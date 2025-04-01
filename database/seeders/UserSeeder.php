@@ -30,7 +30,7 @@ class UserSeeder extends Seeder
             'name' => 'Motorista',
             'password' => Hash::make('passwordmotor')
         ]);
-        $motorista->givePermissionTo('dashboard_Motorista'); // ✅ Asignar permiso "dashboard_Motorista"
+        $motorista->givePermissionTo('Motorista'); // ✅ Asignar permiso "dashboard_Motorista"
 
         // Crear usuario cocina
         $cocina = User::firstOrCreate([
@@ -39,6 +39,6 @@ class UserSeeder extends Seeder
             'name' => 'Cocina',
             'password' => Hash::make('passwordcocina')
         ]);
-        $cocina->givePermissionTo('dashboard_cocina'); // ✅ Asignar permiso "dashboard_cocina"
+        $cocina->givePermissionTo('cocina'); // ✅ Asignar permiso "dashboard_cocina"
     }
 }

@@ -16,12 +16,11 @@ class PermissionSeeder extends Seeder
     {
         //
         $permissions = [
-            'dashboard_Motorista',
+            'Motorista',
             'admin',
-            'dashboard_cocina',
+            'cocina',
             'crear_usuarios',
-            'eliminar_usuarios',
-            'dashboard_admin'
+            'eliminar_usuarios'
         ];
 
         foreach ($permissions as $permission) {
