@@ -2,9 +2,9 @@
 CREATE DATABASE IF NOT EXISTS restaurante_bot;
 USE restaurante_bot;
 
--- Tabla: usuarios
+-- Tabla: clientes
 -- Esta tabla almacena a los clientes que hacen pedidos a través del bot
-CREATE TABLE usuarios (
+CREATE TABLE clientes (
     id INT AUTO_INCREMENT PRIMARY KEY,
     nombre VARCHAR(100) NOT NULL,
     telefono VARCHAR(20) NOT NULL UNIQUE, -- Se asume que el número de teléfono es único
@@ -36,16 +36,16 @@ CREATE TABLE menu_diario (
 );
 
 -- Tabla: pedidos
--- Almacena información general de los pedidos hechos por los usuarios
--- Relación: Muchos pedidos a Un usuario
+-- Almacena información general de los pedidos hechos por los clientes
+-- Relación: Muchos pedidos a Un cliente
 CREATE TABLE pedidos (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    usuario_id INT NOT NULL, -- FK hacia usuarios
+    cliente_id INT NOT NULL, -- FK hacia clientes
     fecha_pedido DATETIME DEFAULT CURRENT_TIMESTAMP,
     direccion_envio TEXT NOT NULL,
     estado ENUM('pendiente', 'en preparación', 'entregado', 'cancelado') DEFAULT 'pendiente',
     total DECIMAL(10,2) NOT NULL,
-    FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+    FOREIGN KEY (cliente_id) REFERENCES clientes(id)
 );
 
 -- Tabla: detalle_pedido
