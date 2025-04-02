@@ -33,12 +33,14 @@ class VroomController extends Controller
                 ["id" => 5, "location" => [-87.21999967445643, 14.062946497848914], "delivery" => [1]],
                 ["id" => 6, "location" => [-87.21926306490725, 14.060941348644857], "delivery" => [1]]
             ],
-
+            "options" => [
+                "g" => true  // Solicita geometría explícitamente
+            ]
 
         ];
 
 
-        $response = Http::post('http://localhost:3000', $data);
+        $response = Http::post('http://154.38.191.25:3000/?geometry=true', $data);
         $result = $response->json();
 
         if (!isset($result['routes'])) {

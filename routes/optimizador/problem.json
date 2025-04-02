@@ -1,1 +1,0 @@
-{"vehicles":[{"id":"vehiculo_1","start_address":{"location_id":"vehiculo_1","lon":-87.191,"lat":14.072}}],"services":[{"id":"trabajo_1","address":{"location_id":"trabajo_1","lon":-87.217,"lat":14.081}},{"id":"trabajo_2","address":{"location_id":"trabajo_2","lon":-87.2,"lat":14.09}}],"matrix":{"duration":[[0,286.5,367.6],[375.3,0,389.4],[332,309.1,0]]}}
