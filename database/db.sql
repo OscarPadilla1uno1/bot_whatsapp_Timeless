@@ -76,3 +76,4 @@ CREATE TABLE pagos (
     referencia_transaccion VARCHAR(100),
     FOREIGN KEY (pedido_id) REFERENCES pedidos(id) ON DELETE CASCADE
 );
+
