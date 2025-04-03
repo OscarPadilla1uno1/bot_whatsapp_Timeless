@@ -37,7 +37,7 @@
                 <!-- Botón para Crear/Editar Menú (Solo visible para administradores) -->
                 @can('admin')
                     <div class="mt-4">
-                        <a href="#" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
+                        <a href="{{route('admin.menu')}}" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
                             Crear/Editar Menú del Día
                         </a>
                     </div>

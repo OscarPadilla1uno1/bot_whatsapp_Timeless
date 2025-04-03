@@ -4,16 +4,25 @@ namespace App\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
-use Symfony\Component\HttpFoundation\Response;
+use Illuminate\Support\Facades\Auth;
 
 class CheckPermission
 {
-    public function handle(Request $request, Closure $next, $permission): Response
+    public function handle(Request $request, Closure $next, ...$permissions)
     {
-        if (!auth()->check() || !auth()->user()->hasPermissionTo($permission)) {
-            abort(403, 'No tienes permiso para acceder a esta página.');
+        if (!Auth::check()) {
+            abort(403, 'No estás autenticado.');
         }
 
-        return $next($request);
+        $user = Auth::user();
+
+        // Verifica si el usuario tiene al menos uno de los permisos
+        foreach ($permissions as $permission) {
+            if ($user->hasPermissionTo($permission)) {
+                return $next($request);
+            }
+        }
+
+        abort(403, 'No tienes permiso para acceder a esta página.');
     }
 }

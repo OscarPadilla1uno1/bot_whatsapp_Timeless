@@ -34,3 +34,16 @@ BEGIN
     WHERE md.fecha = CURDATE();
 END $$
 DELIMITER ;
+
+
+-- Procedimiento almacenado para obtener todos los platillos disponibles
+DELIMITER //
+
+CREATE PROCEDURE ObtenerTodosLosPlatillos()
+BEGIN
+    SELECT id, nombre, descripcion, precio_base, imagen_url, activo 
+    FROM platillos
+    ORDER BY nombre ASC;
+END //
+
+DELIMITER ;
