@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 
 class DashboardController extends Controller
@@ -12,7 +13,9 @@ class DashboardController extends Controller
             abort(403, 'No tienes permiso para acceder a esta página.');
         }
 
-        return view('admin.dashboard');
+        // Traer datos específicos para el dashboard del admin
+        $menu = DB::select('CALL obtener_menu_diario()');
+        return view('admin.dashboard', compact('menu'));
     }
 
     public function motorista()
