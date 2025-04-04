@@ -38,6 +38,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/admin/menu/fecha', [AdminController::class, 'obtenerMenuPorFecha'])->name('admin.menu.fecha')->can('admin');
     Route::post('/admin/menu/eliminar', [AdminController::class, 'eliminarPlatillo'])->name('admin.menu.eliminar')->can('admin');
     Route::post('/admin/menu/actualizar-cantidad', [AdminController::class, 'actualizarCantidad'])->name('admin.menu.actualizarCantidad')->can('admin');
+    Route::get('/admin/menu/MenuHoy', [AdminController::class,'obtenerMenuHoy'])->name('admin.menu.hoy')->can('admin');
 
 });
 

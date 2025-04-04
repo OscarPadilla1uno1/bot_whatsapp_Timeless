@@ -47,6 +47,15 @@ class AdminController extends Controller
         ]);
     }
 
+    public function obtenerMenuHoy(Request $request){
+        $platillosEnMenu = DB::select('CALL obtener_menu_diario()');
+        
+        return response()->json([
+            'menu' => $platillosEnMenu
+        ]);
+
+    }
+
 
     public function obtenerMenuPorFecha(Request $request)
     {
