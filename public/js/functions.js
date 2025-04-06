@@ -169,3 +169,143 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 });
+
+
+function editarPlatillo(id) {
+    // Obtener datos desde la fila de la tabla
+    const fila = document.querySelector(`#tabla-platillos-body tr td button[onclick="editarPlatillo(${id})"]`).closest('tr');
+    const nombre = fila.children[1].textContent.trim();
+    const descripcion = fila.children[2].getAttribute('title');
+    const precio = parseFloat(fila.children[3].textContent.replace('LPS.', ''));
+
+    // Rellenar el formulario
+    document.getElementById('edit-id').value = id;
+    document.getElementById('edit-nombre').value = nombre;
+    document.getElementById('edit-descripcion').value = descripcion;
+    document.getElementById('edit-precio_base').value = precio;
+
+    // Mostrar el modal
+    document.getElementById('modal-editar-platillo').classList.remove('hidden');
+}
+
+function cerrarModalEditar() {
+    document.getElementById('modal-editar-platillo').classList.add('hidden');
+}
+
+
+function eliminarPlatillo(id) {
+    Swal.fire({
+        title: '¿Estás seguro?',
+        text: 'Este platillo será eliminado del catálogo.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'Sí, eliminar',
+        cancelButtonText: 'Cancelar'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            fetch('/admin/platillos/eliminar', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken
+                },
+                body: JSON.stringify({ id: id })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    Swal.fire({
+                        title: '¡Eliminado!',
+                        text: 'El platillo ha sido eliminado correctamente.',
+                        icon: 'success',
+                        confirmButtonText: 'Aceptar'
+                    }).then(() => {
+                        location.reload();
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Error al eliminar el platillo:', error);
+                Swal.fire('Error', 'Ocurrió un error al eliminar el platillo.', 'error');
+            });
+        }
+    });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const formEditar = document.getElementById('form-editar-platillo');
+    const formAgregar = document.getElementById('agregar-platillo-form');
+
+    if (formEditar) {
+        formEditar.addEventListener('submit', function (e) {
+            e.preventDefault();
+
+            const formData = new FormData(this);
+
+            fetch('/admin/platillos/actualizar', {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': csrfToken,
+                },
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    Swal.fire('Actualizado', 'El platillo se actualizó correctamente.', 'success')
+                        .then(() => location.reload());
+                } else {
+                    Swal.fire('Error', 'Hubo un problema al actualizar.', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                Swal.fire('Error', 'Ocurrió un error inesperado.', 'error');
+            });
+        });
+    }
+
+    if (formAgregar) {
+        formAgregar.addEventListener('submit', function (event) {
+            event.preventDefault();
+
+            const formData = new FormData(this);
+            const paginaActual = new URLSearchParams(window.location.search).get('page') || 1;
+            formData.append('page', paginaActual);
+
+            fetch('/admin/platillos/crear', {
+                method: 'POST',
+                body: formData,
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    Swal.fire({
+                        title: '¡Éxito!',
+                        text: 'Platillo guardado correctamente.',
+                        icon: 'success',
+                        confirmButtonText: 'Aceptar'
+                    }).then(() => location.reload());
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
+        });
+    }
+
+    document.querySelectorAll('.descripcion-cell').forEach(cell => {
+        cell.addEventListener('click', () => {
+            const div = cell.querySelector('div');
+            if (div.classList.contains('truncate')) {
+                div.classList.remove('truncate');
+                div.classList.add('whitespace-normal');
+            } else {
+                div.classList.add('truncate');
+                div.classList.remove('whitespace-normal');
+            }
+        });
+    });
+});

@@ -11,6 +11,26 @@
                 <h3 class="text-lg font-bold mb-4">Platillos Disponibles</h3>
 
                 <div class="overflow-x-auto">
+                    <form method="GET" action="{{ route('admin.platillos') }}" class="mb-4 flex gap-2 items-center">
+                        <!-- Barra de búsqueda alineada a la izquierda -->
+                        <input type="text" name="search" value="{{ request('search') }}"
+                            placeholder="Buscar platillo..."
+                            class="block w-full sm:w-80 md:w-96 rounded-md border-gray-300 shadow-sm px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500">
+
+                        <!-- Botón de Buscar -->
+                        <button type="submit"
+                            class="bg-indigo-600 text-white rounded-md px-4 py-2 hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500">
+                            Buscar
+                        </button>
+
+                        <!-- Botón de Reiniciar Filtros -->
+                        <button type="submit"
+                            class="bg-gray-600 text-white rounded-md px-4 py-2 hover:bg-gray-700 focus:ring-2 focus:ring-gray-500"
+                            name="search" value="">
+                            Reiniciar Filtros
+                        </button>
+                    </form>
+
                     <table class="min-w-full divide-y divide-gray-200" id="tabla-platillos">
                         <thead class="bg-gray-100">
                             <tr>
@@ -71,102 +91,94 @@
                 </div>
 
                 <div class="mt-4 pagination">
-                    {{ $platillos->links() }}
+                    {{ $platillos->appends(['search' => request('search')])->links() }}
                 </div>
             </div>
         </div>
     </div>
 
     <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 mt-6 space-y-6">
-    <!-- Card: Formulario para agregar platillo -->
-    <div class="bg-white shadow-sm sm:rounded-lg">
-        <div class="p-6">
-            <h4 class="text-lg font-medium text-gray-900 mb-4">Agregar Nuevo Platillo</h4>
+        <!-- Card: Formulario para agregar platillo -->
+        <div class="bg-white shadow-sm sm:rounded-lg">
+            <div class="p-6">
+                <h4 class="text-lg font-medium text-gray-900 mb-4">Agregar Nuevo Platillo</h4>
 
-            <form method="POST" action="{{ route('admin.platillos.crear') }}" id="agregar-platillo-form" class="space-y-4">
+                <form method="POST" action="{{ route('admin.platillos.crear') }}" id="agregar-platillo-form"
+                    class="space-y-4">
+                    @csrf
+
+                    <div>
+                        <label for="nombre" class="block text-sm font-medium text-gray-700">Nombre del Platillo:</label>
+                        <input type="text" name="nombre" id="nombre" required
+                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+
+                    <div>
+                        <label for="descripcion" class="block text-sm font-medium text-gray-700">Descripción:</label>
+                        <textarea name="descripcion" id="descripcion" rows="3" required
+                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-indigo-500 focus:border-indigo-500"></textarea>
+                    </div>
+
+                    <div>
+                        <label for="precio_base" class="block text-sm font-medium text-gray-700">Precio Base
+                            (Lempiras):</label>
+                        <input type="number" step="0.01" name="precio_base" id="precio_base" required
+                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+
+                    <div>
+                        <button type="submit"
+                            class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-white hover:bg-green-700 transition">
+                            Guardar Platillo
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de edición -->
+    <div id="modal-editar-platillo"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 hidden">
+        <div class="bg-white p-6 rounded shadow max-w-md w-full">
+            <h3 class="text-lg font-bold mb-4">Editar Platillo</h3>
+
+            <form id="form-editar-platillo">
                 @csrf
+                <input type="hidden" name="id" id="edit-id">
 
-                <div>
-                    <label for="nombre" class="block text-sm font-medium text-gray-700">Nombre del Platillo:</label>
-                    <input type="text" name="nombre" id="nombre" required
-                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                <div class="mb-4">
+                    <label for="edit-nombre" class="block text-sm font-medium text-gray-700">Nombre:</label>
+                    <input type="text" name="nombre" id="edit-nombre" required
+                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
                 </div>
 
-                <div>
-                    <label for="descripcion" class="block text-sm font-medium text-gray-700">Descripción:</label>
-                    <textarea name="descripcion" id="descripcion" rows="3" required
-                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-indigo-500 focus:border-indigo-500"></textarea>
+                <div class="mb-4">
+                    <label for="edit-descripcion" class="block text-sm font-medium text-gray-700">Descripción:</label>
+                    <textarea name="descripcion" id="edit-descripcion" rows="3" required
+                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm"></textarea>
                 </div>
 
-                <div>
-                    <label for="precio_base" class="block text-sm font-medium text-gray-700">Precio Base
-                        (Lempiras):</label>
-                    <input type="number" step="0.01" name="precio_base" id="precio_base" required
-                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                <div class="mb-4">
+                    <label for="edit-precio_base" class="block text-sm font-medium text-gray-700">Precio Base
+                        (LPS.):</label>
+                    <input type="number" name="precio_base" id="edit-precio_base" step="0.01" min="1" required
+                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
                 </div>
 
-                <div>
+                <div class="flex justify-end space-x-2">
+                    <button type="button" onclick="cerrarModalEditar()"
+                        class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded">Cancelar</button>
                     <button type="submit"
-                        class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-white hover:bg-green-700 transition">
-                        Guardar Platillo
-                    </button>
+                        class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">Guardar</button>
                 </div>
             </form>
         </div>
     </div>
-    </div>
 
-    <script>
-    document.getElementById('agregar-platillo-form').addEventListener('submit', function(event) {
-    event.preventDefault(); // Prevenir que el formulario se envíe de la manera tradicional
 
-    const formData = new FormData(this);
-    const paginaActual = new URLSearchParams(window.location.search).get('page') || 1; // Obtener la página actual
 
-    // Agregar el parámetro de la página actual al formulario
-    formData.append('page', paginaActual);
 
-    fetch('{{ route('admin.platillos.crear') }}', {
-        method: 'POST',
-        body: formData,
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            Swal.fire({
-                title: '¡Éxito!',
-                text: 'Platillo guardado correctamente.',
-                icon: 'success',
-                confirmButtonText: 'Aceptar'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    // Recargar la página solo si el usuario hizo clic en "Aceptar"
-                    location.reload();
-                }
-            });
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-    });
-});
 
-</script>
-
-    <script>
-        document.querySelectorAll('.descripcion-cell').forEach(cell => {
-            cell.addEventListener('click', () => {
-                const div = cell.querySelector('div');
-                // Alternar clases para expandir/contraer
-                if (div.classList.contains('truncate')) {
-                    div.classList.remove('truncate');
-                    div.classList.add('whitespace-normal');
-                } else {
-                    div.classList.add('truncate');
-                    div.classList.remove('whitespace-normal');
-                }
-            });
-        });
-    </script>
 
 </x-app-layout>

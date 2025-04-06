@@ -96,3 +96,37 @@ END $$
 
 DELIMITER ;
 
+--PROCEDIMIENTO PARA PODER ACTUALIZAR LOS PLATILLOS
+
+DELIMITER $$
+
+CREATE OR REPLACE PROCEDURE sp_actualizar_platillo (
+    IN p_id INT,
+    IN p_nombre VARCHAR(100),
+    IN p_descripcion TEXT,
+    IN p_precio_base DECIMAL(10,2)
+)
+BEGIN
+    UPDATE platillos
+    SET 
+        nombre = p_nombre,
+        descripcion = p_descripcion,
+        precio_base = p_precio_base
+    WHERE id = p_id;
+END $$
+
+DELIMITER ;
+
+
+DELIMITER $$
+
+CREATE OR REPLACE PROCEDURE sp_borrar_platillo (
+    IN p_id INT
+)
+BEGIN
+    UPDATE platillos
+    SET activo = FALSE
+    WHERE id = p_id;
+END$$
+
+DELIMITER ;

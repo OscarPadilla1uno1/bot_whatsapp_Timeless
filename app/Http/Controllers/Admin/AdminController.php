@@ -121,11 +121,24 @@ class AdminController extends Controller
 
 // El resto de tus métodos pueden permanecer igual
     // Vista principal del catálogo de platillos
-    public function vistaPlatillos()
-    {
-        $platillos = Platillo::where('activo', true)->orderBy('nombre')->paginate(10);
-        return view('admin.platillos', compact('platillos'));
-    }
+    public function vistaPlatillos(Request $request)
+{
+    $search = $request->input('search');
+
+    $platillos = Platillo::where('activo', true)
+        ->when($search, function ($query, $search) {
+            $search = strtolower($search);
+            return $query->where(function ($q) use ($search) {
+                $q->whereRaw('LOWER(nombre) LIKE ?', ["%{$search}%"])
+                  ->orWhereRaw('LOWER(descripcion) LIKE ?', ["%{$search}%"])
+                  ->orWhereRaw('CAST(precio_base AS CHAR) LIKE ?', ["%{$search}%"]);
+            });
+        })
+        ->orderBy('nombre')
+        ->paginate(10);
+
+    return view('admin.platillos', compact('platillos'));
+}
 
     // Crear platillo
     public function crearPlatillo(Request $request)
@@ -152,18 +165,14 @@ class AdminController extends Controller
             'id' => 'required|integer|exists:platillos,id',
             'nombre' => 'required|string|max:100',
             'descripcion' => 'nullable|string',
-            'precio_base' => 'required|numeric|min:0',
-            'imagen_url' => 'nullable|string',
-            'activo' => 'required|boolean'
+            'precio_base' => 'required|numeric|min:1',
         ]);
 
-        DB::statement('CALL actualizar_platillo(?, ?, ?, ?, ?, ?)', [
+        DB::statement('CALL sp_actualizar_platillo(?, ?, ?, ?)', [
             $request->id,
             $request->nombre,
             $request->descripcion,
             $request->precio_base,
-            $request->imagen_url,
-            $request->activo
         ]);
 
         return response()->json(['success' => true]);
@@ -176,7 +185,7 @@ class AdminController extends Controller
             'id' => 'required|integer|exists:platillos,id'
         ]);
 
-        DB::statement('CALL eliminar_platillo(?)', [$request->id]);
+        DB::statement('CALL sp_borrar_platillo(?)', [$request->id]);
 
         return response()->json(['success' => true]);
     }
