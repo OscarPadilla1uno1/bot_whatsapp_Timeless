@@ -1,6 +1,10 @@
 <x-app-layout>
+<x-slot name="header">
+        <h2 class="font-semibold text-xl text-gray-800 leading-tight">
+            {{ __('Administrar Menú Diario') }}
+        </h2>
+    </x-slot>
     <div class="max-w-7xl mx-auto p-6">
-        <h2 class="text-2xl font-semibold mb-6 text-gray-800">Administrar Menú Diario</h2>
 
         <!-- Selección de Fecha -->
         <div class="mb-6">
@@ -105,234 +109,72 @@
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            const today = new Date().toISOString().split('T')[0];
-            document.getElementById('fecha').value = today;
-        });
-
-        document.getElementById('fecha').addEventListener('change', function () {
-            const fecha = this.value;
-            const token = document.querySelector('input[name="_token"]').value;
-
-            fetch(`{{ route('admin.menu.fecha') }}?fecha=${fecha}`, {
-                headers: { "X-CSRF-TOKEN": token, "Accept": "application/json" }
-            })
-                .then(res => res.json())
-                .then(data => renderizarTabla(data.platillos))
-                .catch(err => console.error("Error al cargar menú:", err));
-        });
-
-        document.getElementById('agregar-platillo-form').addEventListener('submit', function (e) {
-            e.preventDefault();
-
-            const platilloId = document.getElementById('platillo').value;
-            const cantidad = document.getElementById('cantidad').value;
-            const fecha = document.getElementById('fecha').value;
-            const token = document.querySelector('input[name="_token"]').value;
-
-            fetch("{{ route('admin.menu.agregar') }}", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "X-CSRF-TOKEN": token,
-                    "Accept": "application/json"
-                },
-                body: JSON.stringify({ platillo_id: platilloId, cantidad: cantidad, fecha: fecha })
-            })
-                .then(res => res.json())
-                .then(data => {
-                    if (data.success) {
-                        Swal.fire({
-                            icon: 'success',
-                            title: '¡Éxito!',
-                            text: 'Platillo agregado correctamente.',
-                            timer: 2000,
-                            showConfirmButton: false
-                        });
-
-                        cargarMenuPorFecha(fecha);
-                    }
-                })
-                .catch(err => console.error("Error al agregar:", err));
-        });
-
-        function renderizarTabla(platillos) {
-            const tabla = document.getElementById('body-tabla-platillos-menu');
-            tabla.innerHTML = '';
-
-            if (platillos.length > 0) {
-                platillos.forEach((platillo, index) => {
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = `
-                        <td class="px-6 py-4 whitespace-nowrap">${index + 1}</td>
-                        <td class="px-6 py-4 whitespace-nowrap">${platillo.nombre}</td>
-                        <td class="px-6 py-4 whitespace-nowrap">${platillo.cantidad_disponible}</td>
-                        <td class="px-6 py-4 whitespace-nowrap">
-                            <button onclick="eliminarPlatillo(${platillo.id})"
-                                    class="text-red-600 hover:text-red-800 font-semibold text-sm">
-                                Eliminar
-                            </button>
-                        </td>
-                    `;
-                    tabla.appendChild(tr);
-                });
-            } else {
-                tabla.innerHTML = `
-                    <tr>
-                        <td colspan="4" class="px-6 py-4 text-center text-gray-500">No hay platillos para esta fecha.</td>
-                    </tr>
-                `;
-            }
-        }
-
-        function eliminarPlatillo(platilloId) {
-            const fecha = document.getElementById('fecha').value;
-            const token = document.querySelector('input[name="_token"]').value;
-
-            Swal.fire({
-                title: '¿Estás seguro?',
-                text: "Este platillo será eliminado del menú.",
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#d33',
-                cancelButtonColor: '#6c757d',
-                confirmButtonText: 'Sí, eliminar',
-                cancelButtonText: 'Cancelar'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    fetch("{{ route('admin.menu.eliminar') }}", {
-                        method: "POST",
-                        headers: {
-                            "Content-Type": "application/json",
-                            "X-CSRF-TOKEN": token,
-                            "Accept": "application/json"
-                        },
-                        body: JSON.stringify({ platillo_id: platilloId, fecha: fecha })
-                    })
-                        .then(res => res.json())
-                        .then(data => {
-                            if (data.success) {
-                                Swal.fire({
-                                    icon: 'success',
-                                    title: 'Platillo eliminado',
-                                    text: 'El platillo fue eliminado del menú correctamente.',
-                                    timer: 2000,
-                                    showConfirmButton: false
-                                });
-
-                                cargarMenuPorFecha(fecha);
-                            } else {
-                                Swal.fire({
-                                    icon: 'error',
-                                    title: 'Error al eliminar',
-                                    text: 'El platillo no se pudo eliminar',
-                                    timer: 2000,
-                                    showConfirmButton: false
-                                });
-                            }
-                        })
-                        .catch(err => {
-                            console.error("Error al eliminar:", err);
-                            Swal.fire({
-                                icon: 'error',
-                                title: 'Error al eliminar',
-                                text: 'El platillo no se pudo eliminar',
-                                timer: 2000,
-                                showConfirmButton: false
-                            });
-                        });
-                }
-            });
-
-        }
-
-        function cargarMenuPorFecha(fecha) {
-            const token = document.querySelector('input[name="_token"]').value;
-
-            fetch(`{{ route('admin.menu.fecha') }}?fecha=${fecha}`, {
-                headers: { "X-CSRF-TOKEN": token, "Accept": "application/json" }
-            })
-                .then(res => res.json())
-                .then(data => renderizarTabla(data.platillos))
-                .catch(err => console.error("Error al cargar menú:", err));
-        }
+        window.csrfToken = '{{ csrf_token() }}';
+        window.routes = {
+            porFecha: "{{ route('admin.menu.fecha') }}",
+            agregar: "{{ route('admin.menu.agregar') }}",
+            eliminar: "{{ route('admin.menu.eliminar') }}",
+            actualizarCantidad: "{{ route('admin.menu.actualizarCantidad') }}"
+        };
     </script>
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const tabla = document.getElementById('tabla-platillos-menu');
-
-            tabla?.addEventListener('click', function (e) {
-                if (e.target.classList.contains('cantidad-text')) {
-                    const cell = e.target.closest('td');
-                    const span = cell.querySelector('.cantidad-text');
-                    const input = cell.querySelector('.cantidad-input');
-                    const btn = cell.querySelector('.guardar-cantidad');
-
-                    span.classList.add('hidden');
-                    input.classList.remove('hidden');
-                    btn.classList.remove('hidden');
-                    input.focus();
-                }
-
-                if (e.target.classList.contains('guardar-cantidad')) {
-                    const cell = e.target.closest('td');
-                    const input = cell.querySelector('.cantidad-input');
-                    const span = cell.querySelector('.cantidad-text');
-                    const btn = cell.querySelector('.guardar-cantidad');
-
-                    const nuevaCantidad = input.value.trim();
-                    const platilloId = input.dataset.id;
-                    const fecha = input.dataset.fecha;
-                    const token = document.querySelector('input[name="_token"]').value;
-
-                    if (!nuevaCantidad || isNaN(nuevaCantidad) || parseInt(nuevaCantidad) <= 0) {
-                        alert("Ingresa una cantidad válida mayor a 0.");
-                        return;
-                    }
-
-                    fetch("{{ route('admin.menu.actualizarCantidad') }}", {
-                        method: "POST",
-                        headers: {
-                            "Content-Type": "application/json",
-                            "X-CSRF-TOKEN": token,
-                            "Accept": "application/json"
-                        },
-                        body: JSON.stringify({
-                            platillo_id: platilloId,
-                            cantidad: nuevaCantidad,
-                            fecha: fecha
-                        })
-                    })
-                        .then(res => res.json())
-                        .then(data => {
-                            if (data.success) {
-                                span.textContent = nuevaCantidad;
-                                span.classList.remove('hidden');
-                                input.classList.add('hidden');
-                                btn.classList.add('hidden');
-                            } else {
-                                Swal.fire({
-                                    icon: 'error',
-                                    title: 'Error al actualizar',
-                                    text: 'El platillo no se pudo actualizar',
-                                    timer: 2000,
-                                    showConfirmButton: false
-                                });
-                            }
-                        })
-                        .catch(err => {
-                            console.error(err);
-                            Swal.fire({
-                                icon: 'error',
-                                title: 'Error al actualizar',
-                                text: 'El platillo no se pudo actualizar, error del servidor',
-                                timer: 2000,
-                                showConfirmButton: false
-                            });
-                        });
-                }
-            });
+        document.addEventListener('DOMContentLoaded', function () {
+    // Get local date string in YYYY-MM-DD format
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const today = `${year}-${month}-${day}`;
+    
+    console.log('Fecha de hoy:', today);
+    
+    const fechaInput = document.getElementById('fecha');
+    
+    // Verificar si el elemento existe
+    if (fechaInput) {
+        fechaInput.value = today;
+        
+        fechaInput.addEventListener('change', function () {
+            cargarMenuPorFecha(this.value);
         });
+    } else {
+        console.error('No se encontró el elemento con id "fecha"');
+    }
+
+    document.getElementById('agregar-platillo-form').addEventListener('submit', function (e) {
+        e.preventDefault();
+
+        const platilloId = document.getElementById('platillo').value;
+        const cantidad = document.getElementById('cantidad').value;
+        const fecha = document.getElementById('fecha').value;
+
+        fetch(window.routes.agregar, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRF-TOKEN": window.csrfToken,
+                "Accept": "application/json"
+            },
+            body: JSON.stringify({ platillo_id: platilloId, cantidad: cantidad, fecha: fecha })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                Swal.fire({
+                    icon: 'success',
+                    title: '¡Éxito!',
+                    text: 'Platillo agregado correctamente.',
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+
+                cargarMenuPorFecha(fecha);
+            }
+        })
+        .catch(err => console.error("Error al agregar:", err));
+    });
+});
     </script>
+
 
 </x-app-layout>

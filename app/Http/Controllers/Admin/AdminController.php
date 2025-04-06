@@ -5,11 +5,12 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use App\Models\Platillo;
 
 class AdminController extends Controller
 {
     //
-    public function index(Request $request)
+    public function paginaMenuDelDia(Request $request)
     {
         // Si se recibe una fecha en el query, obtener el menú para esa fecha
         if ($request->has('fecha')) {
@@ -47,9 +48,10 @@ class AdminController extends Controller
         ]);
     }
 
-    public function obtenerMenuHoy(Request $request){
+    public function obtenerMenuHoy(Request $request)
+    {
         $platillosEnMenu = DB::select('CALL obtener_menu_diario()');
-        
+
         return response()->json([
             'menu' => $platillosEnMenu
         ]);
@@ -68,36 +70,117 @@ class AdminController extends Controller
     }
 
     public function eliminarPlatillo(Request $request)
-{
-    $request->validate([
-        'platillo_id' => 'required|integer',
-        'fecha' => 'required|date'
-    ]);
+    {
+        $request->validate([
+            'platillo_id' => 'required|integer',
+            'fecha' => 'required|date'
+        ]);
 
-    DB::statement('CALL eliminar_platillo_menu(?, ?)', [
-        $request->platillo_id,
-        $request->fecha
-    ]);
+        DB::statement('CALL eliminar_platillo_menu(?, ?)', [
+            $request->platillo_id,
+            $request->fecha
+        ]);
 
-    return response()->json(['success' => true]);
-}
+        return response()->json(['success' => true]);
+    }
 
-public function actualizarCantidad(Request $request)
-{
-    $request->validate([
-        'platillo_id' => 'required|integer',
-        'cantidad' => 'required|integer|min:1',
-        'fecha' => 'required|date'
-    ]);
+    public function actualizarCantidad(Request $request)
+    {
+        $request->validate([
+            'platillo_id' => 'required|integer',
+            'cantidad' => 'required|integer|min:1',
+            'fecha' => 'required|date'
+        ]);
 
-    DB::statement('CALL actualizar_cantidad_menu(?, ?, ?)', [
-        $request->platillo_id,
-        $request->cantidad,
-        $request->fecha
-    ]);
+        DB::statement('CALL actualizar_cantidad_menu(?, ?, ?)', [
+            $request->platillo_id,
+            $request->cantidad,
+            $request->fecha
+        ]);
 
-    return response()->json(['success' => true]);
-}
+        return response()->json(['success' => true]);
+    }
+
+    public function obtenerTodosPlatillos(Request $request)
+    {
+        // Obtiene la página desde la URL si existe
+        $page = $request->query('page', 1);
+        
+        $platillos = Platillo::where('activo', true)
+                            ->orderBy('nombre')
+                            ->paginate(10);
+    
+        // Devuelve tanto los datos de los platillos como la paginación en formato HTML
+        return response()->json([
+            'success' => true,
+            'platillos' => $platillos,
+        ]);
+    }
+    
+
+
+// El resto de tus métodos pueden permanecer igual
+    // Vista principal del catálogo de platillos
+    public function vistaPlatillos()
+    {
+        $platillos = Platillo::where('activo', true)->orderBy('nombre')->paginate(10);
+        return view('admin.platillos', compact('platillos'));
+    }
+
+    // Crear platillo
+    public function crearPlatillo(Request $request)
+    {
+        $request->validate([
+            'nombre' => 'required|string|max:100',
+            'descripcion' => 'nullable|string',
+            'precio_base' => 'required|numeric|min:1',
+        ]);
+    
+        DB::statement('CALL InsertarPlatillo(?, ?, ?)', [
+            $request->nombre,
+            $request->descripcion,
+            $request->precio_base
+        ]);
+
+        return response()->json(['success' => true]);
+    }
+
+    // Actualizar platillo
+    public function actualizarPlatillo(Request $request)
+    {
+        $request->validate([
+            'id' => 'required|integer|exists:platillos,id',
+            'nombre' => 'required|string|max:100',
+            'descripcion' => 'nullable|string',
+            'precio_base' => 'required|numeric|min:0',
+            'imagen_url' => 'nullable|string',
+            'activo' => 'required|boolean'
+        ]);
+
+        DB::statement('CALL actualizar_platillo(?, ?, ?, ?, ?, ?)', [
+            $request->id,
+            $request->nombre,
+            $request->descripcion,
+            $request->precio_base,
+            $request->imagen_url,
+            $request->activo
+        ]);
+
+        return response()->json(['success' => true]);
+    }
+
+    // Eliminar platillo
+    public function eliminarPlatilloCatalogo(Request $request)
+    {
+        $request->validate([
+            'id' => 'required|integer|exists:platillos,id'
+        ]);
+
+        DB::statement('CALL eliminar_platillo(?)', [$request->id]);
+
+        return response()->json(['success' => true]);
+    }
+
 
 
 

@@ -50,7 +50,7 @@ DELIMITER //
 CREATE OR REPLACE PROCEDURE ObtenerTodosLosPlatillos()
 BEGIN
     SELECT id, nombre, descripcion, precio_base, imagen_url, activo 
-    FROM platillos
+    FROM platillos WHERE activo = TRUE
     ORDER BY nombre ASC;
 END //
 
@@ -80,3 +80,19 @@ BEGIN
 END $$
 
 DELIMITER ;
+
+--Procedimiento almacenado para guardar un platillo nuevo, la subida de la imagen esta pendiente
+DELIMITER $$
+
+CREATE PROCEDURE InsertarPlatillo (
+    IN p_nombre VARCHAR(100),
+    IN p_descripcion TEXT,
+    IN p_precio_base DECIMAL(10,2)
+)
+BEGIN
+    INSERT INTO platillos (nombre, descripcion, precio_base, activo)
+    VALUES (p_nombre, p_descripcion, p_precio_base, TRUE);
+END $$
+
+DELIMITER ;
+
