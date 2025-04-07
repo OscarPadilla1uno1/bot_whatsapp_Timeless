@@ -48,6 +48,9 @@
                                     Precio</th>
                                 <th
                                     class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    Imagen</th>
+                                <th
+                                    class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                     Acciones</th>
                             </tr>
                         </thead>
@@ -67,6 +70,18 @@
                                     </td>
                                     <td class="px-2 py-2 whitespace-nowrap text-sm text-gray-900">
                                         LPS.{{ number_format($platillo->precio_base, 2) }}
+                                    </td>
+                                    <td class="px-2 py-2 whitespace-nowrap">
+                                        <!-- Verificar si hay una imagen -->
+                                        @if($platillo->imagen_url)
+                                            <button onclick="showImage('{{ asset('storage/' . $platillo->imagen_url) }}')"
+                                                class="text-blue-600 hover:text-blue-800 font-semibold text-xs sm:text-sm mr-2"
+                                                data-imagen-url="{{ asset('storage/' . $platillo->imagen_url) }}">
+                                                Ver Imagen
+                                            </button>
+                                        @else
+                                            <span class="text-red-500">Sin imagen</span>
+                                        @endif
                                     </td>
                                     <td class="px-2 py-2 whitespace-nowrap">
                                         <button
@@ -127,6 +142,19 @@
                     </div>
 
                     <div>
+                        <label for="imagen" class="block text-sm font-medium text-gray-700">Imagen del Platillo:</label>
+                        <div class="mt-1">
+                            <!-- Contenedor para el input de tipo file -->
+                            <label for="imagen"
+                                class="cursor-pointer inline-flex items-center px-4 py-2 bg-indigo-600 text-white font-medium rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                                <span id="imagen-text">Seleccionar Imagen</span>
+                                <input type="file" name="imagen" id="imagen" accept="image/*" class="hidden"
+                                    onchange="updateButtonText()" />
+                            </label>
+                        </div>
+                    </div>
+
+                    <div>
                         <button type="submit"
                             class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-white hover:bg-green-700 transition">
                             Guardar Platillo
@@ -138,46 +166,63 @@
     </div>
 
     <!-- Modal de edición -->
-    <div id="modal-editar-platillo"
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 hidden">
-        <div class="bg-white p-6 rounded shadow max-w-md w-full">
-            <h3 class="text-lg font-bold mb-4">Editar Platillo</h3>
+<div id="modal-editar-platillo"
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 hidden">
+    <div class="bg-white p-6 rounded shadow max-w-md w-full">
+        <h3 class="text-lg font-bold mb-4">Editar Platillo</h3>
 
-            <form id="form-editar-platillo">
-                @csrf
-                <input type="hidden" name="id" id="edit-id">
+        <form id="form-editar-platillo" method="POST" action="{{ route('admin.platillos.actualizar') }}" enctype="multipart/form-data">
+            @csrf
+            <input type="hidden" name="id" id="edit-id">
 
-                <div class="mb-4">
-                    <label for="edit-nombre" class="block text-sm font-medium text-gray-700">Nombre:</label>
-                    <input type="text" name="nombre" id="edit-nombre" required
-                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
-                </div>
+            <div class="mb-4">
+                <label for="edit-nombre" class="block text-sm font-medium text-gray-700">Nombre:</label>
+                <input type="text" name="nombre" id="edit-nombre" required
+                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+            </div>
 
-                <div class="mb-4">
-                    <label for="edit-descripcion" class="block text-sm font-medium text-gray-700">Descripción:</label>
-                    <textarea name="descripcion" id="edit-descripcion" rows="3" required
-                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm"></textarea>
-                </div>
+            <div class="mb-4">
+                <label for="edit-descripcion" class="block text-sm font-medium text-gray-700">Descripción:</label>
+                <textarea name="descripcion" id="edit-descripcion" rows="3" required
+                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm"></textarea>
+            </div>
 
-                <div class="mb-4">
-                    <label for="edit-precio_base" class="block text-sm font-medium text-gray-700">Precio Base
-                        (LPS.):</label>
-                    <input type="number" name="precio_base" id="edit-precio_base" step="0.01" min="1" required
-                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
-                </div>
+            <div class="mb-4">
+                <label for="edit-precio_base" class="block text-sm font-medium text-gray-700">Precio Base
+                    (LPS.):</label>
+                <input type="number" name="precio_base" id="edit-precio_base" step="0.01" min="1" required
+                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+            </div>
 
-                <div class="flex justify-end space-x-2">
-                    <button type="button" onclick="cerrarModalEditar()"
-                        class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded">Cancelar</button>
-                    <button type="submit"
-                        class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">Guardar</button>
-                </div>
-            </form>
+            <div class="mb-4">
+                <label for="edit-imagen" class="block text-sm font-medium text-gray-700">Imagen:</label>
+                <input type="file" name="imagen" id="edit-imagen" accept="image/*"
+                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+                <p id="imagen-previa" class="mt-2 text-sm text-gray-500"></p>
+                <button type="button" id="eliminar-imagen" class="text-red-600 hover:text-red-800 font-semibold text-xs sm:text-sm mt-2 hidden">
+                    Eliminar Imagen
+                </button>
+            </div>
+
+            <div class="flex justify-end space-x-2">
+                <button type="button" onclick="cerrarModalEditar()"
+                    class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded">Cancelar</button>
+                <button type="submit"
+                    class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">Guardar</button>
+            </div>
+
+        </form>
+    </div>
+</div>
+
+
+    <!-- Modal para ver la imagen -->
+    <div id="imageModal" class="hidden fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
+        <div class="bg-white p-4 rounded-lg max-w-sm w-full">
+            <img id="full-image" src="" alt="Imagen del Platillo" class="w-full rounded-md">
+            <button onclick="closeImageModal()" class="mt-2 px-4 py-2 bg-red-600 text-white rounded-md">Cerrar</button>
         </div>
     </div>
-
-
-
 
 
 

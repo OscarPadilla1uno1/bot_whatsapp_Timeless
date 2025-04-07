@@ -178,15 +178,62 @@ function editarPlatillo(id) {
     const descripcion = fila.children[2].getAttribute('title');
     const precio = parseFloat(fila.children[3].textContent.replace('LPS.', ''));
 
+    // Obtener la URL de la imagen desde el atributo data-imagen-url del botón "Ver Imagen"
+    const imagenUrl = fila.querySelector('button[data-imagen-url]')?.getAttribute('data-imagen-url');
+
     // Rellenar el formulario
     document.getElementById('edit-id').value = id;
     document.getElementById('edit-nombre').value = nombre;
     document.getElementById('edit-descripcion').value = descripcion;
     document.getElementById('edit-precio_base').value = precio;
 
+    // Si hay imagen, mostrar la imagen previa
+    const imagenPreviaContainer = document.getElementById('imagen-previa');
+    if (imagenUrl) {
+        // Limpiar cualquier contenido previo en el contenedor de la imagen
+        imagenPreviaContainer.innerHTML = 'Imagen actual:';
+
+        // Crear el elemento <img> y asignar la URL de la imagen
+        const imagenElement = document.createElement('img');
+        imagenElement.src = imagenUrl;
+        imagenElement.alt = 'Imagen Platillo';
+        imagenElement.classList.add('w-32', 'h-32', 'object-cover'); // Puedes agregar más clases según lo necesites
+
+        // Añadir la imagen al contenedor
+        imagenPreviaContainer.appendChild(imagenElement);
+
+        // Mostrar el botón para eliminar la imagen
+        document.getElementById('eliminar-imagen').classList.remove('hidden');
+        document.getElementById('eliminar-imagen').onclick = function() {
+            eliminarImagen(id);
+        };
+    } else {
+        // Si no hay imagen, mostrar el texto "No hay imagen registrada"
+        imagenPreviaContainer.textContent = 'No hay imagen registrada';
+        document.getElementById('eliminar-imagen').classList.add('hidden');
+    }
+
     // Mostrar el modal
     document.getElementById('modal-editar-platillo').classList.remove('hidden');
 }
+
+
+// Función para eliminar la imagen
+function eliminarImagen(id) {
+    const form = document.getElementById('form-editar-platillo');
+    const inputImagen = document.getElementById('edit-imagen');
+    inputImagen.value = ''; // Limpiar el campo de la imagen
+    document.getElementById('imagen-previa').textContent = 'No hay imagen registrada';
+    document.getElementById('eliminar-imagen').classList.add('hidden');
+    // Añadir un campo oculto para indicar que la imagen debe eliminarse
+    const inputEliminarImagen = document.createElement('input');
+    inputEliminarImagen.type = 'hidden';
+    inputEliminarImagen.name = 'eliminar_imagen';
+    inputEliminarImagen.value = '1';
+    form.appendChild(inputEliminarImagen);
+}
+
+
 
 function cerrarModalEditar() {
     document.getElementById('modal-editar-platillo').classList.add('hidden');
@@ -309,3 +356,31 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 });
+
+// Función para mostrar la imagen en un modal
+function showImage(imagePath) {
+    const imageModal = document.getElementById('imageModal');
+    const fullImage = document.getElementById('full-image');
+    
+    if (imagePath) {
+        fullImage.src = imagePath;
+        imageModal.classList.remove('hidden');
+    }
+}
+
+// Función para cerrar el modal de imagen
+function closeImageModal() {
+    const imageModal = document.getElementById('imageModal');
+    imageModal.classList.add('hidden');
+}
+
+function updateButtonText() {
+    const inputFile = document.getElementById('imagen');
+    const labelText = document.getElementById('imagen-text');
+
+    if (inputFile.files.length > 0) {
+        labelText.textContent = 'Cambiar Imagen';
+    } else {
+        labelText.textContent = 'Seleccionar Imagen';
+    }
+}

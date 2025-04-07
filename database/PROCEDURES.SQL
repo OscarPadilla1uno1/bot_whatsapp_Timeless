@@ -45,14 +45,14 @@ DELIMITER ;
 
 
 -- Procedimiento almacenado para obtener todos los platillos disponibles
-DELIMITER //
+DELIMITER $$
 
 CREATE OR REPLACE PROCEDURE ObtenerTodosLosPlatillos()
 BEGIN
     SELECT id, nombre, descripcion, precio_base, imagen_url, activo 
     FROM platillos WHERE activo = TRUE
     ORDER BY nombre ASC;
-END //
+END $$
 
 DELIMITER ;
 
@@ -70,7 +70,7 @@ DELIMITER ;
 
 DELIMITER $$
 
-CREATE PROCEDURE eliminar_platillo_menu (
+CREATE OR REPLACE PROCEDURE eliminar_platillo_menu (
     IN p_platillo_id INT,
     IN p_fecha DATE
 )
@@ -84,14 +84,15 @@ DELIMITER ;
 --Procedimiento almacenado para guardar un platillo nuevo, la subida de la imagen esta pendiente
 DELIMITER $$
 
-CREATE PROCEDURE InsertarPlatillo (
+CREATE OR REPLACE PROCEDURE InsertarPlatillo (
     IN p_nombre VARCHAR(100),
     IN p_descripcion TEXT,
-    IN p_precio_base DECIMAL(10,2)
+    IN p_precio_base DECIMAL(10,2),
+    IN p_imagen_url TEXT -- Nuevo parámetro para la URL de la imagen
 )
 BEGIN
-    INSERT INTO platillos (nombre, descripcion, precio_base, activo)
-    VALUES (p_nombre, p_descripcion, p_precio_base, TRUE);
+    INSERT INTO platillos (nombre, descripcion, precio_base, imagen_url, activo)
+    VALUES (p_nombre, p_descripcion, p_precio_base, p_imagen_url, TRUE);
 END $$
 
 DELIMITER ;
@@ -104,18 +105,21 @@ CREATE OR REPLACE PROCEDURE sp_actualizar_platillo (
     IN p_id INT,
     IN p_nombre VARCHAR(100),
     IN p_descripcion TEXT,
-    IN p_precio_base DECIMAL(10,2)
+    IN p_precio_base DECIMAL(10,2),
+    IN p_imagen_url VARCHAR(255) -- Añadimos la URL de la imagen
 )
 BEGIN
     UPDATE platillos
     SET 
         nombre = p_nombre,
         descripcion = p_descripcion,
-        precio_base = p_precio_base
+        precio_base = p_precio_base,
+        imagen_url = p_imagen_url -- Actualizamos la imagen
     WHERE id = p_id;
 END $$
 
 DELIMITER ;
+
 
 
 DELIMITER $$

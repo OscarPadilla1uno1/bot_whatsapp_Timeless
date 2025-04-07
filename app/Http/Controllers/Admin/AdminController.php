@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use App\Models\Platillo;
+use Illuminate\Support\Facades\Storage;
+
 
 class AdminController extends Controller
 {
@@ -105,40 +107,40 @@ class AdminController extends Controller
     {
         // Obtiene la página desde la URL si existe
         $page = $request->query('page', 1);
-        
+
         $platillos = Platillo::where('activo', true)
-                            ->orderBy('nombre')
-                            ->paginate(10);
-    
+            ->orderBy('nombre')
+            ->paginate(10);
+
         // Devuelve tanto los datos de los platillos como la paginación en formato HTML
         return response()->json([
             'success' => true,
             'platillos' => $platillos,
         ]);
     }
-    
 
 
-// El resto de tus métodos pueden permanecer igual
+
+    // El resto de tus métodos pueden permanecer igual
     // Vista principal del catálogo de platillos
     public function vistaPlatillos(Request $request)
-{
-    $search = $request->input('search');
+    {
+        $search = $request->input('search');
 
-    $platillos = Platillo::where('activo', true)
-        ->when($search, function ($query, $search) {
-            $search = strtolower($search);
-            return $query->where(function ($q) use ($search) {
-                $q->whereRaw('LOWER(nombre) LIKE ?', ["%{$search}%"])
-                  ->orWhereRaw('LOWER(descripcion) LIKE ?', ["%{$search}%"])
-                  ->orWhereRaw('CAST(precio_base AS CHAR) LIKE ?', ["%{$search}%"]);
-            });
-        })
-        ->orderBy('nombre')
-        ->paginate(10);
+        $platillos = Platillo::where('activo', true)
+            ->when($search, function ($query, $search) {
+                $search = strtolower($search);
+                return $query->where(function ($q) use ($search) {
+                    $q->whereRaw('LOWER(nombre) LIKE ?', ["%{$search}%"])
+                        ->orWhereRaw('LOWER(descripcion) LIKE ?', ["%{$search}%"])
+                        ->orWhereRaw('CAST(precio_base AS CHAR) LIKE ?', ["%{$search}%"]);
+                });
+            })
+            ->orderBy('nombre')
+            ->paginate(10);
 
-    return view('admin.platillos', compact('platillos'));
-}
+        return view('admin.platillos', compact('platillos'));
+    }
 
     // Crear platillo
     public function crearPlatillo(Request $request)
@@ -147,16 +149,27 @@ class AdminController extends Controller
             'nombre' => 'required|string|max:100',
             'descripcion' => 'nullable|string',
             'precio_base' => 'required|numeric|min:1',
+            'imagen' => 'nullable|image|mimes:jpg,jpeg,png,gif|max:2048', // Validación para imagen
         ]);
-    
-        DB::statement('CALL InsertarPlatillo(?, ?, ?)', [
+
+        // Guardar la imagen, si se ha subido
+        $imagenUrl = null;
+        if ($request->hasFile('imagen')) {
+            $imagen = $request->file('imagen');
+            $imagenUrl = $imagen->storeAs('platillos', uniqid() . '.' . $imagen->getClientOriginalExtension(), 'public');
+        }
+
+        // Llamar al procedimiento almacenado para insertar el platillo
+        DB::statement('CALL InsertarPlatillo(?, ?, ?, ?)', [
             $request->nombre,
             $request->descripcion,
-            $request->precio_base
+            $request->precio_base,
+            $imagenUrl, // Guardar la ruta de la imagen
         ]);
 
         return response()->json(['success' => true]);
     }
+
 
     // Actualizar platillo
     public function actualizarPlatillo(Request $request)
@@ -166,17 +179,48 @@ class AdminController extends Controller
             'nombre' => 'required|string|max:100',
             'descripcion' => 'nullable|string',
             'precio_base' => 'required|numeric|min:1',
+            'imagen' => 'nullable|image|mimes:jpg,jpeg,png|max:2048', // Validación de imagen
+            'eliminar_imagen' => 'nullable|boolean', // Campo para indicar si se eliminará la imagen
         ]);
 
-        DB::statement('CALL sp_actualizar_platillo(?, ?, ?, ?)', [
+        // Obtener el platillo actual
+        $platillo = Platillo::find($request->id);
+
+        // Si el usuario ha decidido eliminar la imagen, eliminamos la imagen actual
+        if ($request->has('eliminar_imagen') && $request->eliminar_imagen) {
+            // Aquí eliminamos la imagen de almacenamiento
+            if ($platillo->imagen_url) {
+                Storage::disk('public')->delete($platillo->imagen_url);
+            }
+            $imagen_url = null;
+        } else {
+            // Si hay una nueva imagen, la procesamos
+            if ($request->hasFile('imagen')) {
+                $imagen = $request->file('imagen');
+                $imagen_url = $imagen->storeAs('platillos', uniqid() . '.' . $imagen->getClientOriginalExtension(), 'public'); // Guardamos la imagen en la carpeta 'platillos' // Guarda la imagen y obtiene la URL
+
+                // Si ya había una imagen previa, la eliminamos
+                if ($platillo->imagen_url) {
+                    Storage::disk('public')->delete($platillo->imagen_url);
+                }
+            } else {
+                // Si no hay nueva imagen, mantenemos la imagen actual
+                $imagen_url = $platillo->imagen_url;
+            }
+        }
+
+        // Llamamos al procedimiento almacenado
+        DB::statement('CALL sp_actualizar_platillo(?, ?, ?, ?, ?)', [
             $request->id,
             $request->nombre,
             $request->descripcion,
             $request->precio_base,
+            $imagen_url, // Enviamos la URL de la imagen (null si no hay imagen)
         ]);
 
         return response()->json(['success' => true]);
     }
+
 
     // Eliminar platillo
     public function eliminarPlatilloCatalogo(Request $request)
@@ -184,6 +228,13 @@ class AdminController extends Controller
         $request->validate([
             'id' => 'required|integer|exists:platillos,id'
         ]);
+
+        // Obtener el platillo actual
+        $platillo = Platillo::find($request->id);
+
+        if ($platillo->imagen_url) {
+            Storage::disk('public')->delete($platillo->imagen_url);
+        }
 
         DB::statement('CALL sp_borrar_platillo(?)', [$request->id]);
 
