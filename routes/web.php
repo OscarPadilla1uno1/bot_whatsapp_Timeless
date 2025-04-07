@@ -1,6 +1,5 @@
 <?php
 
-
 use App\Http\Controllers\Admin\AdminController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\VroomController;
@@ -8,11 +7,8 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Middleware\CheckPermission;
 
-
-Route::get('/vroom', [App\Http\Controllers\VroomController::class, 'index']);
-
-
-
+Route::get('/vroom', [VroomController::class, 'index'])->name('vroom.index');
+Route::get('/vehiculo/{id}', [VroomController::class, 'showVehicle'])->name('vehicle.show');
 
 Route::get('/', function () {
     return view('welcome');
