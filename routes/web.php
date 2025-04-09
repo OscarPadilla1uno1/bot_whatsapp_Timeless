@@ -7,8 +7,9 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Middleware\CheckPermission;
 
-Route::get('/vroom', [VroomController::class, 'index'])->name('vroom.index');
-Route::get('/vehiculo/{id}', [VroomController::class, 'showVehicle'])->name('vehicle.show');
+Route::get('/routes', [VroomController::class, 'index'])->name('routes');
+Route::post('/seguir-ruta', [VroomController::class, 'seguirRuta'])->name('seguirRuta');
+
 
 Route::get('/', function () {
     return view('welcome');

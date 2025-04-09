@@ -42,7 +42,8 @@ CREATE TABLE pedidos (
     id INT AUTO_INCREMENT PRIMARY KEY,
     cliente_id INT NOT NULL, -- FK hacia clientes
     fecha_pedido DATETIME DEFAULT CURRENT_TIMESTAMP,
-    direccion_envio TEXT NOT NULL,
+    latitud double NOT NULL,
+    longitud double NOT NULL,
     estado ENUM('pendiente', 'en preparación', 'entregado', 'cancelado') DEFAULT 'pendiente',
     total DECIMAL(10,2) NOT NULL,
     FOREIGN KEY (cliente_id) REFERENCES clientes(id)
