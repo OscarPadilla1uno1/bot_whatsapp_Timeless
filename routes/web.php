@@ -10,6 +10,12 @@ use App\Http\Middleware\CheckPermission;
 Route::get('/vroom', [VroomController::class, 'index'])->name('vroom.index');
 Route::get('/vehiculo/{id}', [VroomController::class, 'showVehicle'])->name('vehicle.show');
 
+//Rutas publicas
+Route::get('/admin/menu/MenuHoy', [AdminController::class, 'obtenerMenuHoy'])->name('admin.menu.hoy');
+Route::get('/admin/bot/registro/pedido', [AdminController::class, 'storePedido'])->name('admin.bot.pedidoRegistro');
+    
+
+
 Route::get('/', function () {
     return view('welcome');
 });
@@ -34,7 +40,6 @@ Route::middleware('auth')->group(function () {
     Route::get('/admin/menu/fecha', [AdminController::class, 'obtenerMenuPorFecha'])->name('admin.menu.fecha')->can('admin');
     Route::post('/admin/menu/eliminar', [AdminController::class, 'eliminarPlatillo'])->name('admin.menu.eliminar')->can('admin');
     Route::post('/admin/menu/actualizar-cantidad', [AdminController::class, 'actualizarCantidad'])->name('admin.menu.actualizarCantidad')->can('admin');
-    Route::get('/admin/menu/MenuHoy', [AdminController::class, 'obtenerMenuHoy'])->name('admin.menu.hoy')->can('admin');
     // Rutas CRUD para platillos
     Route::get('/admin/platillos', [AdminController::class, 'vistaPlatillos'])->name('admin.platillos')->can('admin');
     Route::post('/admin/platillos/crear', [AdminController::class, 'crearPlatillo'])->name('admin.platillos.crear')->can('admin');
