@@ -169,7 +169,7 @@ BEGIN
     SELECT p.id, md.fecha, p.nombre, p.descripcion, p.precio_base, md.cantidad_disponible, p.imagen_url
     FROM menu_diario md
     JOIN platillos p ON md.platillo_id = p.id
-    WHERE md.fecha = CURDATE();
+    WHERE md.fecha = CURDATE() AND p.activo = TRUE;
 END $$
 DELIMITER ;
 
@@ -193,7 +193,7 @@ BEGIN
     SELECT p.id, md.fecha, p.nombre, p.descripcion, p.precio_base, md.cantidad_disponible
     FROM menu_diario md
     JOIN platillos p ON md.platillo_id = p.id
-    WHERE md.fecha = fecha_param;
+    WHERE md.fecha = fecha_param AND p.activo = TRUE;
 END $$
 
 DELIMITER ;
@@ -263,4 +263,24 @@ BEGIN
     WHERE id = p_id;
 END$$
 
+DELIMITER ;
+
+
+DELIMITER $$
+CREATE OR PROCEDURE actualizar_cantidad_menu(IN p_platillo_id INT, IN p_cantidad INT, IN p_fecha DATE)
+BEGIN
+    DECLARE rows_affected INT;
+
+    UPDATE menu_diario
+    SET cantidad_disponible = p_cantidad
+    WHERE platillo_id = p_platillo_id AND fecha = p_fecha;
+
+    SET rows_affected = ROW_COUNT();
+
+    IF rows_affected > 0 THEN
+        SELECT 'Cantidad actualizada correctamente.' AS mensaje;
+    ELSE
+        SELECT 'No se encontró el platillo para la fecha especificada.' AS mensaje;
+    END IF;
+END$$
 DELIMITER ;

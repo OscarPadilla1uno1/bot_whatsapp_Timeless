@@ -87,21 +87,33 @@ class AdminController extends Controller
     }
 
     public function actualizarCantidad(Request $request)
-    {
-        $request->validate([
-            'platillo_id' => 'required|integer',
-            'cantidad' => 'required|integer|min:1',
-            'fecha' => 'required|date'
-        ]);
+{
+    $request->validate([
+        'platillo_id' => 'required|integer',
+        'cantidad' => 'required|integer|min:1',
+        'fecha' => 'required|date'
+    ]);
 
-        DB::statement('CALL actualizar_cantidad_menu(?, ?, ?)', [
+    try {
+        $result = DB::select('CALL actualizar_cantidad_menu(?, ?, ?)', [
             $request->platillo_id,
             $request->cantidad,
             $request->fecha
         ]);
 
-        return response()->json(['success' => true]);
+        return response()->json([
+            'success' => true,
+            'message' => $result[0]->mensaje ?? 'Cantidad actualizada.'
+        ]);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Error al actualizar: ' . $e->getMessage()
+        ], 500);
     }
+}
+
 
     public function obtenerTodosPlatillos(Request $request)
     {
@@ -241,44 +253,45 @@ class AdminController extends Controller
         return response()->json(['success' => true]);
     }
 
-    public function storePedido(Request $request)
-    {
-        // Crea la tabla temporal
-        DB::statement("CREATE TEMPORARY TABLE temp_pedido_detalle (platillo_id INT, cantidad INT)");
+    public function storePedido($nombre, $telefono, $direccion, array $platillos)
+{
+    // Crea la tabla temporal
+    DB::statement("CREATE TEMPORARY TABLE temp_pedido_detalle (platillo_id INT, cantidad INT)");
 
-        // Llena la tabla temporal
-        foreach ($request->platillos as $platillo) {
-            DB::insert("INSERT INTO temp_pedido_detalle (platillo_id, cantidad) VALUES (?, ?)", [
-                $platillo['id'],
-                $platillo['cantidad']
-            ]);
-        }
-
-        // Llama al procedimiento almacenado
-        DB::statement("CALL PEDIDO_CONFIRMADO(?, ?, ?, @mensaje, @total)", [
-            $request->nombre,
-            $request->telefono,
-            $request->direccion
+    // Llena la tabla temporal con los platillos
+    foreach ($platillos as $platillo) {
+        DB::insert("INSERT INTO temp_pedido_detalle (platillo_id, cantidad) VALUES (?, ?)", [
+            $platillo['id'],
+            $platillo['cantidad']
         ]);
-
-        // Recupera los resultados
-        $res = DB::select("SELECT @mensaje AS mensaje, @total AS total")[0];
-
-        // Verifica si hay mensaje de error
-        if (strpos($res->mensaje, 'Error:') === 0) {
-            return response()->json([
-                'success' => false,
-                'mensaje' => $res->mensaje
-            ], 400);
-        }
-
-        // Retorna la respuesta exitosa
-        return response()->json([
-            'success' => true,
-            'mensaje' => $res->mensaje,
-            'total' => $res->total
-        ], 200);
     }
+
+    // Llama al procedimiento almacenado
+    DB::statement("CALL PEDIDO_CONFIRMADO(?, ?, ?, @mensaje, @total)", [
+        $nombre,
+        $telefono,
+        $direccion
+    ]);
+
+    // Recupera los resultados del procedimiento almacenado
+    $res = DB::select("SELECT @mensaje AS mensaje, @total AS total")[0];
+
+    // Verifica si hay mensaje de error
+    if (strpos($res->mensaje, 'Error:') === 0) {
+        return response()->json([
+            'success' => false,
+            'mensaje' => $res->mensaje
+        ], 400);
+    }
+
+    // Retorna la respuesta exitosa
+    return response()->json([
+        'success' => true,
+        'mensaje' => $res->mensaje,
+        'total' => $res->total
+    ], 200);
+}
+
 
 
 

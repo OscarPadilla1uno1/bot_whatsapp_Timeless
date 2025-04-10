@@ -45,7 +45,7 @@
                                         <span class="cantidad-text">{{ $platillo->cantidad_disponible }}</span>
                                         <input type="number" class="cantidad-input hidden w-20 border rounded px-1"
                                             data-id="{{ $platillo->id }}"
-                                            data-fecha="{{ request('fecha') ?? date('Y-m-d') }}"
+                                            data-fecha=""
                                             value="{{ $platillo->cantidad_disponible }}">
                                         <button
                                             class="guardar-cantidad hidden absolute right-4 top-1/2 -translate-y-1/2 text-green-600 font-semibold text-sm"
@@ -54,7 +54,7 @@
                                         </button>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
-                                        <button onclick="eliminarPlatillo({{ $platillo->id }})"
+                                        <button onclick="eliminarPlatilloMenu({{ $platillo->id }})"
                                             class="text-red-600 hover:text-red-800 font-semibold text-sm">
                                             Eliminar
                                         </button>
@@ -77,7 +77,7 @@
             <div class="p-6">
                 <h4 class="text-lg font-medium text-gray-900 mb-4">Agregar Platillo al Menú</h4>
 
-                <form id="agregar-platillo-form" class="space-y-4">
+                <form id="agregar-platillo-form-menu" class="space-y-4">
                     @csrf
 
                     <div>
@@ -133,6 +133,10 @@
     // Verificar si el elemento existe
     if (fechaInput) {
         fechaInput.value = today;
+
+        document.querySelectorAll('.cantidad-input').forEach(input => {
+            input.dataset.fecha = today;
+        });
         
         fechaInput.addEventListener('change', function () {
             cargarMenuPorFecha(this.value);
@@ -141,7 +145,7 @@
         console.error('No se encontró el elemento con id "fecha"');
     }
 
-    document.getElementById('agregar-platillo-form').addEventListener('submit', function (e) {
+    document.getElementById('agregar-platillo-form-menu').addEventListener('submit', function (e) {
         e.preventDefault();
 
         const platilloId = document.getElementById('platillo').value;
