@@ -19,5 +19,14 @@ class Platillo extends Model
         'activo',
     ];
 
-    public $timestamps = false; // si tu tabla no tiene columnas created_at / updated_at
+    public $timestamps = false; public function menuDiario()
+    {
+        return $this->hasMany(MenuDiario::class);
+    }
+    
+    // Relación con detalles de pedido
+    public function detallesPedido()
+    {
+        return $this->hasMany(DetallePedido::class);
+    }
 }

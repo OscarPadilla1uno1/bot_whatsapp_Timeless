@@ -6,12 +6,18 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use App\Models\Platillo;
+use App\Models\Cliente;
+use App\Models\DetallePedido;
+use App\Models\MenuDiario;
+use App\Models\Pago;
+use App\Models\Pedido;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Storage;
 
 
 class AdminController extends Controller
 {
-    //
+    ///////////////////////////////para el menu del dia
     public function paginaMenuDelDia(Request $request)
     {
         // Si se recibe una fecha en el query, obtener el menú para esa fecha
@@ -87,33 +93,34 @@ class AdminController extends Controller
     }
 
     public function actualizarCantidad(Request $request)
-{
-    $request->validate([
-        'platillo_id' => 'required|integer',
-        'cantidad' => 'required|integer|min:1',
-        'fecha' => 'required|date'
-    ]);
-
-    try {
-        $result = DB::select('CALL actualizar_cantidad_menu(?, ?, ?)', [
-            $request->platillo_id,
-            $request->cantidad,
-            $request->fecha
+    {
+        $request->validate([
+            'platillo_id' => 'required|integer',
+            'cantidad' => 'required|integer|min:1',
+            'fecha' => 'required|date'
         ]);
 
-        return response()->json([
-            'success' => true,
-            'message' => $result[0]->mensaje ?? 'Cantidad actualizada.'
-        ]);
+        try {
+            $result = DB::select('CALL actualizar_cantidad_menu(?, ?, ?)', [
+                $request->platillo_id,
+                $request->cantidad,
+                $request->fecha
+            ]);
 
-    } catch (\Exception $e) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Error al actualizar: ' . $e->getMessage()
-        ], 500);
+            return response()->json([
+                'success' => true,
+                'message' => $result[0]->mensaje ?? 'Cantidad actualizada.'
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al actualizar: ' . $e->getMessage()
+            ], 500);
+        }
     }
-}
 
+    ///////////////////Para los platillos
 
     public function obtenerTodosPlatillos(Request $request)
     {
@@ -253,47 +260,131 @@ class AdminController extends Controller
         return response()->json(['success' => true]);
     }
 
-    public function storePedido($nombre, $telefono, $direccion, array $platillos)
-{
-    // Crea la tabla temporal
-    DB::statement("CREATE TEMPORARY TABLE temp_pedido_detalle (platillo_id INT, cantidad INT)");
 
-    // Llena la tabla temporal con los platillos
-    foreach ($platillos as $platillo) {
-        DB::insert("INSERT INTO temp_pedido_detalle (platillo_id, cantidad) VALUES (?, ?)", [
-            $platillo['id'],
-            $platillo['cantidad']
+
+    /////////////////////// Para el bot
+    public function storePedido(Request $request)
+    {
+        $request->validate([
+            'nombre' => 'required|string',
+            'telefono' => 'required|string',
+            'latitud' => 'required|numeric',
+            'longitud' => 'required|numeric',
+            'platillos' => 'required|array',
+            'platillos.*.id' => 'required|integer',
+            'platillos.*.cantidad' => 'required|integer',
         ]);
+
+        $nombre = $request->nombre;
+        $telefono = $request->telefono;
+        $latitud = $request->latitud;
+        $longitud = $request->longitud;
+        $platillos = $request->platillos;
+        $hoy = Carbon::today()->toDateString();
+        $subtotal = 0.00;
+
+        // Verificar que hay platillos
+        if (empty($platillos)) {
+            return response()->json([
+                'success' => false,
+                'mensaje' => 'Error: No hay platillos en el pedido',
+                'total_final' => 0.00
+            ], 400);
+        }
+
+        try {
+            $result = DB::transaction(function () use ($nombre, $telefono, $latitud, $longitud, $platillos, $hoy, &$subtotal) {
+                // Verificar si el cliente ya existe o crearlo
+                $cliente = Cliente::firstOrCreate(
+                    ['telefono' => $telefono],
+                    ['nombre' => $nombre]
+                );
+
+                // Crear el pedido
+                $pedido = new Pedido([
+                    'cliente_id' => $cliente->id,
+                    'latitud' => $latitud,
+                    'longitud' => $longitud,
+                    'total' => 0.00 // Se actualizará al final
+                ]);
+                
+                $pedido->save();
+
+                // Procesar cada platillo
+                foreach ($platillos as $item) {
+                    $platilloId = $item['id'];
+                    $cantidad = $item['cantidad'];
+
+                    // Verificar existencia en menú diario y disponibilidad
+                    $menuItem = MenuDiario::where('fecha', $hoy)
+                        ->where('platillo_id', $platilloId)
+                        ->first();
+
+                    if (!$menuItem) {
+                        throw new \Exception("Error: el platillo ID {$platilloId} no está en el menú de hoy.");
+                    }
+
+                    if ($cantidad > $menuItem->cantidad_disponible) {
+                        throw new \Exception("Error: no hay suficientes unidades disponibles del platillo ID {$platilloId}.");
+                    }
+
+                    // Obtener el precio del platillo
+                    $platillo = Platillo::find($platilloId);
+                    if (!$platillo) {
+                        throw new \Exception("Error: el platillo ID {$platilloId} no existe.");
+                    }
+
+                    // Insertar detalle del pedido
+                    $detalle = new DetallePedido([
+                        'pedido_id' => $pedido->id,
+                        'platillo_id' => $platilloId,
+                        'cantidad' => $cantidad,
+                        'precio_unitario' => $platillo->precio_base
+                    ]);
+                    
+                    $detalle->save();
+
+                    // Actualizar stock en menú
+                    $menuItem->cantidad_disponible -= $cantidad;
+                    $menuItem->save();
+
+                    // Sumar al subtotal
+                    $subtotal += ($cantidad * $platillo->precio_base);
+                }
+
+                // Actualizar el total del pedido
+                $pedido->total = $subtotal;
+                $pedido->save();
+
+                return [
+                    'mensaje' => 'Pedido registrado exitosamente.',
+                    'total_final' => $subtotal
+                ];
+            });
+
+            return response()->json([
+                'success' => true,
+                'mensaje' => $result['mensaje'],
+                'total' => $result['total_final']
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'mensaje' => $e->getMessage(),
+                'total_final' => 0.00
+            ], 400);
+        }
     }
 
-    // Llama al procedimiento almacenado
-    DB::statement("CALL PEDIDO_CONFIRMADO(?, ?, ?, @mensaje, @total)", [
-        $nombre,
-        $telefono,
-        $direccion
-    ]);
+    ////////////////////////////// Para el CRUD de los usuarios
 
-    // Recupera los resultados del procedimiento almacenado
-    $res = DB::select("SELECT @mensaje AS mensaje, @total AS total")[0];
-
-    // Verifica si hay mensaje de error
-    if (strpos($res->mensaje, 'Error:') === 0) {
-        return response()->json([
-            'success' => false,
-            'mensaje' => $res->mensaje
-        ], 400);
+    public function vistaUsuarios()
+    {
+        $usuarios = DB::select('CALL sp_obtener_usuarios()');
+        $permisos = DB::select('CALL sp_obtener_permisos()');
+        return view('admin.users', compact('usuarios', 'permisos'));
     }
-
-    // Retorna la respuesta exitosa
-    return response()->json([
-        'success' => true,
-        'mensaje' => $res->mensaje,
-        'total' => $res->total
-    ], 200);
-}
-
-
-
 
 
 }

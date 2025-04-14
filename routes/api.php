@@ -3,6 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\VroomController;
+use App\Http\Controllers\Admin\AdminController;
 
 /*
 |--------------------------------------------------------------------------
@@ -15,7 +16,16 @@ use App\Http\Controllers\VroomController;
 |
 */
 
+// En routes/api.php
+
+
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
+});
+
+Route::post('/bot-pedido', [AdminController::class, 'storePedido']);
+
+Route::get('/test', function () {
+    return response()->json(['message' => 'La API funciona!']);
 });
 

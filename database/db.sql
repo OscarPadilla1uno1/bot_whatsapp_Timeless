@@ -8,7 +8,6 @@ CREATE TABLE clientes (
     id INT AUTO_INCREMENT PRIMARY KEY,
     nombre VARCHAR(100) NOT NULL,
     telefono VARCHAR(20) NOT NULL UNIQUE, -- Se asume que el número de teléfono es único
-    email VARCHAR(100),
     fecha_registro DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -44,7 +43,7 @@ CREATE TABLE pedidos (
     fecha_pedido DATETIME DEFAULT CURRENT_TIMESTAMP,
     latitud double NOT NULL,
     longitud double NOT NULL,
-    estado ENUM('pendiente', 'en preparación', 'entregado', 'cancelado') DEFAULT 'pendiente',
+    estado ENUM('pendiente', 'en preparación', 'entregado', 'cancelado', 'despachado') DEFAULT 'pendiente',
     total DECIMAL(10,2) NOT NULL,
     FOREIGN KEY (cliente_id) REFERENCES clientes(id)
 );

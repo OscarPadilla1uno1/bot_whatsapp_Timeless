@@ -13,8 +13,7 @@ Route::post('/seguir-ruta', [VroomController::class, 'seguirRuta'])->name('segui
 
 //Rutas publicas
 Route::get('/admin/menu/MenuHoy', [AdminController::class, 'obtenerMenuHoy'])->name('admin.menu.hoy');
-Route::get('/admin/bot/registro/pedido', [AdminController::class, 'storePedido'])->name('admin.bot.pedidoRegistro');
-    
+
 
 
 Route::get('/', function () {
@@ -47,7 +46,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/admin/platillos/actualizar', [AdminController::class, 'actualizarPlatillo'])->name('admin.platillos.actualizar')->can('admin');
     Route::post('/admin/platillos/eliminar', [AdminController::class, 'eliminarPlatilloCatalogo'])->name('admin.platillos.eliminar')->can('admin');
     Route::get('/admin/platillos/todosPlatillos', [AdminController::class,'obtenerTodosPlatillos'])->name('admin.platillos.obtener')->can('admin');
-
+    // Rutas CRUD para usuarios
+    Route::get('/admin/users', [AdminController::class,'vistaUsuarios'])->name('admin.users')->can('admin');
 
 });
 
