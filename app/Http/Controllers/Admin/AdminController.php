@@ -13,6 +13,10 @@ use App\Models\Pago;
 use App\Models\Pedido;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rules;
+use Illuminate\Support\Facades\Hash;
+use App\Models\User;
+use Illuminate\Support\Facades\Log;
 
 
 class AdminController extends Controller
@@ -386,5 +390,33 @@ class AdminController extends Controller
         return view('admin.users', compact('usuarios', 'permisos'));
     }
 
+    public function UserStore(Request $request)
+{
+
+    try {
+        $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:users'],
+            'password' => ['required', 'confirmed', Rules\Password::defaults()],
+            'permiso' => ['required', 'exists:permissions,name'],
+        ]);
+
+        $user = User::create([
+            'name' => $request->name,
+            'email' => $request->email,
+            'password' => Hash::make($request->password),
+        ]);
+
+        $user->givePermissionTo($request->permiso);
+
+        return response()->json(['message' => 'Usuario creado con éxito.'], 201);
+    } catch (\Exception $e) {
+        Log::error('Error al registrar usuario: ' . $e->getMessage());
+        return response()->json([
+            'message' => 'Error interno del servidor',
+            'error' => $e->getMessage()
+        ], 500);
+    }
+}
 
 }

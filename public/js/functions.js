@@ -1,6 +1,6 @@
 function renderizarTabla(platillos) {
     const tabla = document.getElementById("body-tabla-platillos-menu");
-    const fechaSeleccionada = document.getElementById('fecha')?.value;
+    const fechaSeleccionada = document.getElementById("fecha")?.value;
     tabla.innerHTML = "";
 
     if (platillos.length > 0) {
@@ -10,7 +10,9 @@ function renderizarTabla(platillos) {
                 <td class="px-6 py-4 whitespace-nowrap">${index + 1}</td>
                 <td class="px-6 py-4 whitespace-nowrap">${platillo.nombre}</td>
                 <td class="px-4 py-2 relative">
-                    <span class="cantidad-text">${platillo.cantidad_disponible}</span>
+                    <span class="cantidad-text">${
+                        platillo.cantidad_disponible
+                    }</span>
                     <input type="number" class="cantidad-input hidden w-20 border rounded px-1"
                         data-id="${platillo.id}"
                         data-fecha="${fechaSeleccionada}"
@@ -143,8 +145,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
-
-            console.log("Guardando cantidad:", platilloId, nuevaCantidad, fecha);
+            console.log(
+                "Guardando cantidad:",
+                platilloId,
+                nuevaCantidad,
+                fecha
+            );
             fetch(window.routes.actualizarCantidad, {
                 method: "POST",
                 headers: {
@@ -416,4 +422,87 @@ function updateButtonText() {
     } else {
         labelText.textContent = "Seleccionar Imagen";
     }
+}
+
+function registrarNuevoUsuario(formId, endpointUrl) {
+    const form = document.getElementById(formId);
+
+    if (!form) {
+        console.error(`Formulario con ID "${formId}" no encontrado.`);
+        return;
+    }
+
+    // Obtener el permiso seleccionado (solo uno)
+    
+
+    form.addEventListener("submit", async function (e) {
+        e.preventDefault();
+
+        const permisoSeleccionado = form.querySelector(
+            'input[name="permiso"]:checked'
+        )?.value;
+    
+        if (!permisoSeleccionado) {
+            Swal.fire({
+                icon: "warning",
+                title: "Permiso requerido",
+                text: "Por favor selecciona un permiso para el nuevo usuario.",
+            });
+            return;
+        }
+
+        const formData = new FormData(form);
+        formData.append("permiso", permisoSeleccionado);
+
+        try {
+            const response = await fetch(endpointUrl, {
+                method: "POST",
+                headers: {
+                    "X-CSRF-TOKEN": form.querySelector('input[name="_token"]')
+                        .value,
+                    "Accept": "application/json",
+                },
+                body: formData,
+                
+            });
+
+            if (response.status === 201) {
+                Swal.fire({
+                    title: "¡Usuario creado!",
+                    text: "El nuevo usuario ha sido registrado exitosamente.",
+                    icon: "success",
+                    confirmButtonColor: "#fb923c",
+                    confirmButtonText: "Aceptar",
+                }).then(() => {
+                    location.reload(); // Recarga total
+                });
+            } else if (response.status === 422) {
+                const errorData = await response.json();
+                let mensaje = Object.values(errorData.errors)
+                    .flat()
+                    .join("<br>");
+
+                Swal.fire({
+                    title: "Error de validación",
+                    html: mensaje,
+                    icon: "error",
+                    confirmButtonColor: "#fb923c",
+                });
+            } else {
+                const errorText = await response.text();
+                console.error("Error:", response.status, errorText);
+            
+                throw new Error(
+                    `Error inesperado al registrar el usuario. Código: ${response.status}`
+                );
+            }
+        } catch (err) {
+            Swal.fire({
+                title: "Error",
+                text: err.message,
+                icon: "error",
+                confirmButtonColor: "#fb923c",
+            });
+        }
+    });
 }

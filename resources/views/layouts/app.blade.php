@@ -28,9 +28,9 @@
 
 <body class="font-sans antialiased">
     <div class="min-h-screen bg-gray-100">
-        @if(auth()->user()->hasPermissionTo('admin'))
+        @if(auth()->user()->hasPermissionTo('Administrador'))
             @include('layouts.navigationAdmin')
-        @elseif(auth()->user()->hasPermissionTo('cocina'))
+        @elseif(auth()->user()->hasPermissionTo('Cocina'))
             @include('layouts.navigationCocina')
         @elseif(auth()->user()->hasPermissionTo('Motorista'))
             @include('layouts.navigationMotorista')
