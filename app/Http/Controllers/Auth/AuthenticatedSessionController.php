@@ -33,11 +33,11 @@ public function store(LoginRequest $request): RedirectResponse
     $user = Auth::user();
 
     // Redirigir según los permisos del usuario
-    if ($user->hasPermissionTo('admin')) {
+    if ($user->hasPermissionTo('Administrador')) {
         return redirect()->route('admin.dashboard');
     } elseif ($user->hasPermissionTo('Motorista')) {
         return redirect()->route('motorista.dashboard');
-    } elseif ($user->hasPermissionTo('cocina')) {
+    } elseif ($user->hasPermissionTo('Cocina')) {
         return redirect()->route('cocina.dashboard');
     }
 
