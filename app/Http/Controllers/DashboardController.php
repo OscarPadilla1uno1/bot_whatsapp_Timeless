@@ -9,7 +9,7 @@ class DashboardController extends Controller
 {
     public function admin()
     {
-        if (!auth()->user()->can('admin')) {
+        if (!auth()->user()->can('Administrador')) {
             abort(403, 'No tienes permiso para acceder a esta página.');
         }
 
@@ -29,7 +29,7 @@ class DashboardController extends Controller
 
     public function cocina()
     {
-        if (!auth()->user()->can('cocina')) {
+        if (!auth()->user()->can('Cocina')) {
             abort(403, 'No tienes permiso para acceder a esta página.');
         }
 
