@@ -12,6 +12,7 @@ use App\Models\MenuDiario;
 use App\Models\Pago;
 use App\Models\Pedido;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Log; // 👈 Importación requerida
 use Illuminate\Support\Facades\Storage;
 
 
@@ -280,7 +281,10 @@ class AdminController extends Controller
         $latitud = $request->latitud;
         $longitud = $request->longitud;
         $platillos = $request->platillos;
-        $hoy = Carbon::today()->toDateString();
+   
+        $hoy = now()->setTimezone('America/Tegucigalpa')->format('Y-m-d'); // Ajusta tu zona horaria
+
+        Log::info("Fecha generada: " . $hoy);
         $subtotal = 0.00;
 
         // Verificar que hay platillos
