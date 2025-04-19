@@ -506,3 +506,155 @@ function registrarNuevoUsuario(formId, endpointUrl) {
         }
     });
 }
+
+function initEditarUsuario() {
+    // Ocultar el formulario inicialmente y mostrar el mensaje
+    document.getElementById('form-editar-usuario').style.display = 'none';
+    document.getElementById('no-user-selected').style.display = 'block';
+    
+    // Agregar SweetAlert si no está ya incluido
+    if (!window.Swal && !document.querySelector('script[src*="sweetalert2"]')) {
+        const sweetalertScript = document.createElement('script');
+        sweetalertScript.src = 'https://cdn.jsdelivr.net/npm/sweetalert2@11';
+        document.head.appendChild(sweetalertScript);
+    }
+    
+    document.querySelectorAll('.btn-editar-usuario').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const userId = btn.dataset.id;
+            
+            // Limpiar mensajes de error previos
+            document.querySelectorAll('.error-message').forEach(el => {
+                el.textContent = '';
+            });
+            
+            fetch(`/admin/users/${userId}`)
+                .then(res => res.json())
+                .then(user => {
+                    // Mostrar el formulario y ocultar el mensaje inicial
+                    document.getElementById('form-editar-usuario').style.display = 'block';
+                    document.getElementById('no-user-selected').style.display = 'none';
+                    
+                    document.getElementById('edit-id').value = user.id;
+                    document.getElementById('edit-name').value = user.name;
+                    document.getElementById('edit-email').value = user.email;
+                    
+                    document.querySelectorAll('.permiso-radio').forEach(radio => {
+                        radio.checked = (radio.value === user.permiso);
+                    });
+                    
+                    document.getElementById('form-editar-usuario').action = `/admin/users/${user.id}`;
+                })
+                .catch(err => {
+                    console.error('Error al cargar el usuario:', err);
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'Error al cargar los datos del usuario'
+                    });
+                });
+        });
+    });
+    
+    // Interceptar el envío del formulario para hacerlo por AJAX
+    document.getElementById('form-editar-usuario').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(this);
+        const userId = document.getElementById('edit-id').value;
+        
+        fetch(`/admin/users/${userId}`, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Éxito',
+                    text: data.message,
+                    confirmButtonText: 'Aceptar'
+                }).then((result) => {
+                    // Solo recargar cuando el usuario haga clic en el botón de confirmación
+                    if (result.isConfirmed) {
+                        location.reload();
+                    }
+                });
+            } else {
+                // Mostrar errores de validación
+                if (data.errors) {
+                    Object.keys(data.errors).forEach(field => {
+                        const errorElement = document.getElementById(`error-${field}`);
+                        if (errorElement) {
+                            errorElement.textContent = data.errors[field][0];
+                        }
+                    });
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: 'Ocurrió un error al procesar la solicitud'
+            });
+        });
+    });
+}
+
+function inicializarBotonesEliminarUsuario(idUsuarioActual) {
+    const botonesEliminar = document.querySelectorAll('.btn-eliminar-usuario');
+
+    botonesEliminar.forEach(btn => {
+        btn.addEventListener('click', function () {
+            const userId = this.dataset.id;
+
+            if (parseInt(userId) === parseInt(idUsuarioActual)) {
+                btn.disabled = true;
+                btn.classList.add('opacity-50', 'cursor-not-allowed');
+                btn.title = "No puedes eliminar tu propio usuario";
+                return; // No agregamos el listener
+            }
+
+            Swal.fire({
+                title: '¿Estás seguro?',
+                text: "¡Este usuario será eliminado permanentemente!",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#e3342f',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Sí, eliminar',
+                cancelButtonText: 'Cancelar'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    fetch(`/admin/usuarios/${userId}`, {
+                        method: 'DELETE',
+                        headers: {
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                            'Accept': 'application/json',
+                        }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            Swal.fire('¡Eliminado!', data.message, 'success').then(() => {
+                                location.reload();
+                            });
+                        } else {
+                            Swal.fire('Error', data.message || 'No se pudo eliminar el usuario.', 'error');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        Swal.fire('Error', 'Hubo un problema al eliminar.', 'error');
+                    });
+                }
+            });
+        });
+    });
+}

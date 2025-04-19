@@ -29,33 +29,86 @@
                                     <tr class="border-b">
                                         <td class="px-4 py-2">{{ $usuario->name }}</td>
                                         <td class="px-4 py-2">{{ $usuario->email }}</td>
-                                        <td class="px-4 py-2">{{ $usuario->permisos }}</td>
-                                        <td class="px-4 py-2 space-x-2">
-                                            <button
-                                                class="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600">Editar</button>
-                                            <button
-                                                class="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600">Eliminar</button>
+                                        <td class="px-4 py-2">{{ $usuario->getPermissionNames()->implode(', ') }}</td>
+                                        <!-- Solo un td para la columna de acciones -->
+                                        <td class="px-4 py-2">
+                                            <div class="flex space-x-2">
+                                                <button
+                                                    class="btn-editar-usuario p-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+                                                    data-id="{{ $usuario->id }}">
+                                                    <i class="fas fa-edit"></i>
+                                                </button>
+                                                <button
+                                                    class="btn-eliminar-usuario p-2 bg-red-500 text-white rounded hover:bg-red-600"
+                                                    data-id="{{ $usuario->id }}">
+                                                    <i class="fas fa-trash-alt"></i>
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 @endforeach
                             </tbody>
                         </table>
+                        <div class="mt-4">
+                            {{ $usuarios->links() }}
+                        </div>
                     </div>
                 </div>
 
-                {{-- Permisos del usuario seleccionado --}}
+                <!-- Vista: Formulario de edición con mensaje inicial -->
                 <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                     <div class="p-6">
-                        <h3 class="text-lg font-semibold text-gray-700 mb-4">Permisos del usuario</h3>
-                        {{-- Aquí mostrás dinámicamente los permisos del usuario seleccionado --}}
-                        <ul class="list-disc pl-5 text-sm text-gray-700">
-                            <li>Ver usuarios</li>
-                            <li>Editar usuarios</li>
-                            <li>Eliminar usuarios</li>
-                            {{-- … --}}
-                        </ul>
+                        <h3 class="text-lg font-semibold text-gray-700 mb-4">Editar usuario</h3>
+
+                        <!-- Mensaje inicial cuando no hay usuario seleccionado -->
+                        <div id="no-user-selected" class="py-4 text-center text-gray-600">
+                            <p>Por favor seleccione un usuario para editar</p>
+                        </div>
+
+                        <!-- Formulario oculto inicialmente -->
+                        <form id="form-editar-usuario" method="POST" style="display: none;">
+                            @csrf
+                            @method('PUT')
+
+                            <input type="hidden" name="id" id="edit-id">
+
+                            <div class="mb-4">
+                                <label for="edit-name" class="block text-sm font-medium text-gray-700">Nombre</label>
+                                <input type="text" id="edit-name" name="name"
+                                    class="mt-1 block w-full rounded-md shadow-sm border-gray-300 focus:ring-orange-500 focus:border-orange-500">
+                                <span class="text-red-500 text-xs error-message" id="error-name"></span>
+                            </div>
+
+                            <div class="mb-4">
+                                <label for="edit-email" class="block text-sm font-medium text-gray-700">Correo</label>
+                                <input type="email" id="edit-email" name="email"
+                                    class="mt-1 block w-full rounded-md shadow-sm border-gray-300 focus:ring-orange-500 focus:border-orange-500">
+                                <span class="text-red-500 text-xs error-message" id="error-email"></span>
+                            </div>
+
+                            <div class="mb-4">
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Permisos</label>
+                                <div id="edit-permisos" class="grid grid-cols-2 gap-3">
+                                    @foreach ($permisos as $permiso)
+                                        <label class="flex items-center gap-2 bg-gray-100 px-3 py-2 rounded shadow-sm">
+                                            <input type="radio" name="permiso" value="{{ $permiso->name }}"
+                                                class="permiso-radio rounded text-orange-500 focus:ring-orange-400">
+                                            <span class="ml-2 text-sm">{{ $permiso->name }}</span>
+                                        </label>
+                                    @endforeach
+                                </div>
+                                <span class="text-red-500 text-xs error-message" id="error-permiso"></span>
+                            </div>
+
+                            <button type="submit"
+                                class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded">
+                                Guardar cambios
+                            </button>
+                        </form>
                     </div>
                 </div>
+
+
             </div>
 
             {{-- Segunda fila: formulario para agregar usuario --}}
@@ -110,7 +163,7 @@
                             class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-4 rounded">
                             Crear usuario
                         </button>
-                        </form>
+                    </form>
 
                 </div>
             </div>
@@ -121,6 +174,9 @@
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             registrarNuevoUsuario('form-crear-usuario', '/admin/users/create');
+            initEditarUsuario();
+            const usuarioActual = @json(auth()->user()->id);
+            inicializarBotonesEliminarUsuario(usuarioActual);
         });
 
     </script>
