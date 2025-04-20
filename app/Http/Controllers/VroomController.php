@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class VroomController extends Controller
 {
@@ -34,35 +35,31 @@ class VroomController extends Controller
         $data = [
             "vehicles" => $this->vehicles,
             "jobs" => $jobs,
-            "options" => ["g" => true] // Asegúrate de que la geometría está habilitada
+            "options" => ["g" => true]
         ];
 
-        // Verifica la URL del servidor VROOM
         $vroomUrl = 'http://154.38.191.25:3000';
-
-        // Debug: Ver los datos que se enviarán
-        logger('Datos enviados a VROOM:', $data);
-
         $response = Http::timeout(30)->post($vroomUrl, $data);
 
-        // Debug: Ver la respuesta cruda
-        logger('Respuesta de VROOM:', [
-            'status' => $response->status(),
-            'body' => $response->body()
-        ]);
+        if ($response->failed()) {
+            Log::error('Error en la respuesta de VROOM', [
+                'status' => $response->status(),
+                'body' => $response->body()
+            ]);
+            return back()->with('error', 'Error al contactar el servidor VROOM.');
+        }
 
         $result = $response->json();
 
         if (!isset($result['routes'])) {
-            logger('Error en respuesta VROOM:', $result);
+            Log::error('Respuesta inesperada de VROOM', $result);
             return back()->with('error', 'Error al calcular rutas. Verifica los logs.');
         }
 
-        // Transformar las rutas para la vista
         $routes = [];
         foreach ($result['routes'] as $index => $route) {
             if (!isset($route['geometry'])) {
-                logger('Ruta sin geometría:', $route);
+                Log::warning('Ruta sin geometría', $route);
                 continue;
             }
 
@@ -84,9 +81,85 @@ class VroomController extends Controller
         ]);
     }
 
+    public function seguirRuta(Request $request)
+    {
+        // Validación de entrada
+        $validated = $request->validate([
+            'current_location' => 'required|array|size:2',
+            'current_location.0' => 'required|numeric', // longitud
+            'current_location.1' => 'required|numeric'  // latitud
+        ]);
+
+        try {
+            // Obtener ubicación actual desde el request
+            $currentLocation = $validated['current_location'];
+
+            // Configurar vehículo con ubicación actual
+            $vehicle = [
+                "id" => 1,
+                "start" => [$currentLocation[1], $currentLocation[0]], // [lat, lng]
+                "end" => [$currentLocation[1], $currentLocation[0]],
+                "capacity" => [2]
+            ];
+
+            // Obtener trabajos/pedidos válidos
+            $jobs = $this->getValidJobs();
+
+            if (empty($jobs)) {
+                return response()->json([
+                    'error' => 'No hay pedidos válidos para procesar'
+                ], 400);
+            }
+
+            // Configurar solicitud para VROOM
+            $vroomRequest = [
+                "vehicles" => [$vehicle],
+                "jobs" => $jobs,
+                "options" => ["g" => true] // Habilitar geometría
+            ];
+
+            // Enviar solicitud a VROOM
+            $response = Http::timeout(30)->post('http://154.38.191.25:3000', $vroomRequest);
+            
+            if ($response->failed()) {
+                return response()->json([
+                    'error' => 'Error al calcular la ruta desde tu ubicación actual',
+                    'vroom_error' => $response->body()
+                ], 500);
+            }
+
+            $result = $response->json();
+
+            if (!isset($result['routes'])) {
+                return response()->json([
+                    'error' => 'Formato de respuesta inválido desde el servidor de rutas'
+                ], 500);
+            }
+
+            // Procesar la primera ruta
+            $route = $result['routes'][0];
+
+            return response()->json([
+                'success' => true,
+                'routes' => [
+                    [
+                        'geometry' => $route['geometry'],
+                        'steps' => $this->formatSteps($route['steps'], $jobs)
+                    ]
+                ]
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Excepción en seguirRuta: ' . $e->getMessage());
+            return response()->json([
+                'error' => 'Error interno del servidor',
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
     private function getValidJobs()
     {
-        return DB::table('pedidos')
+        $pedidos = DB::table('pedidos')
             ->join('clientes', 'pedidos.cliente_id', '=', 'clientes.id')
             ->select(
                 'pedidos.id',
@@ -96,15 +169,16 @@ class VroomController extends Controller
             )
             ->whereNotNull('pedidos.latitud')
             ->whereNotNull('pedidos.longitud')
-            ->get()
-            ->map(function ($pedido) {
-                return [
-                    "id" => $pedido->id,
-                    "location" => [(float) $pedido->longitud, (float) $pedido->latitud],
-                    "delivery" => [1],
-                    "cliente" => $pedido->cliente_nombre
-                ];
-            })->toArray();
+            ->get();
+
+        return $pedidos->map(function ($pedido) {
+            return [
+                "id" => $pedido->id,
+                "location" => [(float) $pedido->longitud, (float) $pedido->latitud],
+                "delivery" => [1],
+                "cliente" => $pedido->cliente_nombre
+            ];
+        })->toArray();
     }
 
     private function formatSteps($steps, $jobs)
@@ -118,45 +192,14 @@ class VroomController extends Controller
             if (isset($step['id'])) {
                 $formatted['job'] = $step['id'];
                 $job = collect($jobs)->firstWhere('id', $step['id']);
-                $formatted['job_details'] = $job;
+                if ($job) {
+                    $formatted['job_details'] = [
+                        'cliente' => $job['cliente'] ?? 'Desconocido'
+                    ];
+                }
             }
 
             return $formatted;
         }, $steps);
     }
-
-    public function seguirRuta(Request $request)
-    {
-        $start = $request->input('current_location');
-        $vehiclesRuta = [
-            [
-                "id" => 1,
-                "start" => $start,
-                "end" => $start,
-                "capacity" => [2]
-            ],
-            [
-                "id" => 2,
-                "start" => $start,
-                "end" => $start,
-                "capacity" => [2]
-            ]
-        ];
-        $jobs = $this->getValidJobs();
-
-        if (empty($jobs)) {
-            return back()->with('error', 'No hay pedidos válidos para procesar');
-        }
-
-        $vroomRequest = [
-            "vehicles" => $vehiclesRuta,
-            "jobs" => $jobs,
-            "options" => ["g" => true] 
-        ];
-
-        $response = Http::post('http://154.38.191.25:3000', $vroomRequest); 
-        
-        return $response->json();
-    }
-
 }
