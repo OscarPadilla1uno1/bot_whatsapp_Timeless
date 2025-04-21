@@ -8,11 +8,6 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Middleware\CheckPermission;
 
 Route::get('/routes', [VroomController::class, 'index'])->name('routes');
-Route::post('/seguir', [VroomController::class, 'seguirRuta'])->name('seguir.ruta');
-
-Route::get('/prueba', function () {
-    return '¡Funciona!';
-});
 
 //Rutas publicas
 Route::get('/admin/menu/MenuHoy', [AdminController::class, 'obtenerMenuHoy'])->name('admin.menu.hoy');

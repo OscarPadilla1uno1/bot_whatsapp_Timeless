@@ -149,7 +149,6 @@ class VroomController extends Controller
                 ]
             ]);
         } catch (\Exception $e) {
-            \Log::error('Excepción en seguirRuta: ' . $e->getMessage());
             return response()->json([
                 'error' => 'Error interno del servidor',
                 'message' => $e->getMessage()

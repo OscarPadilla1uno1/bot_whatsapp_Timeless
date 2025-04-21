@@ -29,3 +29,5 @@ Route::get('/test', function () {
     return response()->json(['message' => 'La API funciona!']);
 });
 
+Route::post('/seguir', [VroomController::class, 'seguirRuta']);
+
