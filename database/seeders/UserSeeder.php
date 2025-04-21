@@ -19,9 +19,9 @@ class UserSeeder extends Seeder
             'email' => 'admin@example.com'
         ], [
             'name' => 'Admin',
-            'password' => Hash::make('passwordadmin')
+            'password' => Hash::make('Administrador')
         ]);
-        $admin->givePermissionTo('admin'); // ✅ Asignar permiso "admin"
+        $admin->givePermissionTo('Administrador'); // ✅ Asignar permiso "admin"
 
         // Crear usuario motorista
         $motorista = User::firstOrCreate([
@@ -39,6 +39,6 @@ class UserSeeder extends Seeder
             'name' => 'Cocina',
             'password' => Hash::make('passwordcocina')
         ]);
-        $cocina->givePermissionTo('cocina'); // ✅ Asignar permiso "dashboard_cocina"
+        $cocina->givePermissionTo('Cocina'); // ✅ Asignar permiso "dashboard_cocina"
     }
 }
