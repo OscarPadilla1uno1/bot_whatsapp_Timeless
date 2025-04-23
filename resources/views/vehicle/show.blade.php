@@ -196,6 +196,7 @@
 
         // Función para alternar el seguimiento de ruta
         function toggleFollowRoute() {
+        
             const followButton = document.getElementById('follow-button');
             
             if (isFollowingRoute) {
@@ -239,6 +240,7 @@
 
         // Función principal para actualizar la posición y ruta
         // Función principal para actualizar la posición y ruta
+// Función principal para actualizar la posición y ruta
 async function updateRouteAndPosition() {
     if (!navigator.geolocation) {
         showError("Geolocalización no soportada.");
@@ -246,118 +248,132 @@ async function updateRouteAndPosition() {
         return;
     }
 
-    navigator.geolocation.getCurrentPosition(async position => {
+    try {
+        const position = await new Promise((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+                enableHighAccuracy: true,
+                timeout: 5000,
+                maximumAge: 0
+            });
+        });
+
         const currentLat = position.coords.latitude;
         const currentLng = position.coords.longitude;
-        async function tryRequest(retries = 3) {
-        try {
-            // 1. Obtener la ruta desde el servidor con Axios
-            const response = await axios.post('http://127.0.0.1:8000/seguir', { 
-                current_location: [currentLng, currentLat] 
-            },{ timeout: 30000 } ,{
+        
+        await tryRequest(currentLat, currentLng);
+        
+    } catch (error) {
+        console.error('Error al obtener posición:', error);
+        showError("No se pudo obtener tu ubicación.");
+        stopFollowing();
+    }
+}
+
+// Función para hacer la petición al servidor
+async function tryRequest(currentLat, currentLng, retries = 3) {
+    try {
+        // 1. Obtener la ruta desde el servidor con Axios
+        const response = await axios.post(
+            'http://127.0.0.1:8000/api/seguir', 
+            { 
+                current_location: [currentLat, currentLng] 
+            },
+            {
                 headers: {
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
                     'Content-Type': 'application/json'
-                }
-            });
-
-            const data = response.data;
-
-            if (!data.routes || data.routes.length === 0) {
-                showError("No se pudo calcular la ruta.");
-                stopFollowing();
-                return;
+                },
+                timeout: 30000
             }
+        );
 
-            // 2. Procesar la ruta recibida
-            const coords = data.routes[0].geometry;
-            const decoded = polyline.decode(coords);
-            const latlngs = decoded.map(p => L.latLng(p[0], p[1]));
+        const data = response.data;
 
-            // Si es la primera vez o la ruta cambió, actualizar el trazado
-            if (!currentRouteLine || JSON.stringify(latlngs) !== JSON.stringify(currentRouteCoords)) {
-                currentRouteCoords = latlngs;
-                
-                if (currentRouteLine) {
-                    map.removeLayer(currentRouteLine);
-                }
-                
-                currentRouteLine = L.polyline(latlngs, { 
-                    color: '#00aaff', 
-                    weight: 5,
-                    opacity: 0.7
-                }).addTo(map);
-                
-                // Ajustar la vista para mostrar toda la ruta
-                map.fitBounds(currentRouteLine.getBounds());
-            }
-
-            // 3. Encontrar el punto más cercano en la ruta
-            const closestPoint = findClosestPoint(currentRouteCoords, currentLat, currentLng);
-            
-            // 4. Actualizar o crear el marcador de posición
-            if (currentMarker) {
-                currentMarker.setLatLng(closestPoint);
-            } else {
-                currentMarker = L.marker(closestPoint, {
-                    icon: L.divIcon({
-                        className: 'current-location-marker',
-                        html: '<div style="background-color: #4285F4; width: 20px; height: 20px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.3);"></div>',
-                        iconSize: [26, 26],
-                        iconAnchor: [13, 13]
-                    })
-                }).addTo(map).bindPopup("Tu ubicación").openPopup();
-            }
-
-            // 5. Dibujar línea desde tu posición actual al punto más cercano en la ruta
-            if (directionLine) {
-                map.removeLayer(directionLine);
-            }
-            
-            directionLine = L.polyline([[currentLat, currentLng], [closestPoint.lat, closestPoint.lng]], {
-                color: '#FF0000',
-                weight: 2,
-                dashArray: '5, 5'
-            }).addTo(map);
-
-            // 6. Ajustar la vista para mostrar tu posición y la ruta
-            const bounds = new L.LatLngBounds();
-            bounds.extend([currentLat, currentLng]);
-            bounds.extend([closestPoint.lat, closestPoint.lng]);
-            map.fitBounds(bounds, { padding: [50, 50] });
-
-            // Ocultar mensajes de error si todo está bien
-            document.getElementById('error-message').style.display = 'none';
-
-        } catch (error) {
-            console.error('Error al calcular la ruta:', error);
-            
-            // Manejo mejorado de errores con Axios
-            let errorMessage = "Error al calcular la ruta";
-            if (error.response) {
-                // El servidor respondió con un código de estado fuera del rango 2xx
-                errorMessage = error.response.data.message || 
-                             error.response.data.error || 
-                             `Error ${error.response.status}: ${error.response.statusText}`;
-            } else if (error.request) {
-                // La solicitud fue hecha pero no se recibió respuesta
-                errorMessage = "No se recibió respuesta del servidor";
-            }
-            
-            showError(errorMessage);
+        if (!data.routes || data.routes.length === 0) {
+            showError("No se pudo calcular la ruta.");
             stopFollowing();
+            return;
         }
-    }
-    }, error => {
-        showError("No se pudo obtener tu ubicación.");
-        stopFollowing();
-    }, {
-        enableHighAccuracy: true,
-        timeout: 5000,
-        maximumAge: 0
-    });
-} 
 
+        // 2. Procesar la ruta recibida
+        const coords = data.routes[0].geometry;
+        const decoded = polyline.decode(coords);
+        const latlngs = decoded.map(p => L.latLng(p[0], p[1]));
+
+        // Si es la primera vez o la ruta cambió, actualizar el trazado
+        if (!currentRouteLine || JSON.stringify(latlngs) !== JSON.stringify(currentRouteCoords)) {
+            currentRouteCoords = latlngs;
+            
+            if (currentRouteLine) {
+                map.removeLayer(currentRouteLine);
+            }
+            
+            currentRouteLine = L.polyline(latlngs, { 
+                color: '#00aaff', 
+                weight: 5,
+                opacity: 0.7
+            }).addTo(map);
+            
+            // Ajustar la vista para mostrar toda la ruta
+            map.fitBounds(currentRouteLine.getBounds());
+        }
+
+        // 3. Encontrar el punto más cercano en la ruta
+        const closestPoint = findClosestPoint(currentRouteCoords, currentLat, currentLng);
+        
+        // 4. Actualizar o crear el marcador de posición
+        if (currentMarker) {
+            currentMarker.setLatLng(closestPoint);
+        } else {
+            currentMarker = L.marker(closestPoint, {
+                icon: L.divIcon({
+                    className: 'current-location-marker',
+                    html: '<div style="background-color: #4285F4; width: 20px; height: 20px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.3);"></div>',
+                    iconSize: [26, 26],
+                    iconAnchor: [13, 13]
+                })
+            }).addTo(map).bindPopup("Tu ubicación").openPopup();
+        }
+
+        // 5. Dibujar línea desde tu posición actual al punto más cercano en la ruta
+        if (directionLine) {
+            map.removeLayer(directionLine);
+        }
+        
+        directionLine = L.polyline([[currentLat, currentLng], [closestPoint.lat, closestPoint.lng]], {
+            color: '#FF0000',
+            weight: 2,
+            dashArray: '5, 5'
+        }).addTo(map);
+
+        // 6. Ajustar la vista para mostrar tu posición y la ruta
+        const bounds = new L.LatLngBounds();
+        bounds.extend([currentLat, currentLng]);
+        bounds.extend([closestPoint.lat, closestPoint.lng]);
+        map.fitBounds(bounds, { padding: [50, 50] });
+
+        // Ocultar mensajes de error si todo está bien
+        document.getElementById('error-message').style.display = 'none';
+
+    } catch (error) {
+        console.error('Error al calcular la ruta:', error);
+        
+        // Manejo mejorado de errores con Axios
+        let errorMessage = "Error al calcular la ruta";
+        if (error.response) {
+            errorMessage = error.response.data.message || 
+                         error.response.data.error || 
+                         `Error ${error.response.status}: ${error.response.statusText}`;
+        } else if (error.request) {
+            errorMessage = "No se recibió respuesta del servidor";
+        } else if (error.message.includes('timeout')) {
+            errorMessage = "La solicitud tardó demasiado, intenta nuevamente";
+        }
+        
+        showError(errorMessage);
+        stopFollowing();
+    }
+}
         // Función para encontrar el punto más cercano en la ruta
         function findClosestPoint(routeCoords, lat, lng) {
             let closest = null;
