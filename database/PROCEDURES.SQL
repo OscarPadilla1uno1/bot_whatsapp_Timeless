@@ -133,7 +133,7 @@ DELIMITER ;
 
 
 DELIMITER $$
-CREATE OR PROCEDURE actualizar_cantidad_menu(IN p_platillo_id INT, IN p_cantidad INT, IN p_fecha DATE)
+CREATE OR REPLACE PROCEDURE actualizar_cantidad_menu(IN p_platillo_id INT, IN p_cantidad INT, IN p_fecha DATE)
 BEGIN
     DECLARE rows_affected INT;
 

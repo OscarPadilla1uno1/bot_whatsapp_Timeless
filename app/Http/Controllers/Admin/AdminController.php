@@ -285,7 +285,7 @@ class AdminController extends Controller
         $latitud = $request->latitud;
         $longitud = $request->longitud;
         $platillos = $request->platillos;
-   
+
         $hoy = now()->setTimezone('America/Tegucigalpa')->format('Y-m-d'); // Ajusta tu zona horaria
 
         Log::info("Fecha generada: " . $hoy);
@@ -315,7 +315,7 @@ class AdminController extends Controller
                     'longitud' => $longitud,
                     'total' => 0.00 // Se actualizará al final
                 ]);
-                
+
                 $pedido->save();
 
                 // Procesar cada platillo
@@ -349,7 +349,7 @@ class AdminController extends Controller
                         'cantidad' => $cantidad,
                         'precio_unitario' => $platillo->precio_base
                     ]);
-                    
+
                     $detalle->save();
 
                     // Actualizar stock en menú
@@ -390,104 +390,104 @@ class AdminController extends Controller
     public function vistaUsuarios()
     {
         $usuarios = User::with('permissions') // Carga permisos con eager loading
-        ->select('id', 'name', 'email')
-        ->paginate(10); // 10 usuarios por página
+            ->select('id', 'name', 'email')
+            ->paginate(10); // 10 usuarios por página
         $permisos = DB::select('CALL sp_obtener_permisos()');
         return view('admin.users', compact('usuarios', 'permisos'));
     }
 
 
-public function UserStore(Request $request)
-{
-    $request->validate([
-        'name' => ['required', 'string', 'max:255'],
-        'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:users'],
-        'password' => ['required', 'confirmed', Rules\Password::defaults()],
-        'permiso' => ['required', 'exists:permissions,name'],
-    ]);
-
-    $user = User::create([
-        'name' => $request->name,
-        'email' => $request->email,
-        'password' => Hash::make($request->password),
-    ]);
-
-    $user->givePermissionTo($request->permiso);
-
-    return response()->json(['message' => 'Usuario creado con éxito.'], 201);
-}
-
-public function showUser($id)
-{
-    $user = User::with('permissions')->findOrFail($id);
-
-    return response()->json([
-        'id' => $user->id,
-        'name' => $user->name,
-        'email' => $user->email,
-        'permiso' => $user->getPermissionNames()->first(), // o como lo gestiones
-    ]);
-}
-
-public function updateUser(Request $request, $id)
-{
-    try {
-        $user = User::findOrFail($id);
-
-        $validator = Validator::make($request->all(), [
-            'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users,email,' . $id,
-            'permiso' => 'required|exists:permissions,name',
+    public function UserStore(Request $request)
+    {
+        $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:users'],
+            'password' => ['required', 'confirmed', Rules\Password::defaults()],
+            'permiso' => ['required', 'exists:permissions,name'],
         ]);
 
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false, 
-                'errors' => $validator->errors()
-            ], 422);
-        }
-
-        $user->update([
+        $user = User::create([
             'name' => $request->name,
-            'email' => strtolower($request->email),
+            'email' => $request->email,
+            'password' => Hash::make($request->password),
         ]);
 
-        $user->syncPermissions([$request->permiso]);
+        $user->givePermissionTo($request->permiso);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Usuario actualizado correctamente'
-        ]);
-    } catch (\Exception $e) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Error al actualizar el usuario: ' . $e->getMessage()
-        ], 500);
+        return response()->json(['message' => 'Usuario creado con éxito.'], 201);
     }
-}
 
-public function destroyUser($id)
-{
-    try {
+    public function showUser($id)
+    {
+        $user = User::with('permissions')->findOrFail($id);
 
-        if (auth()->id() == $id) {
+        return response()->json([
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'permiso' => $user->getPermissionNames()->first(), // o como lo gestiones
+        ]);
+    }
+
+    public function updateUser(Request $request, $id)
+    {
+        try {
+            $user = User::findOrFail($id);
+
+            $validator = Validator::make($request->all(), [
+                'name' => 'required|string|max:255',
+                'email' => 'required|email|unique:users,email,' . $id,
+                'permiso' => 'required|exists:permissions,name',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            $user->update([
+                'name' => $request->name,
+                'email' => strtolower($request->email),
+            ]);
+
+            $user->syncPermissions([$request->permiso]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Usuario actualizado correctamente'
+            ]);
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'No puedes eliminar tu propio usuario.'
-            ], 403);
+                'message' => 'Error al actualizar el usuario: ' . $e->getMessage()
+            ], 500);
         }
-        
-        $usuario = User::findOrFail($id);
-
-        // Si querés también quitar sus permisos:
-        $usuario->syncPermissions([]);
-
-        $usuario->delete();
-
-        return response()->json(['success' => true, 'message' => 'Usuario eliminado correctamente.']);
-    } catch (\Exception $e) {
-        return response()->json(['success' => false, 'message' => 'Error al eliminar el usuario.']);
     }
-}
+
+    public function destroyUser($id)
+    {
+        try {
+
+            if (auth()->id() == $id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No puedes eliminar tu propio usuario.'
+                ], 403);
+            }
+
+            $usuario = User::findOrFail($id);
+
+            // Si querés también quitar sus permisos:
+            $usuario->syncPermissions([]);
+
+            $usuario->delete();
+
+            return response()->json(['success' => true, 'message' => 'Usuario eliminado correctamente.']);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Error al eliminar el usuario.']);
+        }
+    }
 
 }
