@@ -70,7 +70,7 @@ CREATE TABLE detalle_pedido (
 CREATE TABLE pagos (
     id INT AUTO_INCREMENT PRIMARY KEY,
     pedido_id INT NOT NULL, -- FK hacia pedidos
-    metodo_pago ENUM('en_linea', 'efectivo') NOT NULL,
+    metodo_pago ENUM('tarjeta', 'efectivo', 'transferencia') NOT NULL,
     estado_pago ENUM('pendiente', 'confirmado', 'fallido') DEFAULT 'pendiente',
     fecha_pago DATETIME,
     referencia_transaccion VARCHAR(100),

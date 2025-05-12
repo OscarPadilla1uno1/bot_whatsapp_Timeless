@@ -490,4 +490,416 @@ class AdminController extends Controller
         }
     }
 
+
+    public function pedidosStatusView(Request $request)
+    {
+        $tab = $request->query('tab', 'hoy'); // Por defecto "hoy"
+
+        $query = Pedido::with('cliente')->orderBy('fecha_pedido', 'desc');
+
+        if ($tab === 'hoy') {
+            $query->whereDate('fecha_pedido', now()->setTimezone('America/Tegucigalpa')->format('Y-m-d'));
+        } elseif ($tab === 'futuro') {
+            $query->whereDate('fecha_pedido', '>', now()->setTimezone('America/Tegucigalpa')->format('Y-m-d'));
+        } elseif ($tab === 'pasado') {
+            $query->whereDate('fecha_pedido', '<', now()->setTimezone('America/Tegucigalpa')->format('Y-m-d'));
+        }
+
+        $pedidos = $query->paginate(10)->withQueryString(); // Mantener query params en paginación
+
+        $pedidoSeleccionado = null;
+        if ($request->has('pedido_id')) {
+            $pedidoSeleccionado = Pedido::with('cliente')->find($request->pedido_id);
+        }
+
+        $estados = ['pendiente', 'en preparación', 'despachado', 'entregado', 'cancelado'];
+
+        return view('admin.pedidos', compact('pedidos', 'pedidoSeleccionado', 'estados', 'tab'));
+    }
+
+
+    public function actualizarEstado(Request $request, $id)
+    {
+        $pedido = Pedido::findOrFail($id);
+
+        $estados = ['pendiente', 'en preparación', 'despachado', 'entregado', 'cancelado'];
+
+        $estadoActual = $pedido->estado;
+        $nuevoEstado = $request->input('nuevo_estado');
+
+        $posActual = array_search($estadoActual, $estados);
+        $posNuevo = array_search($nuevoEstado, $estados);
+
+        // Validación: solo permitir avanzar
+        if ($posNuevo === false || $posNuevo < $posActual) {
+            return redirect()->back()->with('error', 'No se puede retroceder el estado del pedido.');
+        }
+
+        $pedido->estado = $nuevoEstado;
+        $pedido->save();
+
+        return redirect()->back()->with('success', 'Estado del pedido actualizado correctamente.');
+    }
+
+    /////////////////////////////Pedidos a futuro///////////////////////
+
+    public function pedidosProgramadosView(Request $request)
+    {
+        return view('admin.pedidosProgramados');
+    }
+
+    public function obtenerPedidosPorFecha(Request $request)
+    {
+        $fecha = $request->query('fecha');
+
+        if (!$fecha) {
+            return response()->json(['error' => 'Fecha requerida'], 400);
+        }
+
+        $pedidos = Pedido::with('cliente')
+            ->whereDate('fecha_pedido', $fecha)
+            ->where('estado', '!=', 'cancelado')
+            ->get()
+            ->sortBy(function ($pedido) {
+                return $pedido->cliente->nombre ?? '';
+            })
+            ->values(); // Reindexar para que no haya huecos
+
+        return response()->json(['pedidos' => $pedidos]);
+
+    }
+
+    public function storePedidoProgramado(Request $request)
+    {
+        $request->validate([
+            'nombre' => 'required|string',
+            'telefono' => 'required|string',
+            'fecha' => 'required|date|after_or_equal:today',
+            'mapa_url' => 'required|url',
+            'platillos' => 'required|array|min:1',
+            'platillos.*.id' => 'required|integer|exists:platillos,id',
+            'platillos.*.cantidad' => 'required|integer|min:1',
+            'metodo_pago' => 'required|in:efectivo,tarjeta,transferencia',
+        ]);
+
+        $fecha = $request->input('fecha');
+        $mapaUrl = $request->input('mapa_url');
+
+        // Extraer lat/lng desde el enlace
+        if (!preg_match('/@([-0-9.]+),([-0-9.]+),/', $mapaUrl, $matches)) {
+            return response()->json([
+                'success' => false,
+                'mensaje' => 'Error: No se pudo extraer latitud y longitud del enlace de mapa.',
+            ], 400);
+        }
+
+        $latitud = $matches[1];
+        $longitud = $matches[2];
+
+        $platillos = $request->input('platillos');
+        $nombre = $request->input('nombre');
+        $telefono = $request->input('telefono');
+        $pago = $request->input('metodo_pago');
+
+        $subtotal = 0.00;
+
+        try {
+            $result = DB::transaction(function () use ($nombre, $telefono, $latitud, $longitud, $platillos, $fecha, $pago, &$subtotal) {
+                $cliente = Cliente::firstOrCreate(
+                    ['telefono' => $telefono],
+                    ['nombre' => $nombre]
+                );
+
+                $pedido = Pedido::create([
+                    'cliente_id' => $cliente->id,
+                    'latitud' => $latitud,
+                    'longitud' => $longitud,
+                    'fecha_pedido' => $fecha . ' 12:00:00',
+                    'total' => 0.00
+                ]);
+
+                foreach ($platillos as $item) {
+                    $platilloId = $item['id'];
+                    $cantidad = $item['cantidad'];
+
+                    $menuItem = MenuDiario::where('fecha', $fecha)
+                        ->where('platillo_id', $platilloId)
+                        ->first();
+
+                    if (!$menuItem) {
+                        throw new \Exception("El platillo ID {$platilloId} no está en el menú del {$fecha}.");
+                    }
+
+                    if ($cantidad > $menuItem->cantidad_disponible) {
+                        throw new \Exception("No hay suficientes unidades disponibles del platillo ID {$platilloId}.");
+                    }
+
+                    $platillo = Platillo::findOrFail($platilloId);
+
+                    DetallePedido::create([
+                        'pedido_id' => $pedido->id,
+                        'platillo_id' => $platilloId,
+                        'cantidad' => $cantidad,
+                        'precio_unitario' => $platillo->precio_base,
+                    ]);
+
+                    $menuItem->cantidad_disponible -= $cantidad;
+                    $menuItem->save();
+
+                    $subtotal += $cantidad * $platillo->precio_base;
+                }
+
+                $pedido->total = $subtotal;
+                $pedido->save();
+
+                Pago::create([
+                    'pedido_id' => $pedido->id,
+                    'metodo_pago' => $pago,
+                    'estado' => 'pendiente', // o el estado que corresponda por defecto
+                ]);
+
+
+                return [
+                    'mensaje' => 'Pedido programado exitosamente.',
+                    'total_final' => $subtotal
+                ];
+            });
+
+            return response()->json([
+                'success' => true,
+                'mensaje' => $result['mensaje'],
+                'total' => $result['total_final']
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'mensaje' => $e->getMessage()
+            ], 400);
+        }
+    }
+
+
+    public function editPedidoProgramado(Pedido $pedido)
+    {
+        $pedido->load(['cliente', 'detalles.platillo', 'pago']);
+
+        // Obtener los platillos del menú del día para la fecha del pedido
+        $menu = MenuDiario::with('platillo')
+            ->whereDate('fecha', $pedido->fecha_pedido)
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'id' => $item->platillo->id,
+                    'nombre' => $item->platillo->nombre,
+                    'precio' => $item->platillo->precio,
+                    'cantidad_disponible' => $item->cantidad_disponible,
+                ];
+            })
+            ->unique('id')
+            ->values();
+
+
+        $urlMaps = $pedido->latitud && $pedido->longitud
+        ? "https://www.google.com/maps?q={$pedido->latitud},{$pedido->longitud}"
+        : null;
+
+        return response()->json([
+            'cliente' => [
+                'nombre' => $pedido->cliente->nombre,
+                'telefono' => $pedido->cliente->telefono,
+            ],
+            'latitud' => $pedido->latitud,
+            'longitud' => $pedido->longitud,
+            'url_maps' => $urlMaps,
+            'fecha_pedido' => $pedido->fecha_pedido->toDateString(),
+            'platillos' => $pedido->detalles->map(function ($detalle) {
+                return [
+                    'platillo_id' => $detalle->platillo_id,
+                    'nombre' => $detalle->platillo->nombre,
+                    'cantidad' => $detalle->cantidad,
+                    'precio' => $detalle->precio_unitario,
+                ];
+            }),
+            'metodo_pago' => optional($pedido->pago)->metodo_pago,
+            'menu_dia' => $menu,
+        ]);
+    }
+
+    public function updatePedidoProgramado(Request $request, $id)
+    {
+        $request->validate([
+            'nombre' => 'required|string|max:255',
+            'telefono' => 'required|string|max:20',
+            'mapa_url' => 'required|url',
+            'platillos' => 'required|array|min:1',
+            'platillos.*.platillo_id' => 'required|integer|exists:platillos,id',
+            'platillos.*.cantidad' => 'required|integer|min:0',
+            'platillos.*.precio' => 'required|numeric|min:0',
+            'metodo_pago' => 'required|in:efectivo,tarjeta,transferencia',
+        ]);
+
+
+        $cliente = Cliente::firstOrCreate(
+            [
+                'nombre' => $request->nombre,
+                'telefono' => $request->telefono,
+            ],
+        );
+
+        $pedido = Pedido::with(['detalles', 'pago'])->findOrFail($id);
+        $fecha = $pedido->fecha_pedido->format('Y-m-d');
+
+        // Extraer coordenadas del mapa
+        if (!preg_match('/@([-0-9.]+),([-0-9.]+),/', $request->mapa_url, $matches)) {
+            return response()->json(['success' => false, 'mensaje' => 'No se pudo extraer latitud/longitud.'], 400);
+        }
+        $latitud = $matches[1];
+        $longitud = $matches[2];
+
+        $platillosInput = collect($request->platillos)->keyBy('platillo_id');
+        $platillosActuales = $pedido->detalles->keyBy('platillo_id');
+
+        $subtotal = 0.0;
+
+        try {
+            DB::transaction(function () use ($pedido, $platillosInput, $platillosActuales, $fecha, $latitud, $longitud, $cliente, $request, &$subtotal) {
+
+                // 1. Revertir stock de platillos eliminados o disminuidos
+                foreach ($platillosActuales as $platilloId => $detalle) {
+                    $cantidadNueva = $platillosInput[$platilloId]['cantidad'] ?? 0;
+                    $diferencia = $detalle->cantidad - $cantidadNueva;
+
+                    if ($diferencia > 0) {
+                        $menuItem = MenuDiario::where('fecha', $fecha)
+                            ->where('platillo_id', $platilloId)
+                            ->first();
+
+                        if ($menuItem) {
+                            $menuItem->cantidad_disponible += $diferencia;
+                            $menuItem->save();
+                        }
+
+                        if ($cantidadNueva == 0) {
+                            $detalle->delete(); // Eliminar detalle si la cantidad se puso en cero
+                        } else {
+                            $detalle->cantidad = $cantidadNueva;
+                            $detalle->save();
+                        }
+                    }
+                }
+
+                // 2. Agregar o aumentar platillos nuevos
+                foreach ($platillosInput as $platilloId => $datos) {
+                    $cantidad = $datos['cantidad'];
+                    $precio = $datos['precio'];
+
+                    if ($cantidad <= 0)
+                        continue; // Ya fue procesado arriba
+
+                    $menuItem = MenuDiario::where('fecha', $fecha)
+                        ->where('platillo_id', $platilloId)
+                        ->first();
+
+                    if (!$menuItem) {
+                        throw new \Exception("El platillo ID {$platilloId} no está en el menú del {$fecha}.");
+                    }
+
+                    $yaExistia = $platillosActuales->has($platilloId);
+                    $cantidadActual = $yaExistia ? $platillosActuales[$platilloId]->cantidad : 0;
+                    $incremento = $cantidad - $cantidadActual;
+
+                    if ($incremento > 0) {
+                        if ($incremento > $menuItem->cantidad_disponible) {
+                            throw new \Exception("No hay suficientes unidades disponibles del platillo ID {$platilloId}.");
+                        }
+
+                        $menuItem->cantidad_disponible -= $incremento;
+                        $menuItem->save();
+                    }
+
+                    if ($yaExistia) {
+                        $detalle = $platillosActuales[$platilloId];
+                        $detalle->cantidad = $cantidad;
+                        $detalle->precio_unitario = $precio;
+                        $detalle->save();
+                    } else {
+                        DetallePedido::create([
+                            'pedido_id' => $pedido->id,
+                            'platillo_id' => $platilloId,
+                            'cantidad' => $cantidad,
+                            'precio_unitario' => $precio,
+                        ]);
+                    }
+
+                    $subtotal += $cantidad * $precio;
+                }
+
+                // 3. Actualizar coordenadas y total
+                $pedido->latitud = $latitud;
+                $pedido->longitud = $longitud;
+                $pedido->total = $subtotal;
+                $pedido->cliente_id = $cliente->id;
+                $pedido->save();
+
+                // 4. Actualizar método de pago
+                if ($pedido->pago) {
+                    $pedido->pago->metodo_pago = $request->metodo_pago;
+                    $pedido->pago->save();
+                } else {
+                    Pago::create([
+                        'pedido_id' => $pedido->id,
+                        'metodo_pago' => $request->metodo_pago,
+                        'estado' => 'pendiente',
+                    ]);
+                }
+            });
+
+            return response()->json(['success' => true, 'mensaje' => 'Pedido actualizado correctamente.']);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'mensaje' => $e->getMessage()], 400);
+        }
+    }
+
+    public function cancelarPedidoProgramado($id)
+    {
+        try {
+            $pedido = Pedido::with(['detalles', 'pago'])->findOrFail($id);
+
+            if ($pedido->estado === 'cancelado') {
+                return response()->json(['success' => false, 'mensaje' => 'Este pedido ya fue cancelado.'], 400);
+            }
+
+            $fecha = $pedido->fecha_pedido->format('Y-m-d');
+
+            DB::transaction(function () use ($pedido, $fecha) {
+                foreach ($pedido->detalles as $detalle) {
+                    $menuItem = MenuDiario::where('fecha', $fecha)
+                        ->where('platillo_id', $detalle->platillo_id)
+                        ->first();
+
+                    if ($menuItem) {
+                        $menuItem->cantidad_disponible += $detalle->cantidad;
+                        $menuItem->save();
+                    }
+                }
+
+                // Marcar el pedido como cancelado
+                $pedido->estado = 'cancelado';
+                $pedido->save();
+            });
+
+            return response()->json(['success' => true, 'mensaje' => 'Pedido cancelado y stock restaurado.']);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'mensaje' => $e->getMessage()], 400);
+        }
+    }
+
+
+
+
+
 }
+
+
+

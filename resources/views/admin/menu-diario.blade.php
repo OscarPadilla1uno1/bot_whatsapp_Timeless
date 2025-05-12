@@ -1,5 +1,5 @@
 <x-app-layout>
-<x-slot name="header">
+    <x-slot name="header">
         <h2 class="font-semibold text-xl text-gray-800 leading-tight">
             {{ __('Administrar Menú Diario') }}
         </h2>
@@ -44,8 +44,7 @@
                                     <td class="px-4 py-2 relative">
                                         <span class="cantidad-text">{{ $platillo->cantidad_disponible }}</span>
                                         <input type="number" class="cantidad-input hidden w-20 border rounded px-1"
-                                            data-id="{{ $platillo->id }}"
-                                            data-fecha=""
+                                            data-id="{{ $platillo->id }}" data-fecha=""
                                             value="{{ $platillo->cantidad_disponible }}">
                                         <button
                                             class="guardar-cantidad hidden absolute right-4 top-1/2 -translate-y-1/2 text-green-600 font-semibold text-sm"
@@ -75,10 +74,12 @@
         <!-- Card: Formulario para agregar platillo -->
         <div class="bg-white shadow-sm sm:rounded-lg">
             <div class="p-6">
-                <h4 class="text-lg font-medium text-gray-900 mb-4">Agregar Platillo al Menú</h4>
+
 
                 <form id="agregar-platillo-form-menu" class="space-y-4">
                     @csrf
+
+                    <h4 class="text-lg font-medium text-gray-900 mb-4">Agregar Platillo al Menú</h4>
 
                     <div>
                         <label for="platillo" class="block text-sm font-medium text-gray-700">Selecciona un
@@ -119,65 +120,89 @@
     </script>
     <script>
         document.addEventListener('DOMContentLoaded', function () {
-    // Get local date string in YYYY-MM-DD format
-    const d = new Date();
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    const today = `${year}-${month}-${day}`;
-    
-    console.log('Fecha de hoy:', today);
-    
-    const fechaInput = document.getElementById('fecha');
-    
-    // Verificar si el elemento existe
-    if (fechaInput) {
-        fechaInput.value = today;
 
-        document.querySelectorAll('.cantidad-input').forEach(input => {
-            input.dataset.fecha = today;
-        });
-        
-        fechaInput.addEventListener('change', function () {
-            cargarMenuPorFecha(this.value);
-        });
-    } else {
-        console.error('No se encontró el elemento con id "fecha"');
-    }
+            const today = obtenerFechaHoyTegucigalpa();
 
-    document.getElementById('agregar-platillo-form-menu').addEventListener('submit', function (e) {
-        e.preventDefault();
+            manejarEstadoFormulario(esFechaPasada(today));
 
-        const platilloId = document.getElementById('platillo').value;
-        const cantidad = document.getElementById('cantidad').value;
-        const fecha = document.getElementById('fecha').value;
 
-        fetch(window.routes.agregar, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "X-CSRF-TOKEN": window.csrfToken,
-                "Accept": "application/json"
-            },
-            body: JSON.stringify({ platillo_id: platilloId, cantidad: cantidad, fecha: fecha })
-        })
-        .then(res => res.json())
-        .then(data => {
-            if (data.success) {
-                Swal.fire({
-                    icon: 'success',
-                    title: '¡Éxito!',
-                    text: 'Platillo agregado correctamente.',
-                    timer: 2000,
-                    showConfirmButton: false
+            console.log('Fecha de hoy:', today);
+
+            const fechaInput = document.getElementById('fecha');
+
+            // Verificar si el elemento existe
+            if (fechaInput) {
+                fechaInput.value = today;
+
+                document.querySelectorAll('.cantidad-input').forEach(input => {
+                    input.dataset.fecha = today;
                 });
 
-                cargarMenuPorFecha(fecha);
+                fechaInput.addEventListener('change', function () {
+                    const esPasada = esFechaPasada(this.value);
+                    manejarEstadoFormulario(esPasada);
+                    cargarMenuPorFecha(this.value);
+                });
+            } else {
+                console.error('No se encontró el elemento con id "fecha"');
             }
-        })
-        .catch(err => console.error("Error al agregar:", err));
-    });
-});
+
+
+            document.addEventListener('click', function (e) {
+                if (e.target.classList.contains('cantidad-text')) {
+                    const fechaSeleccionada = document.getElementById('fecha')?.value;
+                    if (esFechaPasada(fechaSeleccionada)) {
+                        // Si la fecha es pasada, no hacer nada y terminar la función
+                        return;
+                    }
+
+                    // Solo ejecutamos esta parte si la fecha NO es pasada
+                    const span = e.target;
+                    const td = span.closest('td');
+
+                    const input = td.querySelector('.cantidad-input');
+                    const button = td.querySelector('.guardar-cantidad');
+
+                    span.classList.add('hidden');
+                    input.classList.remove('hidden');
+                    button.classList.remove('hidden');
+                }
+            });
+
+
+            document.getElementById('agregar-platillo-form-menu').addEventListener('submit', function (e) {
+                e.preventDefault();
+
+                const platilloId = document.getElementById('platillo').value;
+                const cantidad = document.getElementById('cantidad').value;
+                const fecha = document.getElementById('fecha').value;
+
+                fetch(window.routes.agregar, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-CSRF-TOKEN": window.csrfToken,
+                        "Accept": "application/json"
+                    },
+                    body: JSON.stringify({ platillo_id: platilloId, cantidad: cantidad, fecha: fecha })
+                })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.success) {
+                            Swal.fire({
+                                icon: 'success',
+                                title: '¡Éxito!',
+                                text: 'Platillo agregado correctamente.',
+                                timer: 2000,
+                                showConfirmButton: false
+                            });
+
+                            cargarMenuPorFecha(fecha);
+                        }
+                    })
+                    .catch(err => console.error("Error al agregar:", err));
+            });
+        });
     </script>
 
 
