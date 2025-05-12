@@ -497,6 +497,8 @@ class AdminController extends Controller
 
         $query = Pedido::with('cliente')->orderBy('fecha_pedido', 'desc');
 
+        
+
         if ($tab === 'hoy') {
             $query->whereDate('fecha_pedido', now()->setTimezone('America/Tegucigalpa')->format('Y-m-d'));
         } elseif ($tab === 'futuro') {
@@ -505,7 +507,23 @@ class AdminController extends Controller
             $query->whereDate('fecha_pedido', '<', now()->setTimezone('America/Tegucigalpa')->format('Y-m-d'));
         }
 
+
+        if ($request->filled('buscar')) {
+            $buscar = $request->buscar;
+        
+            $query->where(function ($q) use ($buscar) {
+                $q->whereHas('cliente', function ($q2) use ($buscar) {
+                    $q2->where('nombre', 'like', '%' . $buscar . '%');
+                })
+                ->orWhere('estado', 'like', '%' . $buscar . '%')
+                ->orWhereDate('fecha_pedido', $buscar)
+                ->orWhere('total', 'like', '%' . $buscar . '%');
+            });
+        }
+
         $pedidos = $query->paginate(10)->withQueryString(); // Mantener query params en paginación
+
+        
 
         $pedidoSeleccionado = null;
         if ($request->has('pedido_id')) {

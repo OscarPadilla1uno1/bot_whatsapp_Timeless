@@ -21,6 +21,7 @@
 
         {{-- Card: Tabla de pedidos --}}
         <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+            
             <div class="p-6 text-gray-900">
                 {{-- Tabs --}}
                 <div class="border-b border-gray-200 mb-4">
@@ -39,6 +40,26 @@
                         </a>
                     </nav>
                 </div>
+                <div class="mb-4 flex flex-wrap gap-2 items-center justify-between">
+            <form method="GET" class="flex flex-wrap gap-2 w-full sm:w-auto">
+                <input type="hidden" name="tab" value="{{ $tab }}">
+                <input type="text" name="buscar" value="{{ request('buscar') }}"
+                    placeholder="Buscar cliente, estado, fecha o total"
+                    class="border rounded px-3 py-2 w-full sm:w-64">
+
+                <button type="submit"
+                    class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 text-sm">
+                    Buscar
+                </button>
+
+                @if(request('buscar'))
+                    <a href="{{ route('admin.pedidos', ['tab' => $tab]) }}"
+                        class="bg-gray-300 text-gray-800 px-4 py-2 rounded hover:bg-gray-400 text-sm">
+                        Reiniciar
+                    </a>
+                @endif
+            </form>
+        </div>
                 <h3 class="text-lg font-semibold mb-4">Lista de Pedidos</h3>
 
                 <table class="min-w-full divide-y divide-gray-200" id="tabla-pedidos">
@@ -118,10 +139,10 @@
                                                         {{-- Icono con animación --}}
                                                         <div
                                                             class="w-12 h-12 flex items-center justify-center rounded-full
-                                                                                                                                                                    {{ ($index < array_search($pedidoSeleccionado->estado, $estados)) ? 'bg-green-500 text-white' :
+                                                                                                                                                                                            {{ ($index < array_search($pedidoSeleccionado->estado, $estados)) ? 'bg-green-500 text-white' :
                                     ($pedidoSeleccionado->estado == $estado ? 'bg-blue-500 text-white' : 'bg-gray-300 text-gray-700') }}
-                                                                                                                                                                    z-10 transition-all duration-300 transform 
-                                                                                                                                                                    {{ $pedidoSeleccionado->estado == $estado ? 'animate-pulse' : '' }}">
+                                                                                                                                                                                            z-10 transition-all duration-300 transform 
+                                                                                                                                                                                            {{ $pedidoSeleccionado->estado == $estado ? 'animate-pulse' : '' }}">
                                                         </div>
 
                                                         {{-- Nombre del estado --}}
