@@ -13,7 +13,7 @@
             <div class="bg-white shadow rounded-lg p-4">
                 <h3 class="text-lg font-semibold mb-2">Menú del día</h3>
                 <input type="date" id="fecha-menu-programar" class="border p-2 rounded mb-4"
-                    min="{{ now()->format('Y-m-d') }}">
+                    min="{{ now()->setTimezone('America/Tegucigalpa')->addDay()->format('Y-m-d') }}">
                 <div id="contenedor-menu-programar" class="space-y-4">
                     <p class="text-gray-500">Seleccione una fecha para ver el menú.</p>
                 </div>
@@ -108,7 +108,7 @@
 
             <h3 class="text-lg font-semibold mb-4">Editar Pedido</h3>
 
-            <form id="form-editar-pedido-programar">
+            <form id="form-editar-pedido-programar" method="PUT">
                 <div id="campos-form-pedido-editar">
                     <!-- Cliente -->
                     <div class="mb-4">

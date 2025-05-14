@@ -911,6 +911,8 @@ function abrirModalEditarPedido(pedidoId) {
     fetch(`/admin/pedidos/${pedidoId}/edit`)
         .then((response) => response.json())
         .then((data) => {
+
+            console.log("Datos del pedido:", data);
             document
                 .getElementById("modal-editar-pedido-programado")
                 .classList.remove("hidden");
@@ -1154,6 +1156,8 @@ async function actualizarPedidoProgramado(form) {
         platillos,
     };
 
+    console.log("Payload:", payload);
+
     const token = document
         .querySelector('meta[name="csrf-token"]')
         .getAttribute("content");
@@ -1243,7 +1247,7 @@ function eliminarPedido(id) {
                             "fecha-menu-programar"
                         );
                         if(fecha && fecha.value){
-                        cargarPedidosPorFecha(fecha);
+                        cargarPedidosPorFecha(fecha.value);
                         } else {
                             location.reload();
                         }

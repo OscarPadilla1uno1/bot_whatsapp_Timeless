@@ -527,7 +527,7 @@ class AdminController extends Controller
 
         $pedidoSeleccionado = null;
         if ($request->has('pedido_id')) {
-            $pedidoSeleccionado = Pedido::with('cliente')->find($request->pedido_id);
+            $pedidoSeleccionado = Pedido::with(['cliente', 'detalles.platillo'])->find($request->pedido_id);
         }
 
         $estados = ['pendiente', 'en preparación', 'despachado', 'entregado', 'cancelado'];
@@ -710,7 +710,7 @@ class AdminController extends Controller
                 return [
                     'id' => $item->platillo->id,
                     'nombre' => $item->platillo->nombre,
-                    'precio' => $item->platillo->precio,
+                    'precio' => $item->platillo->precio_base,
                     'cantidad_disponible' => $item->cantidad_disponible,
                 ];
             })
@@ -718,9 +718,10 @@ class AdminController extends Controller
             ->values();
 
 
-        $urlMaps = $pedido->latitud && $pedido->longitud
-        ? "https://www.google.com/maps?q={$pedido->latitud},{$pedido->longitud}"
-        : null;
+            $urlMaps = $pedido->latitud && $pedido->longitud
+            ? "https://www.google.com/maps/@{$pedido->latitud},{$pedido->longitud},15z"
+            : null;
+        
 
         return response()->json([
             'cliente' => [

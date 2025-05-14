@@ -19,9 +19,10 @@
             </div>
         @endif
 
+        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
         {{-- Card: Tabla de pedidos --}}
         <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
-            
+
             <div class="p-6 text-gray-900">
                 {{-- Tabs --}}
                 <div class="border-b border-gray-200 mb-4">
@@ -41,25 +42,25 @@
                     </nav>
                 </div>
                 <div class="mb-4 flex flex-wrap gap-2 items-center justify-between">
-            <form method="GET" class="flex flex-wrap gap-2 w-full sm:w-auto">
-                <input type="hidden" name="tab" value="{{ $tab }}">
-                <input type="text" name="buscar" value="{{ request('buscar') }}"
-                    placeholder="Buscar cliente, estado, fecha o total"
-                    class="border rounded px-3 py-2 w-full sm:w-64">
+                    <form method="GET" class="flex flex-wrap gap-2 w-full sm:w-auto">
+                        <input type="hidden" name="tab" value="{{ $tab }}">
+                        <input type="text" name="buscar" value="{{ request('buscar') }}"
+                            placeholder="Buscar cliente, estado, fecha o total"
+                            class="border rounded px-3 py-2 w-full sm:w-64">
 
-                <button type="submit"
-                    class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 text-sm">
-                    Buscar
-                </button>
+                        <button type="submit"
+                            class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 text-sm">
+                            Buscar
+                        </button>
 
-                @if(request('buscar'))
-                    <a href="{{ route('admin.pedidos', ['tab' => $tab]) }}"
-                        class="bg-gray-300 text-gray-800 px-4 py-2 rounded hover:bg-gray-400 text-sm">
-                        Reiniciar
-                    </a>
-                @endif
-            </form>
-        </div>
+                        @if(request('buscar'))
+                            <a href="{{ route('admin.pedidos', ['tab' => $tab]) }}"
+                                class="bg-gray-300 text-gray-800 px-4 py-2 rounded hover:bg-gray-400 text-sm">
+                                Reiniciar
+                            </a>
+                        @endif
+                    </form>
+                </div>
                 <h3 class="text-lg font-semibold mb-4">Lista de Pedidos</h3>
 
                 <table class="min-w-full divide-y divide-gray-200" id="tabla-pedidos">
@@ -125,9 +126,43 @@
                     <h3 class="text-lg font-semibold mb-4">Detalle del Pedido #{{ $pedidoSeleccionado->id }}</h3>
 
                     <div class="mb-4">
-                        <p><strong>Cliente:</strong> {{ $pedidoSeleccionado->cliente->nombre }}</p>
-                        <p><strong>Teléfono:</strong> {{ $pedidoSeleccionado->cliente->telefono }}</p>
-                        <p><strong>Total:</strong> LPS. {{ number_format($pedidoSeleccionado->total, 2) }}</p>
+                        <div class="grid grid-cols-1 items-center sm:grid-cols-3 gap-4 mb-4">
+                            <p><strong>Cliente:</strong> {{ $pedidoSeleccionado->cliente->nombre }}</p>
+                            <p><strong>Teléfono:</strong> {{ $pedidoSeleccionado->cliente->telefono }}</p>
+                            <p><strong>Total:</strong> LPS. {{ number_format($pedidoSeleccionado->total, 2) }}</p>
+                        </div>
+
+
+                        {{-- Detalles del pedido (platillos) --}}
+                        @if ($pedidoSeleccionado->detalles->count())
+                            <div class="mb-4">
+                                <h4 class="font-semibold mb-2">Platillos:</h4>
+                                <table class="min-w-full border border-gray-200 text-sm">
+                                    <thead class="bg-gray-100">
+                                        <tr>
+                                            <th class="border px-2 py-1 text-left">Platillo</th>
+                                            <th class="border px-2 py-1 text-center">Cantidad</th>
+                                            <th class="border px-2 py-1 text-right">Precio Unitario</th>
+                                            <th class="border px-2 py-1 text-right">Subtotal</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach ($pedidoSeleccionado->detalles as $detalle)
+                                            <tr>
+                                                <td class="border px-2 py-1">{{ $detalle->platillo->nombre }}</td>
+                                                <td class="border px-2 py-1 text-center">{{ $detalle->cantidad }}</td>
+                                                <td class="border px-2 py-1 text-right">LPS.
+                                                    {{ number_format($detalle->precio_unitario, 2) }}</td>
+                                                <td class="border px-2 py-1 text-right">LPS.
+                                                    {{ number_format($detalle->cantidad * $detalle->precio_unitario, 2) }}</td>
+                                            </tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+                        @endif
+
+
                     </div>
 
                     {{-- Timeline de estados --}}
@@ -139,10 +174,10 @@
                                                         {{-- Icono con animación --}}
                                                         <div
                                                             class="w-12 h-12 flex items-center justify-center rounded-full
-                                                                                                                                                                                            {{ ($index < array_search($pedidoSeleccionado->estado, $estados)) ? 'bg-green-500 text-white' :
+                                                                                                                                                                                                                    {{ ($index < array_search($pedidoSeleccionado->estado, $estados)) ? 'bg-green-500 text-white' :
                                     ($pedidoSeleccionado->estado == $estado ? 'bg-blue-500 text-white' : 'bg-gray-300 text-gray-700') }}
-                                                                                                                                                                                            z-10 transition-all duration-300 transform 
-                                                                                                                                                                                            {{ $pedidoSeleccionado->estado == $estado ? 'animate-pulse' : '' }}">
+                                                                                                                                                                                                                    z-10 transition-all duration-300 transform 
+                                                                                                                                                                                                                    {{ $pedidoSeleccionado->estado == $estado ? 'animate-pulse' : '' }}">
                                                         </div>
 
                                                         {{-- Nombre del estado --}}
@@ -209,5 +244,6 @@
                 </div>
             </div>
         @endif
+        </div>
     </div>
 </x-app-layout>
