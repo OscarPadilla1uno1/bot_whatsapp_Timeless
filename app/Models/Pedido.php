@@ -6,12 +6,10 @@ use Illuminate\Database\Eloquent\Model;
 class Pedido extends Model
 {
     protected $table = 'pedidos';
-    protected $fillable = ['cliente_id', 'latitud', 'longitud', 'estado', 'total'];
+    protected $fillable = ['cliente_id', 'latitud', 'longitud', 'estado', 'total', 'fecha_pedido'];
     
-    // Si tu tabla usa fecha_pedido en lugar de created_at y no tiene updated_at
-    const CREATED_AT = 'fecha_pedido';
-    const UPDATED_AT = null;
-    
+    public $timestamps = false;
+
     // Relación con cliente
     public function cliente()
     {
