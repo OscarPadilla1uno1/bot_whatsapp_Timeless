@@ -429,6 +429,29 @@ document.addEventListener("DOMContentLoaded", () => {
         formAgregar.addEventListener("submit", function (event) {
             event.preventDefault();
 
+            const imagenInput = document.getElementById("imagen");
+        const file = imagenInput.files[0];
+
+        if (!file) {
+            Swal.fire({
+                icon: "warning",
+                title: "Imagen requerida",
+                text: "Por favor, selecciona una imagen antes de guardar el platillo.",
+                confirmButtonText: "Aceptar"
+            });
+            return;
+        }
+
+        if (!file.type.startsWith("image/")) {
+            Swal.fire({
+                icon: "error",
+                title: "Archivo no válido",
+                text: "El archivo seleccionado no es una imagen.",
+                confirmButtonText: "Aceptar"
+            });
+            return;
+        }
+
             const formData = new FormData(this);
             const paginaActual =
                 new URLSearchParams(window.location.search).get("page") || 1;
