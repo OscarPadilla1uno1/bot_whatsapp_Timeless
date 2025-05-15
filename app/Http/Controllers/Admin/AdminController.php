@@ -313,6 +313,7 @@ class AdminController extends Controller
                     'cliente_id' => $cliente->id,
                     'latitud' => $latitud,
                     'longitud' => $longitud,
+                    'fecha_pedido' => $hoy,
                     'total' => 0.00 // Se actualizará al final
                 ]);
 
