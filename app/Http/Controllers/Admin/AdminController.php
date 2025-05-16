@@ -704,8 +704,9 @@ class AdminController extends Controller
         $pedido->load(['cliente', 'detalles.platillo', 'pago']);
 
         // Obtener los platillos del menú del día para la fecha del pedido
+        $fecha = Carbon::parse($pedido->fecha_pedido);
         $menu = MenuDiario::with('platillo')
-            ->whereDate('fecha', $pedido->fecha_pedido)
+            ->whereDate('fecha', $fecha)
             ->get()
             ->map(function ($item) {
                 return [
@@ -732,7 +733,7 @@ class AdminController extends Controller
             'latitud' => $pedido->latitud,
             'longitud' => $pedido->longitud,
             'url_maps' => $urlMaps,
-            'fecha_pedido' => $pedido->fecha_pedido->toDateString(),
+            'fecha_pedido' => Carbon::parse($pedido->fecha_pedido)->toDateString(),
             'platillos' => $pedido->detalles->map(function ($detalle) {
                 return [
                     'platillo_id' => $detalle->platillo_id,
@@ -768,7 +769,8 @@ class AdminController extends Controller
         );
 
         $pedido = Pedido::with(['detalles', 'pago'])->findOrFail($id);
-        $fecha = $pedido->fecha_pedido->format('Y-m-d');
+        $fecha = Carbon::parse($pedido->fecha_pedido)->format('Y-m-d'); // ✅ convierte string a Carbon
+
 
         // Extraer coordenadas del mapa
         if (!preg_match('/@([-0-9.]+),([-0-9.]+),/', $request->mapa_url, $matches)) {
@@ -890,7 +892,7 @@ class AdminController extends Controller
                 return response()->json(['success' => false, 'mensaje' => 'Este pedido ya fue cancelado.'], 400);
             }
 
-            $fecha = $pedido->fecha_pedido->format('Y-m-d');
+            $fecha = Carbon::parse($pedido->fecha_pedido)->format('Y-m-d');
 
             DB::transaction(function () use ($pedido, $fecha) {
                 foreach ($pedido->detalles as $detalle) {
