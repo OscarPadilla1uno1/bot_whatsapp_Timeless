@@ -195,7 +195,7 @@
                     </div>
 
                     {{-- Formulario para cambiar estado --}}
-                    @if ($tab == 'hoy' && $pedidoSeleccionado->estado !== 'cancelado')
+                    @if ($tab == 'hoy' && $pedidoSeleccionado->estado !== 'cancelado' && $pedidoSeleccionado->estado !== 'entregado')
                         {{-- Formulario de actualización de estado + botón cancelar --}}
                         <form method="POST" action="{{ route('admin.pedidos.actualizarEstado', $pedidoSeleccionado->id) }}">
                             @csrf

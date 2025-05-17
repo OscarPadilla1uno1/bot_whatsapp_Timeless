@@ -464,13 +464,18 @@ document.addEventListener("DOMContentLoaded", () => {
                 .then((response) => response.json())
                 .then((data) => {
                     if (data.success) {
-                        Swal.fire({
-                            title: "¡Éxito!",
-                            text: "Platillo guardado correctamente.",
-                            icon: "success",
-                            confirmButtonText: "Aceptar",
-                        }).then(() => location.reload());
-                    }
+    Swal.fire({
+        title: "¡Éxito!",
+        text: "Platillo guardado correctamente.",
+        icon: "success",
+        confirmButtonText: "Aceptar",
+        allowOutsideClick: false,
+    }).then((result) => {
+        if (result.isConfirmed) {
+            location.reload();
+        }
+    });
+}
                 })
                 .catch((error) => {
                     console.error("Error:", error);
