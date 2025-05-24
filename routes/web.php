@@ -62,6 +62,10 @@ Route::middleware('auth')->group(function () {
 
     //Ruta de cancelacion de pedidos
     Route::delete('/admin/pedidos/{id}', [AdminController::class, 'cancelarPedidoProgramado'])->can('Administrador');
+    Route::post('/admin/pedidos/{pedido}/descargar-factura', [AdminController::class, 'descargarFactura'])
+    ->name('admin.pedidos.descargarFactura')
+    ->can('Administrador');
+
 
 });
 

@@ -12,16 +12,29 @@ use App\Models\MenuDiario;
 use App\Models\Pago;
 use App\Models\Pedido;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\Log; // 👈 Importación requerida
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rules;
 use Illuminate\Support\Facades\Hash;
 use App\Models\User;
 use Illuminate\Support\Facades\Validator;
+use thiagoalessio\TesseractOCR\TesseractOCR;
+use Barryvdh\DomPDF\Facade\Pdf;
+
 
 
 class AdminController extends Controller
 {
+
+    public function descargarFactura($id)
+    {
+        $pedido = Pedido::with(['cliente', 'detalles.platillo'])->findOrFail($id);
+
+        $pdf = PDF::loadView('pdf.factura', compact('pedido'));
+        return $pdf->download("factura_pedido_{$pedido->id}.pdf");
+    }
+
+
     ///////////////////////////////para el menu del dia
     public function paginaMenuDelDia(Request $request)
     {
@@ -386,6 +399,74 @@ class AdminController extends Controller
         }
     }
 
+    public function procesarComprobante(Request $request)
+    {
+        $request->validate([
+            'comprobante' => 'required|image|max:4096', // PNG, JPG, etc.
+        ]);
+
+        $path = $request->file('comprobante')->store('comprobantes_temp');
+
+        // Ejecutar OCR
+        $ocr = new TesseractOCR(storage_path("app/$path"));
+        $texto = $ocr->run();
+
+        // Extraer datos del texto con regex
+        $monto = $this->extraerMonto($texto);
+        $fecha = $this->extraerFecha($texto);
+        $referencia = $this->extraerReferencia($texto);
+        $banco = $this->extraerBanco($texto);
+
+        // Eliminar imagen temporal
+        Storage::delete($path);
+
+        return response()->json([
+            'monto' => $monto,
+            'fecha' => $fecha,
+            'referencia' => $referencia,
+            'banco' => $banco,
+            'texto_crudo' => $texto // útil para debug
+        ]);
+    }
+
+    private function extraerMonto($texto)
+    {
+        if (preg_match('/([L\$]?\s?\d+[.,]?\d+)+/i', $texto, $matches)) {
+            return $matches[0];
+        }
+        return null;
+    }
+
+    private function extraerFecha($texto)
+    {
+        if (preg_match('/\d{2}\/\d{2}\/\d{4}/', $texto, $matches)) {
+            return $matches[0];
+        }
+        return null;
+    }
+
+    private function extraerReferencia($texto)
+    {
+        if (preg_match('/Ref(erencia)?:?\s*([A-Z0-9]+)/i', $texto, $matches)) {
+            return $matches[2] ?? null;
+        }
+        return null;
+    }
+
+    private function extraerBanco($texto)
+    {
+        if (stripos($texto, 'BAC') !== false)
+            return 'BAC';
+        if (stripos($texto, 'Atlántida') !== false)
+            return 'Atlántida';
+        if (stripos($texto, 'Banpaís') !== false)
+            return 'Banpaís';
+        return 'Desconocido';
+    }
+
+
+
+
     ////////////////////////////// Para el CRUD de los usuarios
 
     public function vistaUsuarios()
@@ -498,7 +579,7 @@ class AdminController extends Controller
 
         $query = Pedido::with('cliente')->orderBy('fecha_pedido', 'desc');
 
-        
+
 
         if ($tab === 'hoy') {
             $query->whereDate('fecha_pedido', now()->setTimezone('America/Tegucigalpa')->format('Y-m-d'));
@@ -511,20 +592,20 @@ class AdminController extends Controller
 
         if ($request->filled('buscar')) {
             $buscar = $request->buscar;
-        
+
             $query->where(function ($q) use ($buscar) {
                 $q->whereHas('cliente', function ($q2) use ($buscar) {
                     $q2->where('nombre', 'like', '%' . $buscar . '%');
                 })
-                ->orWhere('estado', 'like', '%' . $buscar . '%')
-                ->orWhereDate('fecha_pedido', $buscar)
-                ->orWhere('total', 'like', '%' . $buscar . '%');
+                    ->orWhere('estado', 'like', '%' . $buscar . '%')
+                    ->orWhereDate('fecha_pedido', $buscar)
+                    ->orWhere('total', 'like', '%' . $buscar . '%');
             });
         }
 
         $pedidos = $query->paginate(10)->withQueryString(); // Mantener query params en paginación
 
-        
+
 
         $pedidoSeleccionado = null;
         if ($request->has('pedido_id')) {
@@ -720,10 +801,10 @@ class AdminController extends Controller
             ->values();
 
 
-            $urlMaps = $pedido->latitud && $pedido->longitud
+        $urlMaps = $pedido->latitud && $pedido->longitud
             ? "https://www.google.com/maps/@{$pedido->latitud},{$pedido->longitud},15z"
             : null;
-        
+
 
         return response()->json([
             'cliente' => [

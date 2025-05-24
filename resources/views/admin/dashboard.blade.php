@@ -5,7 +5,7 @@
         </h2>
     </x-slot>
 
-    <div class="py-12">
+    <div class="py-6">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
             <!-- Card de bienvenida -->
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
@@ -68,8 +68,98 @@
                 </div>
             </div>
 
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                <!-- Ventas Mensuales -->
+                <div class="bg-white shadow-sm sm:rounded-lg p-6">
+                    <h4 class="text-lg font-medium text-gray-900 mb-4">Ventas Mensuales</h4>
+                    <canvas id="graficoVentas"></canvas>
+                </div>
+
+                <!-- Clientes Frecuentes -->
+                <div class="bg-white shadow-sm sm:rounded-lg p-6 flex flex-col items-center justify-center">
+                    <h4 class="text-lg font-medium text-gray-900 mb-4">Clientes Frecuentes</h4>
+                    <canvas id="graficoClientes" class="max-w-xs max-h-64"></canvas>
+                </div>
+
+                <!-- Platillos Más Vendidos -->
+                <div class="bg-white shadow-sm sm:rounded-lg p-6">
+                    <h4 class="text-lg font-medium text-gray-900 mb-4">Platillos Más Vendidos</h4>
+                    <canvas id="graficoPlatillos"></canvas>
+                </div>
+
+                <!-- Ventas Semanales -->
+                <div class="bg-white shadow-sm sm:rounded-lg p-6">
+                    <h4 class="text-lg font-medium text-gray-900 mb-4">Ventas Semanales</h4>
+                    <canvas id="graficoSemana"></canvas>
+                </div>
+            </div>
+
+
+
         </div>
     </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        const ventasMensuales = @json($ventasMensuales);
+        const platillosMasVendidos = @json($platillosMasVendidos);
+        const clientesFrecuentes = @json($clientesFrecuentes);
+        const ventasSemanales = @json($ventasSemanales);
+
+        // Ventas Mensuales
+        new Chart(document.getElementById('graficoVentas'), {
+            type: 'bar',
+            data: {
+                labels: ventasMensuales.map(e => e.mes),
+                datasets: [{
+                    label: 'Ventas (LPS)',
+                    data: ventasMensuales.map(e => e.total),
+                    backgroundColor: '#60A5FA'
+                }]
+            }
+        });
+
+        // Platillos Más Vendidos
+        new Chart(document.getElementById('graficoPlatillos'), {
+            type: 'bar',
+            data: {
+                labels: platillosMasVendidos.map(e => e.nombre),
+                datasets: [{
+                    label: 'Cantidad Vendida',
+                    data: platillosMasVendidos.map(e => e.total_vendido),
+                    backgroundColor: '#F59E0B'
+                }]
+            }
+        });
+
+        // Clientes Frecuentes (Pastel)
+        new Chart(document.getElementById('graficoClientes'), {
+            type: 'pie',
+            data: {
+                labels: clientesFrecuentes.map(e => e.nombre),
+                datasets: [{
+                    data: clientesFrecuentes.map(e => e.total_pedidos),
+                    backgroundColor: clientesFrecuentes.map(() => '#' + Math.floor(Math.random() * 16777215).toString(16))
+                }]
+            }
+        });
+
+        // Ventas Semanales
+        new Chart(document.getElementById('graficoSemana'), {
+            type: 'bar',
+            data: {
+                labels: ventasSemanales.map(e => e.dia),
+                datasets: [{
+                    label: 'Ventas (LPS)',
+                    data: ventasSemanales.map(e => e.total),
+                    backgroundColor: '#10B981'
+                }]
+            }
+        });
+    </script>
+
+
+
 
 
 </x-app-layout>
