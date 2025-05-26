@@ -18,7 +18,7 @@ use App\Http\Controllers\Admin\AdminController;
 
 // En routes/api.php
 
-
+Route::post('/vehicle/distance', [VroomController::class, 'calculateDistanceFromVehicle']);
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });

@@ -688,4 +688,206 @@ class VroomController extends Controller
             return $formatted;
         }, $steps);
     }
+/**
+ * API para calcular distancia desde vehículo hasta coordenadas específicas
+ * 
+ * @param Request $request
+ * @return \Illuminate\Http\JsonResponse
+ */
+public function calculateDistanceFromVehicle(Request $request)
+{
+    try {
+        // Validación de entrada
+        $validated = $request->validate([
+            'target_lat' => 'required|numeric|between:-90,90',
+            'target_lng' => 'required|numeric|between:-180,180',
+            'vehicle_id' => 'sometimes|integer|exists:users,id',
+            'method' => 'sometimes|string|in:haversine,euclidean,manhattan'
+        ]);
+
+        // Usar usuario por defecto para testing
+$user = Auth::user() ?? User::first(); // Toma el primer usuario de la BD
+
+if (!$user) {
+    return response()->json([
+        'success' => false,
+        'error' => 'No hay usuarios en la base de datos'
+    ], 500);
+}
+
+        // Determinar vehículo a usar
+        $vehicleId = $validated['vehicle_id'] ?? $user->id;
+        
+        // Si no es admin, solo puede usar su propio vehículo
+        if (!$user->can('Administrador') && $vehicleId != $user->id) {
+            $vehicleId = $user->id;
+        }
+
+        // Obtener posición inicial del vehículo
+        $vehiclePosition = $this->getVehicleStartPosition($vehicleId);
+        
+        if (!$vehiclePosition) {
+            return response()->json([
+                'success' => false,
+                'error' => 'No se pudo obtener la posición del vehículo'
+            ], 404);
+        }
+
+        // Calcular distancia
+        $method = $validated['method'] ?? 'haversine';
+        $distance = $this->calculateDistance(
+            $vehiclePosition['lat'],
+            $vehiclePosition['lng'],
+            $validated['target_lat'],
+            $validated['target_lng'],
+            $method
+        );
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'vehicle_id' => $vehicleId,
+                'vehicle_position' => $vehiclePosition,
+                'target_coordinates' => [
+                    'lat' => $validated['target_lat'],
+                    'lng' => $validated['target_lng']
+                ],
+                'distance' => [
+                    'km' => round($distance, 3),
+                    'meters' => round($distance * 1000, 0),
+                    'formatted' => $distance < 1 ? round($distance * 1000) . ' m' : round($distance, 2) . ' km'
+                ],
+                'method' => $method
+            ]
+        ]);
+
+    } catch (\Illuminate\Validation\ValidationException $e) {
+        return response()->json([
+            'success' => false,
+            'error' => 'Datos inválidos',
+            'details' => $e->errors()
+        ], 422);
+
+    } catch (\Exception $e) {
+        Log::error('Error en calculateDistanceFromVehicle', [
+            'error' => $e->getMessage(),
+            'user_id' => Auth::id()
+        ]);
+        
+        return response()->json([
+            'success' => false,
+            'error' => 'Error interno del servidor'
+        ], 500);
+    }
+}
+
+/**
+ * Obtiene la posición inicial del vehículo
+ */
+private function getVehicleStartPosition($vehicleId)
+{
+    try {
+        // 1. Buscar en asignaciones de rutas
+        $routeAssignment = RouteAssignment::where('user_id', $vehicleId)
+            ->latest('calculated_at')
+            ->first();
+            
+        if ($routeAssignment && $routeAssignment->route_data) {
+            $routeData = $routeAssignment->route_data;
+            
+            if (isset($routeData['steps']) && is_array($routeData['steps'])) {
+                foreach ($routeData['steps'] as $step) {
+                    if ($step['type'] === 'start' && isset($step['location'])) {
+                        return [
+                            'lat' => $step['location'][1], // VROOM usa [lng, lat]
+                            'lng' => $step['location'][0],
+                            'source' => 'route_assignment'
+                        ];
+                    }
+                }
+            }
+        }
+
+        // 2. Usar posición por defecto de getAvailableVehicles()
+        $vehicles = $this->getAvailableVehicles();
+        $vehicle = collect($vehicles)->firstWhere('id', $vehicleId);
+        
+        if ($vehicle && isset($vehicle['start'])) {
+            return [
+                'lat' => $vehicle['start'][1],
+                'lng' => $vehicle['start'][0],
+                'source' => 'default_position'
+            ];
+        }
+
+        // 3. Posición por defecto (Tegucigalpa)
+        return [
+            'lat' => 14.0667,
+            'lng' => -87.1875,
+            'source' => 'fallback'
+        ];
+
+    } catch (\Exception $e) {
+        Log::error('Error obteniendo posición del vehículo', [
+            'vehicle_id' => $vehicleId,
+            'error' => $e->getMessage()
+        ]);
+        
+        return null;
+    }
+}
+
+/**
+ * Calcula distancia entre dos puntos
+ */
+private function calculateDistance($lat1, $lng1, $lat2, $lng2, $method = 'haversine')
+{
+    switch ($method) {
+        case 'euclidean':
+            return $this->euclideanDistance($lat1, $lng1, $lat2, $lng2);
+            
+        case 'manhattan':
+            return $this->manhattanDistance($lat1, $lng1, $lat2, $lng2);
+            
+        case 'haversine':
+        default:
+            return $this->haversineDistance($lat1, $lng1, $lat2, $lng2);
+    }
+}
+
+/**
+ * Fórmula de Haversine (más precisa para la Tierra)
+ */
+private function haversineDistance($lat1, $lng1, $lat2, $lng2)
+{
+    $earthRadius = 6371; // Radio de la Tierra en km
+
+    $dLat = deg2rad($lat2 - $lat1);
+    $dLng = deg2rad($lng2 - $lng1);
+
+    $a = sin($dLat / 2) * sin($dLat / 2) +
+        cos(deg2rad($lat1)) * cos(deg2rad($lat2)) *
+        sin($dLng / 2) * sin($dLng / 2);
+
+    $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
+
+    return $earthRadius * $c;
+}
+
+/**
+ * Distancia Euclidiana (línea recta)
+ */
+private function euclideanDistance($lat1, $lng1, $lat2, $lng2)
+{
+    $earthRadius = 6371;
+    
+    $latDiff = $lat2 - $lat1;
+    $lngDiff = $lng2 - $lng1;
+    
+    $latKm = $latDiff * ($earthRadius * M_PI / 180);
+    $lngKm = $lngDiff * ($earthRadius * M_PI / 180) * cos(deg2rad(($lat1 + $lat2) / 2));
+    
+    return sqrt($latKm * $latKm + $lngKm * $lngKm);
+}
+
 }
