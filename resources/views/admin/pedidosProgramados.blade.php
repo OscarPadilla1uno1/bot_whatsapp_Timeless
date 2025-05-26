@@ -290,6 +290,7 @@
                     platillos,
                     metodo_pago,
                 };
+                console.log(payload)
 
                 const token = document
                     .querySelector('meta[name="csrf-token"]')

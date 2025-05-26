@@ -132,6 +132,15 @@
                             <p><strong>Total:</strong> LPS. {{ number_format($pedidoSeleccionado->total, 2) }}</p>
                         </div>
 
+                        <div class="mb-4">
+                            <form action="{{ route('admin.pedidos.descargarFactura', $pedidoSeleccionado->id) }}" method="POST" target="_blank">
+                            @csrf
+                            <button type="submit" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">
+                                Descargar Factura
+                            </button>
+                            </form>
+                        </div>
+
 
                         {{-- Detalles del pedido (platillos) --}}
                         @if ($pedidoSeleccionado->detalles->count())
@@ -195,7 +204,7 @@
                     </div>
 
                     {{-- Formulario para cambiar estado --}}
-                    @if ($tab == 'hoy' && $pedidoSeleccionado->estado !== 'cancelado')
+                    @if ($tab == 'hoy' && $pedidoSeleccionado->estado !== 'cancelado' && $pedidoSeleccionado->estado !== 'entregado')
                         {{-- Formulario de actualización de estado + botón cancelar --}}
                         <form method="POST" action="{{ route('admin.pedidos.actualizarEstado', $pedidoSeleccionado->id) }}">
                             @csrf
