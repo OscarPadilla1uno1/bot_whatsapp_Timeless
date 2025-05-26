@@ -688,206 +688,506 @@ class VroomController extends Controller
             return $formatted;
         }, $steps);
     }
-/**
- * API para calcular distancia desde vehículo hasta coordenadas específicas
- * 
- * @param Request $request
- * @return \Illuminate\Http\JsonResponse
- */
-public function calculateDistanceFromVehicle(Request $request)
-{
-    try {
-        // Validación de entrada
-        $validated = $request->validate([
-            'target_lat' => 'required|numeric|between:-90,90',
-            'target_lng' => 'required|numeric|between:-180,180',
-            'vehicle_id' => 'sometimes|integer|exists:users,id',
-            'method' => 'sometimes|string|in:haversine,euclidean,manhattan'
-        ]);
-
-        // Usar usuario por defecto para testing
-$user = Auth::user() ?? User::first(); // Toma el primer usuario de la BD
-
-if (!$user) {
-    return response()->json([
-        'success' => false,
-        'error' => 'No hay usuarios en la base de datos'
-    ], 500);
-}
-
-        // Determinar vehículo a usar
-        $vehicleId = $validated['vehicle_id'] ?? $user->id;
-        
-        // Si no es admin, solo puede usar su propio vehículo
-        if (!$user->can('Administrador') && $vehicleId != $user->id) {
-            $vehicleId = $user->id;
-        }
-
-        // Obtener posición inicial del vehículo
-        $vehiclePosition = $this->getVehicleStartPosition($vehicleId);
-        
-        if (!$vehiclePosition) {
+    /**
+     * API para calcular distancia y tiempo real usando VROOM
+     * Reemplaza el método calculateDistanceFromVehicle existente
+     */
+    public function calculateDistanceFromVehicle(Request $request)
+    {
+        try {
+            // Validación de entrada
+            $validated = $request->validate([
+                'target_lat' => 'required|numeric|between:-90,90',
+                'target_lng' => 'required|numeric|between:-180,180',
+                'vehicle_id' => 'sometimes|integer|exists:users,id',
+                'delivery_type' => 'sometimes|string|in:express,standard,economy',
+                'traffic_condition' => 'sometimes|string|in:light,moderate,heavy',
+                'weather_condition' => 'sometimes|string|in:clear,rain,storm',
+                'use_vroom' => 'sometimes|boolean' // Opción para usar VROOM o cálculo directo
+            ]);
+    
+            $user = Auth::user() ?? User::first();
+            
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'No hay usuarios en la base de datos'
+                ], 500);
+            }
+    
+            // Determinar vehículo a usar
+            $vehicleId = $validated['vehicle_id'] ?? $user->id;
+            
+            // Si no es admin, solo puede usar su propio vehículo
+            if (!$user->can('Administrador') && $vehicleId != $user->id) {
+                $vehicleId = $user->id;
+            }
+    
+            // Obtener posición inicial del vehículo
+            $vehiclePosition = $this->getVehicleStartPositionSimple($vehicleId);
+    
+            // Usar VROOM por defecto
+            $useVroom = $validated['use_vroom'] ?? true;
+            
+            if ($useVroom) {
+                // Calcular usando VROOM (distancia y tiempo reales de la ruta)
+                $vroomResult = $this->calculateRouteWithVroom(
+                    $vehiclePosition['lat'],
+                    $vehiclePosition['lng'],
+                    $validated['target_lat'],
+                    $validated['target_lng'],
+                    $vehicleId
+                );
+                
+                if ($vroomResult['success']) {
+                    $routeData = $vroomResult['data'];
+                    
+                    // Aplicar factores externos al tiempo base de VROOM
+                    $adjustedTime = $this->adjustVroomTime(
+                        $routeData['duration_seconds'],
+                        $validated['delivery_type'] ?? 'standard',
+                        $validated['traffic_condition'] ?? 'moderate',
+                        $validated['weather_condition'] ?? 'clear'
+                    );
+                    
+                    // Obtener información del vehículo
+                    $vehicle = User::find($vehicleId);
+                    
+                    return response()->json([
+                        'success' => true,
+                        'data' => [
+                            'vehicle' => [
+                                'id' => $vehicleId,
+                                'name' => $vehicle ? $vehicle->name : 'Vehículo ' . $vehicleId,
+                                'position' => $vehiclePosition
+                            ],
+                            'target_coordinates' => [
+                                'lat' => $validated['target_lat'],
+                                'lng' => $validated['target_lng']
+                            ],
+                            'route_info' => [
+                                'distance' => [
+                                    'km' => $routeData['distance_km'],
+                                    'meters' => $routeData['distance_meters'],
+                                    'formatted' => $routeData['distance_formatted']
+                                ],
+                                'vroom_base_time' => [
+                                    'seconds' => $routeData['duration_seconds'],
+                                    'minutes' => $routeData['duration_minutes'],
+                                    'formatted' => $routeData['duration_formatted']
+                                ],
+                                'adjusted_delivery_time' => $adjustedTime,
+                                'geometry' => $routeData['geometry'],
+                                'steps_count' => $routeData['steps_count']
+                            ],
+                            'calculation_details' => [
+                                'method' => 'vroom_real_route',
+                                'delivery_type' => $validated['delivery_type'] ?? 'standard',
+                                'traffic_condition' => $validated['traffic_condition'] ?? 'moderate',
+                                'weather_condition' => $validated['weather_condition'] ?? 'clear',
+                                'vroom_response_time_ms' => $vroomResult['response_time_ms']
+                            ]
+                        ],
+                        'timestamp' => now()->toISOString()
+                    ]);
+                } else {
+                    // Log de error y usar fallback
+                    Log::warning('VROOM falló, usando cálculo de respaldo', [
+                        'vroom_error' => $vroomResult['error'],
+                        'target_coords' => [$validated['target_lat'], $validated['target_lng']]
+                    ]);
+                }
+            }
+    
+            // Fallback: cálculo directo (método anterior)
+            $distance = $this->calculateDistanceSimple(
+                $vehiclePosition['lat'],
+                $vehiclePosition['lng'],
+                $validated['target_lat'],
+                $validated['target_lng']
+            );
+    
+            $deliveryEstimate = $this->calculateDeliveryTime(
+                $distance,
+                $validated['delivery_type'] ?? 'standard',
+                $validated['traffic_condition'] ?? 'moderate',
+                $validated['weather_condition'] ?? 'clear'
+            );
+    
+            $vehicle = User::find($vehicleId);
+    
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'vehicle' => [
+                        'id' => $vehicleId,
+                        'name' => $vehicle ? $vehicle->name : 'Vehículo ' . $vehicleId,
+                        'position' => $vehiclePosition
+                    ],
+                    'target_coordinates' => [
+                        'lat' => $validated['target_lat'],
+                        'lng' => $validated['target_lng']
+                    ],
+                    'route_info' => [
+                        'distance' => [
+                            'km' => round($distance, 3),
+                            'meters' => round($distance * 1000, 0),
+                            'formatted' => $distance < 1 ? round($distance * 1000) . ' m' : round($distance, 2) . ' km'
+                        ],
+                        'delivery_estimate' => $deliveryEstimate
+                    ],
+                    'calculation_details' => [
+                        'method' => 'fallback_calculation',
+                        'note' => 'VROOM no disponible, usando cálculo directo'
+                    ]
+                ],
+                'timestamp' => now()->toISOString()
+            ]);
+    
+        } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
                 'success' => false,
-                'error' => 'No se pudo obtener la posición del vehículo'
-            ], 404);
+                'error' => 'Datos inválidos',
+                'details' => $e->errors()
+            ], 422);
+    
+        } catch (\Exception $e) {
+            Log::error('Error en calculateDistanceFromVehicle', [
+                'error' => $e->getMessage(),
+                'user_id' => Auth::id()
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'error' => 'Error interno del servidor'
+            ], 500);
         }
-
-        // Calcular distancia
-        $method = $validated['method'] ?? 'haversine';
-        $distance = $this->calculateDistance(
-            $vehiclePosition['lat'],
-            $vehiclePosition['lng'],
-            $validated['target_lat'],
-            $validated['target_lng'],
-            $method
-        );
-
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'vehicle_id' => $vehicleId,
-                'vehicle_position' => $vehiclePosition,
-                'target_coordinates' => [
-                    'lat' => $validated['target_lat'],
-                    'lng' => $validated['target_lng']
-                ],
-                'distance' => [
-                    'km' => round($distance, 3),
-                    'meters' => round($distance * 1000, 0),
-                    'formatted' => $distance < 1 ? round($distance * 1000) . ' m' : round($distance, 2) . ' km'
-                ],
-                'method' => $method
-            ]
-        ]);
-
-    } catch (\Illuminate\Validation\ValidationException $e) {
-        return response()->json([
-            'success' => false,
-            'error' => 'Datos inválidos',
-            'details' => $e->errors()
-        ], 422);
-
-    } catch (\Exception $e) {
-        Log::error('Error en calculateDistanceFromVehicle', [
-            'error' => $e->getMessage(),
-            'user_id' => Auth::id()
-        ]);
-        
-        return response()->json([
-            'success' => false,
-            'error' => 'Error interno del servidor'
-        ], 500);
     }
-}
-
-/**
- * Obtiene la posición inicial del vehículo
- */
-private function getVehicleStartPosition($vehicleId)
-{
-    try {
-        // 1. Buscar en asignaciones de rutas
-        $routeAssignment = RouteAssignment::where('user_id', $vehicleId)
-            ->latest('calculated_at')
-            ->first();
+    
+    /**
+     * Calcula ruta real usando VROOM (aprovechando tu configuración existente)
+     */
+    private function calculateRouteWithVroom($startLat, $startLng, $endLat, $endLng, $vehicleId)
+    {
+        $startTime = microtime(true);
+        
+        try {
+            // Configurar vehículo para VROOM (mismo formato que usas en seguirRuta)
+            $vehicle = [
+                "id" => $vehicleId,
+                "start" => [$startLng, $startLat], // VROOM usa [lng, lat]
+                "end" => [$startLng, $startLat],   // Punto final igual al inicial
+                "capacity" => [1]
+            ];
+    
+            // Configurar trabajo/destino
+            $job = [
+                "id" => 1,
+                "location" => [$endLng, $endLat], // VROOM usa [lng, lat]
+                "delivery" => [1]
+            ];
+    
+            // Solicitud a VROOM (mismo formato que ya usas)
+            $vroomRequest = [
+                "vehicles" => [$vehicle],
+                "jobs" => [$job],
+                "options" => ["g" => true] // Habilitar geometría
+            ];
+    
+            // Usar la misma URL que ya tienes configurada
+            $vroomUrl = config('app.vroom_url', 'http://154.38.191.25:3000');
             
-        if ($routeAssignment && $routeAssignment->route_data) {
-            $routeData = $routeAssignment->route_data;
+            Log::info('🚛 Enviando solicitud a VROOM para cálculo de distancia', [
+                'url' => $vroomUrl,
+                'vehicle_id' => $vehicleId,
+                'start' => [$startLat, $startLng],
+                'end' => [$endLat, $endLng]
+            ]);
+    
+            // Usar el mismo timeout y configuración que ya tienes
+            $response = Http::timeout(30)
+                ->retry(2, 1000)
+                ->post($vroomUrl, $vroomRequest);
             
-            if (isset($routeData['steps']) && is_array($routeData['steps'])) {
-                foreach ($routeData['steps'] as $step) {
-                    if ($step['type'] === 'start' && isset($step['location'])) {
-                        return [
-                            'lat' => $step['location'][1], // VROOM usa [lng, lat]
-                            'lng' => $step['location'][0],
-                            'source' => 'route_assignment'
-                        ];
+            $responseTime = round((microtime(true) - $startTime) * 1000, 2);
+    
+            if ($response->successful()) {
+                $result = $response->json();
+                
+                if (isset($result['routes'][0])) {
+                    $route = $result['routes'][0];
+                    
+                    // Extraer distancia y duración de VROOM
+                    $distanceMeters = $route['distance'] ?? 0;
+                    $durationSeconds = $route['duration'] ?? 0;
+                    
+                    Log::info('✅ VROOM respondió exitosamente', [
+                        'distance_m' => $distanceMeters,
+                        'duration_s' => $durationSeconds,
+                        'response_time_ms' => $responseTime
+                    ]);
+                    
+                    return [
+                        'success' => true,
+                        'data' => [
+                            'distance_meters' => $distanceMeters,
+                            'distance_km' => round($distanceMeters / 1000, 3),
+                            'distance_formatted' => $this->formatDistance($distanceMeters / 1000),
+                            'duration_seconds' => $durationSeconds,
+                            'duration_minutes' => round($durationSeconds / 60, 1),
+                            'duration_formatted' => $this->formatDuration($durationSeconds),
+                            'geometry' => $route['geometry'] ?? null,
+                            'steps_count' => isset($route['steps']) ? count($route['steps']) : 0,
+                            'steps' => $route['steps'] ?? []
+                        ],
+                        'response_time_ms' => $responseTime
+                    ];
+                } else {
+                    return [
+                        'success' => false,
+                        'error' => 'VROOM no devolvió rutas válidas',
+                        'vroom_response' => $result
+                    ];
+                }
+            } else {
+                Log::error('❌ Error HTTP desde VROOM', [
+                    'status' => $response->status(),
+                    'body' => $response->body()
+                ]);
+                
+                return [
+                    'success' => false,
+                    'error' => 'Error HTTP ' . $response->status() . ' desde VROOM',
+                    'response_body' => $response->body()
+                ];
+            }
+    
+        } catch (\Exception $e) {
+            Log::error('❌ Error al conectar con VROOM', [
+                'error' => $e->getMessage(),
+                'start' => [$startLat, $startLng],
+                'end' => [$endLat, $endLng]
+            ]);
+            
+            return [
+                'success' => false,
+                'error' => 'Error de conexión con VROOM: ' . $e->getMessage()
+            ];
+        }
+    }
+    
+    /**
+     * Ajusta el tiempo base de VROOM con factores externos
+     */
+    private function adjustVroomTime($baseSeconds, $deliveryType, $trafficCondition, $weatherCondition)
+    {
+        // Factores de ajuste para el tiempo base de VROOM
+        $deliveryFactors = [
+            'express' => 0.9,   // 10% más rápido (prioridad alta)
+            'standard' => 1.0,  // Sin cambio
+            'economy' => 1.1    // 10% más lento (sin prisa)
+        ];
+    
+        $trafficFactors = [
+            'light' => 1.0,     // Sin impacto adicional
+            'moderate' => 1.2,  // 20% más lento
+            'heavy' => 1.5      // 50% más lento
+        ];
+    
+        $weatherFactors = [
+            'clear' => 1.0,     // Sin impacto
+            'rain' => 1.15,     // 15% más lento
+            'storm' => 1.3      // 30% más lento
+        ];
+    
+        // Aplicar factores al tiempo base de VROOM
+        $deliveryFactor = $deliveryFactors[$deliveryType] ?? 1.0;
+        $trafficFactor = $trafficFactors[$trafficCondition] ?? 1.2;
+        $weatherFactor = $weatherFactors[$weatherCondition] ?? 1.0;
+    
+        $adjustedSeconds = $baseSeconds * $deliveryFactor * $trafficFactor * $weatherFactor;
+        
+        // Tiempo adicional por paradas (más realista para entregas)
+        $additionalMinutes = $this->calculateAdditionalTimeForDelivery($deliveryType);
+        $additionalSeconds = $additionalMinutes * 60;
+    
+        $totalSeconds = $adjustedSeconds + $additionalSeconds;
+        $totalMinutes = round($totalSeconds / 60);
+    
+        // Crear rango de estimación
+        $minMinutes = round($totalMinutes * 0.9);   // 10% más rápido
+        $maxMinutes = round($totalMinutes * 1.3);   // 30% más lento
+    
+        // ETA
+        $eta = now()->addMinutes($totalMinutes);
+    
+        return [
+            'vroom_base_time' => [
+                'seconds' => $baseSeconds,
+                'minutes' => round($baseSeconds / 60, 1),
+                'formatted' => $this->formatDuration($baseSeconds)
+            ],
+            'adjusted_time' => [
+                'seconds' => round($totalSeconds),
+                'minutes' => $totalMinutes,
+                'formatted' => $this->formatDeliveryTime($totalMinutes)
+            ],
+            'time_range' => [
+                'min_minutes' => $minMinutes,
+                'max_minutes' => $maxMinutes,
+                'range_text' => $this->formatDeliveryTime($minMinutes) . ' - ' . $this->formatDeliveryTime($maxMinutes)
+            ],
+            'eta' => [
+                'timestamp' => $eta->toISOString(),
+                'time' => $eta->format('H:i'),
+                'date_time' => $eta->format('d/m/Y H:i'),
+                'relative' => $eta->diffForHumans()
+            ],
+            'adjustment_factors' => [
+                'delivery_factor' => $deliveryFactor . 'x (' . $deliveryType . ')',
+                'traffic_factor' => $trafficFactor . 'x (' . $trafficCondition . ')',
+                'weather_factor' => $weatherFactor . 'x (' . $weatherCondition . ')',
+                'additional_time_minutes' => $additionalMinutes,
+                'note' => 'Tiempo base de VROOM ajustado con factores externos'
+            ]
+        ];
+    }
+    
+    /**
+     * Tiempo adicional específico para entregas
+     */
+    private function calculateAdditionalTimeForDelivery($deliveryType)
+    {
+        // Tiempo realista por entrega (carga/descarga, búsqueda de dirección, etc.)
+        $deliveryTimes = [
+            'express' => 3,    // 3 min (entrega rápida)
+            'standard' => 5,   // 5 min (entrega estándar) 
+            'economy' => 8     // 8 min (entrega sin prisa)
+        ];
+    
+        return $deliveryTimes[$deliveryType] ?? 5;
+    }
+    
+    /**
+     * Formatea duración en segundos a texto legible
+     */
+    private function formatDuration($seconds)
+    {
+        if ($seconds < 60) {
+            return round($seconds) . 's';
+        } elseif ($seconds < 3600) {
+            $minutes = round($seconds / 60);
+            return $minutes . ' min';
+        } else {
+            $hours = floor($seconds / 3600);
+            $minutes = round(($seconds % 3600) / 60);
+            return $hours . 'h ' . $minutes . 'min';
+        }
+    }
+    
+    /**
+     * Formatea distancia
+     */
+    private function formatDistance($km)
+    {
+        if ($km < 1) {
+            return round($km * 1000) . ' m';
+        } else {
+            return round($km, 2) . ' km';
+        }
+    }
+    
+    /**
+     * Obtiene la posición inicial del vehículo (versión simplificada)
+     */
+    private function getVehicleStartPositionSimple($vehicleId)
+    {
+        try {
+            // 1. Buscar en asignaciones de rutas existentes
+            $routeAssignment = RouteAssignment::where('user_id', $vehicleId)
+                ->latest('calculated_at')
+                ->first();
+                
+            if ($routeAssignment && $routeAssignment->route_data) {
+                $routeData = $routeAssignment->route_data;
+                
+                if (isset($routeData['steps']) && is_array($routeData['steps'])) {
+                    foreach ($routeData['steps'] as $step) {
+                        if ($step['type'] === 'start' && isset($step['location'])) {
+                            return [
+                                'lat' => $step['location'][1], // VROOM usa [lng, lat]
+                                'lng' => $step['location'][0],
+                                'source' => 'route_assignment'
+                            ];
+                        }
                     }
                 }
             }
-        }
-
-        // 2. Usar posición por defecto de getAvailableVehicles()
-        $vehicles = $this->getAvailableVehicles();
-        $vehicle = collect($vehicles)->firstWhere('id', $vehicleId);
-        
-        if ($vehicle && isset($vehicle['start'])) {
+    
+            // 2. Usar posición por defecto de getAvailableVehicles()
+            $vehicles = $this->getAvailableVehicles();
+            $vehicle = collect($vehicles)->firstWhere('id', $vehicleId);
+            
+            if ($vehicle && isset($vehicle['start'])) {
+                return [
+                    'lat' => $vehicle['start'][1],
+                    'lng' => $vehicle['start'][0],
+                    'source' => 'default_position'
+                ];
+            }
+    
+            // 3. Posición por defecto (Tegucigalpa) - mismo que usas en otras funciones
             return [
-                'lat' => $vehicle['start'][1],
-                'lng' => $vehicle['start'][0],
-                'source' => 'default_position'
+                'lat' => 14.0667,
+                'lng' => -87.1875,
+                'source' => 'fallback'
+            ];
+    
+        } catch (\Exception $e) {
+            Log::error('Error obteniendo posición del vehículo', [
+                'vehicle_id' => $vehicleId,
+                'error' => $e->getMessage()
+            ]);
+            
+            return [
+                'lat' => 14.0667,
+                'lng' => -87.1875,
+                'source' => 'error_fallback'
             ];
         }
-
-        // 3. Posición por defecto (Tegucigalpa)
-        return [
-            'lat' => 14.0667,
-            'lng' => -87.1875,
-            'source' => 'fallback'
-        ];
-
-    } catch (\Exception $e) {
-        Log::error('Error obteniendo posición del vehículo', [
-            'vehicle_id' => $vehicleId,
-            'error' => $e->getMessage()
-        ]);
+    }
+    
+    /**
+     * Calcula distancia simple (método de respaldo)
+     */
+    private function calculateDistanceSimple($lat1, $lng1, $lat2, $lng2)
+    {
+        $earthRadius = 6371; // Radio de la Tierra en km
+    
+        $dLat = deg2rad($lat2 - $lat1);
+        $dLng = deg2rad($lng2 - $lng1);
+    
+        $a = sin($dLat / 2) * sin($dLat / 2) +
+            cos(deg2rad($lat1)) * cos(deg2rad($lat2)) *
+            sin($dLng / 2) * sin($dLng / 2);
+    
+        $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
+    
+        return $earthRadius * $c;
+    }
+    private function formatDeliveryTime($minutes)
+{
+    if ($minutes < 60) {
+        return $minutes . ' min';
+    } else {
+        $hours = floor($minutes / 60);
+        $remainingMinutes = $minutes % 60;
         
-        return null;
+        if ($remainingMinutes == 0) {
+            return $hours . 'h';
+        } else {
+            return $hours . 'h ' . $remainingMinutes . 'min';
+        }
     }
 }
-
-/**
- * Calcula distancia entre dos puntos
- */
-private function calculateDistance($lat1, $lng1, $lat2, $lng2, $method = 'haversine')
-{
-    switch ($method) {
-        case 'euclidean':
-            return $this->euclideanDistance($lat1, $lng1, $lat2, $lng2);
-            
-        case 'manhattan':
-            return $this->manhattanDistance($lat1, $lng1, $lat2, $lng2);
-            
-        case 'haversine':
-        default:
-            return $this->haversineDistance($lat1, $lng1, $lat2, $lng2);
-    }
-}
-
-/**
- * Fórmula de Haversine (más precisa para la Tierra)
- */
-private function haversineDistance($lat1, $lng1, $lat2, $lng2)
-{
-    $earthRadius = 6371; // Radio de la Tierra en km
-
-    $dLat = deg2rad($lat2 - $lat1);
-    $dLng = deg2rad($lng2 - $lng1);
-
-    $a = sin($dLat / 2) * sin($dLat / 2) +
-        cos(deg2rad($lat1)) * cos(deg2rad($lat2)) *
-        sin($dLng / 2) * sin($dLng / 2);
-
-    $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
-
-    return $earthRadius * $c;
-}
-
-/**
- * Distancia Euclidiana (línea recta)
- */
-private function euclideanDistance($lat1, $lng1, $lat2, $lng2)
-{
-    $earthRadius = 6371;
-    
-    $latDiff = $lat2 - $lat1;
-    $lngDiff = $lng2 - $lng1;
-    
-    $latKm = $latDiff * ($earthRadius * M_PI / 180);
-    $lngKm = $lngDiff * ($earthRadius * M_PI / 180) * cos(deg2rad(($lat1 + $lat2) / 2));
-    
-    return sqrt($latKm * $latKm + $lngKm * $lngKm);
-}
-
 }
