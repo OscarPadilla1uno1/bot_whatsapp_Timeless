@@ -7,12 +7,8 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Middleware\CheckPermission;
 
-Route::get('/routes', [VroomController::class, 'index'])->name('routes');
-
 //Rutas publicas
 Route::get('/admin/menu/MenuHoy', [AdminController::class, 'obtenerMenuHoy'])->name('admin.menu.hoy');
-
-
 
 Route::get('/', function () {
     return view('welcome');
@@ -21,7 +17,10 @@ Route::get('/', function () {
 Route::middleware(['auth'])->group(function () {
     Route::get('/admin/dashboard', [DashboardController::class, 'admin'])->name('admin.dashboard');
     Route::get('/motorista/dashboard', [DashboardController::class, 'motorista'])->name('motorista.dashboard');
+    Route::get('/routes', [VroomController::class, 'index'])->name('routes');
     Route::get('/cocina/dashboard', [DashboardController::class, 'cocina'])->name('cocina.dashboard');
+    Route::post('/routes/seguir', [VroomController::class, 'seguirRuta'])->name('routes.seguir');
+    Route::post('/routes/recalculate', [VroomController::class, 'recalculateRoutes'])->name('routes.recalculate')->can('Administrador');
 });
 
 Route::middleware('auth')->group(function () {
