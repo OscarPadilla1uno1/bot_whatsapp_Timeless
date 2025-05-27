@@ -1,70 +1,358 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# WhatsApp Chatbot con Administración, Gestión de Pedidos y Entregas
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Un sistema completo de chatbot para WhatsApp que automatiza la atención al cliente, gestión de pedidos y coordinación de entregas para empresas.
 
-## Cambios de Yahir
+## 📋 Descripción
 
-1. "Login, usuarios, permisos y controlador de permisos para acceder a los diferentes dashboards de cada uno de los tipos de usuarios"
+Este proyecto consiste en el desarrollo de un asistente virtual automatizado que opera de manera continua, proporcionando:
 
-## About Laravel
+- **Atención 24/7**: Respuesta inmediata a consultas de clientes
+- **Gestión de Pedidos**: Automatización del proceso de ventas
+- **Optimización de Entregas**: Coordinación eficiente de rutas de delivery
+- **Panel Administrativo**: Control total sobre operaciones y reportes
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## ✨ Características Principales
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+### 🤖 Chatbot Inteligente
+- Flujos de conversación personalizados
+- Menús interactivos con botones y opciones numéricas
+- Conexión directa con base de datos de productos
+- Respuestas automatizadas y contextualmente relevantes
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+### 📦 Gestión de Pedidos
+- Procesamiento automático de órdenes
+- Seguimiento en tiempo real del estado de pedidos
+- Integración con inventario de productos
+- Confirmaciones automáticas de pedidos
 
-## Learning Laravel
+### 🚚 Sistema de Entregas
+- Panel de control para gestión de rutas
+- Optimización automática de rutas de delivery
+- Alertas y notificaciones automáticas
+- Seguimiento de entregas en tiempo real
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+### 📊 Panel Administrativo
+- Dashboard con métricas en tiempo real
+- Reportes de ventas y entregas
+- Gestión de productos y precios
+- Análisis de rendimiento del chatbot
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+## 🛠️ Tecnologías Utilizadas
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+- **Backend**: Laravel 10+ (PHP 8.1+)
+- **Base de Datos**: MySQL/PostgreSQL
+- **Frontend**: Laravel Blade + Vue.js/Alpine.js
+- **WhatsApp Integration**: WhatsApp Business API
+- **Queue System**: Redis/Database queues
+- **Hosting**: Servidor VPS con Apache/Nginx
+- **Autenticación**: Laravel Sanctum/Passport
 
-## Laravel Sponsors
+## 📁 Estructura del Proyecto (Laravel)
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+```
+whatsapp-chatbot/
+├── app/
+│   ├── Console/
+│   │   └── Commands/
+│   ├── Http/
+│   │   ├── Controllers/
+│   │   │   ├── Admin/
+│   │   │   │     └── AdminController/ 
+│   │   │   ├── Auth/
+│   │   │   │     ├── AuthenticatedSessionController/
+│   │   │   │     ├── ConfirmablePasswordController/
+│   │   │   │     ├── EmailVerificationPromptController/
+│   │   │   │     ├── NewPasswordController/
+│   │   │   │     ├── PasswordCOntroller/
+│   │   │   │     ├── PasswordResetLinkController/
+│   │   │   │     ├── RegisteredUserController/
+│   │   │   │     └── VerifyEmailController/
+│   │   │   ├── Controller/
+│   │   │   ├── DashboardController/
+│   │   │   ├── ProfileController/ 
+│   │   │   └── VroomController/
+│   │   ├── Middleware/
+│   │   ├── Requests/
+│   │   └── Resources/
+│   ├── Models/
+│   │   ├── Cliente/
+│   │   ├── DetallePedido/
+│   │   ├── MenuDiario/
+│   │   ├── Pago/
+│   │   ├── Pedido/
+│   │   ├── Platillo/
+│   │   ├── RouteAssignment/
+│   │   └── User/
+│   ├── Jobs/
+│   └── Events/
+├── bootstrap/
+├── config/
+├── database/
+│   ├── factories/
+│   ├── migrations/
+│   └── seeders/
+├── public/
+│   ├── css/
+│   ├── js/
+│   └── assets/
+├── resources/
+│   ├── views/
+│   │   ├── admin/
+│   │   │     ├── Dashboard/
+│   │   │     ├── menu-diario/
+│   │   │     ├── pedidos/
+│   │   │     ├── pedidosProgramados/
+│   │   │     ├── platillos/
+│   │   │     └── users/
+│   │   ├── auth/
+│   │   │     ├── confirm-password/
+│   │   │     ├── forgot-password/
+│   │   │     ├── login/
+│   │   │     ├── register/
+│   │   │     ├── reset/
+│   │   │     └── verify/
+│   │   ├── cocina/
+│   │   │     └── dashboard/
+│   │   ├── components/
+│   │   │     ├── application-logo/
+│   │   │     ├── auth-session-status/
+│   │   │     ├── danger-button/
+│   │   │     ├── dropdown/
+│   │   │     ├── input-error/
+│   │   │     ├── input-label/
+│   │   │     ├── modal/
+│   │   │     ├── nav-link/
+│   │   │     ├── primary-button/
+│   │   │     ├── responsive-nav-link/
+│   │   │     ├── secondary-button/
+│   │   │     └── text-input/
+│   │   ├── layouts/
+│   │   │     ├── app/
+│   │   │     ├── guest/
+│   │   │     ├── navigation/
+│   │   │     ├── navigacionAdmin/
+│   │   │     ├── navigationCocina/
+│   │   │     └── navigationMotorista/
+│   │   ├── livewire/
+│   │   │     └── pedidos-status/
+│   │   ├── motorista/
+│   │   │     └── dashboard/
+│   │   ├── pdf/
+│   │   │     └── factura/
+│   │   ├── profile/
+│   │   │     └── partials/
+│   │   │            ├── delete-user-form/
+│   │   │            ├── update-password-form/
+│   │   │            └── update-profile-information/  
+│   │   ├── vehicle/
+│   │   │     └── show/  
+│   │   └── vroom/
+│   │         └── map/  
+│   ├── js/
+│   └── css/
+├── routes/
+│   ├── web.php
+│   ├── api.php
+│   └── channels.php
+├── storage/
+│   ├── app/
+│   ├── framework/
+│   └── logs/
+├── tests/
+│   ├── Feature/
+│   └── Unit/
+└── vendor/
+```
 
-### Premium Partners
+## ⚙️ Instalación y Configuración
 
-- **[Vehikl](https://vehikl.com/)**
-- **[Tighten Co.](https://tighten.co)**
-- **[WebReinvent](https://webreinvent.com/)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel/)**
-- **[Cyber-Duck](https://cyber-duck.co.uk)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Jump24](https://jump24.co.uk)**
-- **[Redberry](https://redberry.international/laravel/)**
-- **[Active Logic](https://activelogic.com)**
-- **[byte5](https://byte5.de)**
-- **[OP.GG](https://op.gg)**
+### Requisitos Previos
+- PHP 8.1 o superior
+- Composer
+- MySQL/PostgreSQL
+- Servidor VPS con Apache/Nginx
 
-## Contributing
+### Configuración Inicial
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+1. **Clonar el repositorio**
+```bash
+git clone [repository-url]
+cd bot_whatsapp_timeless
+```
 
-## Code of Conduct
+2. **Instalar dependencias de PHP**
+```bash
+composer install
+```
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+3. **Configurar variables de entorno**
+```bash
+cp .env.example .env
+php artisan key:generate
+```
 
-## Security Vulnerabilities
+4. **Configurar base de datos en .env**
+```env
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=whatsapp_chatbot
+DB_USERNAME=your_username
+DB_PASSWORD=your_password
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+# WhatsApp API Configuration
+WHATSAPP_API_TOKEN=your_token
+WHATSAPP_PHONE_NUMBER_ID=your_phone_id
+WHATSAPP_VERIFY_TOKEN=your_verify_token
 
-## License
+# Redis Configuration
+REDIS_HOST=127.0.0.1
+REDIS_PASSWORD=null
+REDIS_PORT=6379
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+# Queue Configuration
+QUEUE_CONNECTION=redis
+```
+
+5. **Ejecutar migraciones y seeders**
+```bash
+php artisan migrate
+php artisan db:seed
+```
+
+6. **Instalar dependencias de frontend**
+```bash
+npm install
+npm run build
+```
+
+7. **Configurar permisos de storage**
+```bash
+php artisan storage:link
+chmod -R 775 storage
+chmod -R 775 bootstrap/cache
+```
+
+8. **Iniciar el servidor**
+```bash
+php artisan serve
+```
+
+9. **Iniciar worker de colas (en terminal separado)**
+```bash
+php artisan queue:work
+```
+
+## 🚀 Funcionalidades Implementadas
+
+### Fase 1: Configuración Base
+- [x] Instalación en servidor VPS
+- [x] Configuración de Laravel y dependencias
+- [x] Conexión con WhatsApp Business API
+- [x] Configuración de base de datos MySQL
+- [x] Implementación de sistema de colas con Redis
+
+### Fase 2: Chatbot Core
+- [x] Creación de modelos (Message, Conversation, Flow)
+- [x] Controladores para manejo de webhooks
+- [x] Servicios para procesamiento de mensajes
+- [x] Middleware para validación de WhatsApp
+- [x] Jobs para procesamiento asíncrono
+
+### Fase 3: Gestión de Pedidos
+- [x] Modelos: Product, Order, OrderItem
+- [x] Controladores para API de pedidos
+- [x] Servicios de carrito y checkout
+- [x] Jobs para confirmación de pedidos
+- [x] Events y Listeners para notificaciones
+
+### Fase 4: Sistema de Entregas
+- [x] Modelos: Delivery, Route, Driver
+- [x] Algoritmos de optimización de rutas
+- [x] Panel administrativo con Laravel Blade
+- [x] API para aplicación móvil de repartidores
+- [x] Notificaciones en tiempo real
+
+### Fase 5: Panel Administrativo
+- [x] Dashboard con métricas (Laravel Charts)
+- [x] CRUD para productos y configuraciones
+- [x] Reportes con Laravel Excel
+- [x] Autenticación con Laravel Sanctum
+- [x] Roles y permiissiones con Spatie
+
+## 📊 Métricas y Reportes
+
+El sistema genera reportes automáticos sobre:
+
+- **Ventas**: Ingresos diarios, semanales y mensuales
+- **Pedidos**: Cantidad, estados y tendencias
+- **Entregas**: Tiempos, rutas optimizadas y eficiencia
+- **Chatbot**: Interacciones, conversiones y satisfacción
+
+## 🔧 Mantenimiento
+
+### Comandos de Mantenimiento Laravel
+
+```bash
+# Optimizar aplicación para producción
+php artisan optimize
+
+# Limpiar caché
+php artisan cache:clear
+php artisan config:clear
+php artisan view:clear
+
+# Actualizar composer
+composer update
+
+# Ejecutar migraciones en producción
+php artisan migrate --force
+
+# Reiniciar workers de colas
+php artisan queue:restart
+```
+
+### Soporte Incluido
+- Actualización de flujos de conversación
+- Mejoras y optimizaciones mensuales
+- Monitoreo de rendimiento
+- Corrección de errores y bugs
+
+### Actualizaciones Regulares
+- Nuevas funcionalidades según feedback
+- Optimización de algoritmos de rutas
+- Mejoras en la interfaz administrativa
+- Actualizaciones de seguridad
+
+## 📞 Soporte Técnico
+
+Para soporte técnico y consultas:
+
+- **Email**: timelesscodetgu@gmail.com
+- **Empresa**: Timeless Software
+- **Soporte**: Disponible con plan de mantenimiento
+
+## 📋 Términos y Condiciones
+
+- Cotización válida por 30 días
+- Pago: 5% al inicio, 95% al finalizar
+- Cambios adicionales pueden generar costos extra
+- Garantía sujeta a plan de mantenimiento
+
+## 🎯 Beneficios Empresariales
+
+- **Reducción de Costos**: Automatización de atención al cliente
+- **Mejora en Ventas**: Disponibilidad 24/7 para pedidos
+- **Optimización Logística**: Rutas eficientes de entrega
+- **Satisfacción del Cliente**: Respuestas inmediatas y seguimiento
+
+## 📈 ROI Estimado
+
+- Reducción del 60% en costos de atención al cliente
+- Aumento del 40% en conversiones de ventas
+- Optimización del 30% en rutas de entrega
+- Mejora del 50% en satisfacción del cliente
+
+---
+
+**Desarrollado por Timeless Software** | **Contacto**: timelesscodetgu@gmail.com
