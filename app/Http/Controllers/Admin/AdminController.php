@@ -20,6 +20,8 @@ use App\Models\User;
 use Illuminate\Support\Facades\Validator;
 use thiagoalessio\TesseractOCR\TesseractOCR;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Support\Facades\Http;
+use App\Http\Controllers\VroomController;
 
 
 
@@ -32,6 +34,17 @@ class AdminController extends Controller
 
         $pdf = PDF::loadView('pdf.factura', compact('pedido'));
         return $pdf->download("factura_pedido_{$pedido->id}.pdf");
+    }
+
+    public function obtenerFacturaPDF($id)
+    {
+        $pedido = Pedido::with(['cliente', 'detalles.platillo'])->findOrFail($id);
+
+        $pdf = PDF::loadView('pdf.factura', compact('pedido'));
+
+        return response($pdf->output(), 200)
+            ->header('Content-Type', 'application/pdf')
+            ->header('Content-Disposition', 'inline; filename="factura_pedido_' . $pedido->id . '.pdf"');
     }
 
 
@@ -281,6 +294,23 @@ class AdminController extends Controller
 
 
     /////////////////////// Para el bot
+    private function calcularDistancia($lat1, $lon1, $lat2, $lon2)
+    {
+        $radioTierra = 6371; // Radio de la tierra en km
+
+        $dLat = deg2rad($lat2 - $lat1);
+        $dLon = deg2rad($lon2 - $lon1);
+
+        $a = sin($dLat / 2) * sin($dLat / 2) +
+            cos(deg2rad($lat1)) * cos(deg2rad($lat2)) *
+            sin($dLon / 2) * sin($dLon / 2);
+
+        $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
+        $distancia = $radioTierra * $c;
+
+        return $distancia;
+    }
+
     public function storePedido(Request $request)
     {
         $request->validate([
@@ -304,6 +334,54 @@ class AdminController extends Controller
         Log::info("Fecha generada: " . $hoy);
         $subtotal = 0.00;
 
+        $distancia_km = 0;
+        $tiempo_min = 0;
+
+        $request = new Request([
+            'target_lat' => (float) $latitud,
+            'target_lng' => (float) $longitud
+        ]);
+
+        $response = app(VroomController::class)->calculateDistanceFromVehicle($request);
+        $datosDistancia = $response->getData(true);
+
+
+
+        // Fallback por si algo falla
+        if (!isset($datosDistancia['success']) || !$datosDistancia['success']) {
+            return response()->json([
+                'success' => false,
+                'mensaje' => 'Error al calcular la distancia y el tiempo estimado',
+                'total_final' => 0.00
+            ], 400);
+        }
+
+        $datos = $datosDistancia['data'] ?? [];
+
+        $distancia_km = $datos['route_info']['distance']['km'] ?? 0;
+        $tiempo_min = $datos['route_info']['adjusted_delivery_time']['adjusted_time']['minutes'] ?? 0;
+
+        // Coordenadas del restaurante
+        $lat_restaurante = 14.107193046832785;
+        $lon_restaurante = -87.1824026712528;
+
+        // Calcular distancia con método interno (como respaldo y lógica extra)
+        $distanciaManual = $this->calcularDistancia($lat_restaurante, $lon_restaurante, $latitud, $longitud);
+        Log::info("Distancia manual calculada: {$distanciaManual} km");
+
+
+        // Obtener día de la semana (0=domingo, 6=sábado)
+        $diaSemana = now()->setTimezone('America/Tegucigalpa')->dayOfWeek;
+        Log::info("Día de la semana: {$diaSemana}");
+
+        // Evaluar si es sábado o si la distancia es ≤ 1 km
+        if ($diaSemana === 6 || $distanciaManual <= 1) {
+            $costo_envio = 0;
+        } else {
+            $costo_envio = max(60, 20 + (1.5 * $distancia_km) + (1 * $tiempo_min));
+        }
+
+
         // Verificar que hay platillos
         if (empty($platillos)) {
             return response()->json([
@@ -314,7 +392,7 @@ class AdminController extends Controller
         }
 
         try {
-            $result = DB::transaction(function () use ($nombre, $telefono, $latitud, $longitud, $platillos, $hoy, &$subtotal) {
+            $result = DB::transaction(function () use ($nombre, $telefono, $latitud, $longitud, $platillos, $costo_envio, $hoy, &$subtotal) {
                 // Verificar si el cliente ya existe o crearlo
                 $cliente = Cliente::firstOrCreate(
                     ['telefono' => $telefono],
@@ -375,7 +453,7 @@ class AdminController extends Controller
                 }
 
                 // Actualizar el total del pedido
-                $pedido->total = $subtotal;
+                $pedido->total = $subtotal + $costo_envio;
                 $pedido->save();
 
                 return [
@@ -384,10 +462,13 @@ class AdminController extends Controller
                 ];
             });
 
+            $total_final = $result['total_final'] + $costo_envio;
+
             return response()->json([
                 'success' => true,
                 'mensaje' => $result['mensaje'],
-                'total' => $result['total_final']
+                'total' => $total_final,
+                'envio' => $costo_envio
             ], 200);
 
         } catch (\Exception $e) {
@@ -703,8 +784,55 @@ class AdminController extends Controller
 
         $subtotal = 0.00;
 
+        $distancia_km = 0;
+        $tiempo_min = 0;
+
+        $request = new Request([
+            'target_lat' => (float) $latitud,
+            'target_lng' => (float) $longitud
+        ]);
+
+        $response = app(VroomController::class)->calculateDistanceFromVehicle($request);
+        $datosDistancia = $response->getData(true);
+
+
+
+        // Fallback por si algo falla
+        if (!isset($datosDistancia['success']) || !$datosDistancia['success']) {
+            return response()->json([
+                'success' => false,
+                'mensaje' => 'Error al calcular la distancia y el tiempo estimado',
+                'total_final' => 0.00
+            ], 400);
+        }
+
+        $datos = $datosDistancia['data'] ?? [];
+
+        $distancia_km = $datos['route_info']['distance']['km'] ?? 0;
+        $tiempo_min = $datos['route_info']['adjusted_delivery_time']['adjusted_time']['minutes'] ?? 0;
+
+        // Coordenadas del restaurante
+        $lat_restaurante = 14.107193046832785;
+        $lon_restaurante = -87.1824026712528;
+
+        // Calcular distancia con método interno (como respaldo y lógica extra)
+        $distanciaManual = $this->calcularDistancia($lat_restaurante, $lon_restaurante, $latitud, $longitud);
+        Log::info("Distancia manual calculada: {$distanciaManual} km");
+
+
+        // Obtener día de la semana (0=domingo, 6=sábado)
+        $diaSemana = now()->setTimezone('America/Tegucigalpa')->dayOfWeek;
+        Log::info("Día de la semana: {$diaSemana}");
+
+        // Evaluar si es sábado o si la distancia es ≤ 1 km
+        if ($diaSemana === 6 || $distanciaManual <= 1) {
+            $costo_envio = 0;
+        } else {
+            $costo_envio = max(60, 20 + (1.5 * $distancia_km) + (1 * $tiempo_min));
+        }
+
         try {
-            $result = DB::transaction(function () use ($nombre, $telefono, $latitud, $longitud, $platillos, $fecha, $pago, &$subtotal) {
+            $result = DB::transaction(function () use ($nombre, $telefono, $latitud, $longitud, $platillos, $fecha, $costo_envio, $pago, &$subtotal) {
                 $cliente = Cliente::firstOrCreate(
                     ['telefono' => $telefono],
                     ['nombre' => $nombre]
@@ -749,7 +877,7 @@ class AdminController extends Controller
                     $subtotal += $cantidad * $platillo->precio_base;
                 }
 
-                $pedido->total = $subtotal;
+                $pedido->total = $subtotal + $costo_envio;
                 $pedido->save();
 
                 Pago::create([
@@ -761,7 +889,7 @@ class AdminController extends Controller
 
                 return [
                     'mensaje' => 'Pedido programado exitosamente.',
-                    'total_final' => $subtotal
+                    'total_final' => $subtotal + $costo_envio
                 ];
             });
 
@@ -865,8 +993,56 @@ class AdminController extends Controller
 
         $subtotal = 0.0;
 
+        $distancia_km = 0;
+        $tiempo_min = 0;
+
+        $request2 = new Request([
+            'target_lat' => (float) $latitud,
+            'target_lng' => (float) $longitud
+        ]);
+
+        $response = app(VroomController::class)->calculateDistanceFromVehicle($request2);
+        $datosDistancia = $response->getData(true);
+
+
+
+        // Fallback por si algo falla
+        if (!isset($datosDistancia['success']) || !$datosDistancia['success']) {
+            return response()->json([
+                'success' => false,
+                'mensaje' => 'Error al calcular la distancia y el tiempo estimado',
+                'total_final' => 0.00
+            ], 400);
+        }
+
+        $datos = $datosDistancia['data'] ?? [];
+
+        $distancia_km = $datos['route_info']['distance']['km'] ?? 0;
+        $tiempo_min = $datos['route_info']['adjusted_delivery_time']['adjusted_time']['minutes'] ?? 0;
+
+        // Coordenadas del restaurante
+        $lat_restaurante = 14.107193046832785;
+        $lon_restaurante = -87.1824026712528;
+
+        // Calcular distancia con método interno (como respaldo y lógica extra)
+        $distanciaManual = $this->calcularDistancia($lat_restaurante, $lon_restaurante, $latitud, $longitud);
+        Log::info("Distancia manual calculada: {$distanciaManual} km");
+
+
+        // Obtener día de la semana (0=domingo, 6=sábado)
+        $diaSemana = now()->setTimezone('America/Tegucigalpa')->dayOfWeek;
+        Log::info("Día de la semana: {$diaSemana}");
+
+        // Evaluar si es sábado o si la distancia es ≤ 1 km
+        if ($diaSemana === 6 || $distanciaManual <= 1) {
+            $costo_envio = 0;
+        } else {
+            $costo_envio = max(60, 20 + (1.5 * $distancia_km) + (1 * $tiempo_min));
+        }
+
+
         try {
-            DB::transaction(function () use ($pedido, $platillosInput, $platillosActuales, $fecha, $latitud, $longitud, $cliente, $request, &$subtotal) {
+            DB::transaction(function () use ($pedido, $platillosInput, $platillosActuales, $costo_envio, $fecha, $latitud, $longitud, $cliente, $request, &$subtotal) {
 
                 // 1. Revertir stock de platillos eliminados o disminuidos
                 foreach ($platillosActuales as $platilloId => $detalle) {
@@ -941,7 +1117,7 @@ class AdminController extends Controller
                 // 3. Actualizar coordenadas y total
                 $pedido->latitud = $latitud;
                 $pedido->longitud = $longitud;
-                $pedido->total = $subtotal;
+                $pedido->total = $subtotal + $costo_envio;
                 $pedido->cliente_id = $cliente->id;
                 $pedido->save();
 

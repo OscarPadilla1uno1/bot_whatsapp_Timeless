@@ -18,13 +18,16 @@ use App\Http\Controllers\Admin\AdminController;
 
 // En routes/api.php
 
-Route::post('/vehicle/distance', [VroomController::class, 'calculateDistanceFromVehicle']);
+Route::post('/vehicle/distance', [VroomController::class, 'calculateDistanceFromVehicle'])->name('vehicle.distance');
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
 
-Route::post('/bot-pedido', [AdminController::class, 'storePedido']);
 
+Route::get('/factura/{id}', [AdminController::class, 'obtenerFacturaPDF']);
+
+Route::post('/bot-pedido', [AdminController::class, 'storePedido']);
+Route::post('/procesar-comprobante', [AdminController::class, 'procesarComprobante']);
 Route::get('/test', function () {
     return response()->json(['message' => 'La API funciona!']);
 });
