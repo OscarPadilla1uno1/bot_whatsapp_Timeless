@@ -458,7 +458,8 @@ class AdminController extends Controller
 
                 return [
                     'mensaje' => 'Pedido registrado exitosamente.',
-                    'total_final' => $subtotal
+                    'total_final' => $subtotal,
+                    'pedido_id' => $pedido->id
                 ];
             });
 
@@ -468,7 +469,8 @@ class AdminController extends Controller
                 'success' => true,
                 'mensaje' => $result['mensaje'],
                 'total' => $total_final,
-                'envio' => $costo_envio
+                'envio' => $costo_envio,
+                'id' => $result['pedido_id']
             ], 200);
 
         } catch (\Exception $e) {
