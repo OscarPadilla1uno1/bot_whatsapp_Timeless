@@ -617,7 +617,74 @@ class AdminController extends Controller
         return view('admin.pedidos', compact('pedidos', 'pedidoSeleccionado', 'estados', 'tab'));
     }
 
+      public function pedidosStatusViewCocina(Request $request)
+    {
+        $tab = $request->query('tab', 'hoy'); // Por defecto "hoy"
 
+        $query = Pedido::with('cliente')->orderBy('fecha_pedido', 'desc');
+
+
+
+        if ($tab === 'hoy') {
+            $query->whereDate('fecha_pedido', now()->setTimezone('America/Tegucigalpa')->format('Y-m-d'))->where('estado', 'en preparacion'); // Solo pedidos en preparación
+        } elseif ($tab === 'futuro') {
+            $query->whereDate('fecha_pedido', '>', now()->setTimezone('America/Tegucigalpa')->format('Y-m-d'));
+        } elseif ($tab === 'pasado') {
+            $query->whereDate('fecha_pedido', '<', now()->setTimezone('America/Tegucigalpa')->format('Y-m-d'));
+        }
+
+
+        if ($request->filled('buscar')) {
+            $buscar = $request->buscar;
+
+            $query->where(function ($q) use ($buscar) {
+                $q->whereHas('cliente', function ($q2) use ($buscar) {
+                    $q2->where('nombre', 'like', '%' . $buscar . '%');
+                })
+                    ->orWhere('estado', 'like', '%' . $buscar . '%')
+                    ->orWhereDate('fecha_pedido', $buscar)
+                    ->orWhere('total', 'like', '%' . $buscar . '%');
+            });
+        }
+
+        $pedidos = $query->paginate(10)->withQueryString(); // Mantener query params en paginación
+
+
+
+        $pedidoSeleccionado = null;
+        if ($request->has('pedido_id')) {
+            $pedidoSeleccionado = Pedido::with(['cliente', 'detalles.platillo'])->find($request->pedido_id);
+        }
+
+                $estados = ['pendiente', 'en preparación', 'despachado', 'entregado', 'cancelado'];
+
+
+        return view('cocina.pedidos-cocina', compact('pedidos', 'pedidoSeleccionado', 'estados', 'tab'));
+    }
+
+
+        public function actualizarEstadoCocina(Request $request, $id)
+    {
+        $pedido = Pedido::findOrFail($id);
+
+        $estados = ['pendiente', 'en preparación', 'despachado', 'entregado', 'cancelado'];
+
+        $estadoActual = $pedido->estado;
+        $nuevoEstado = $request->input('nuevo_estado');
+
+        $posActual = array_search($estadoActual, $estados);
+        $posNuevo = array_search($nuevoEstado, $estados);
+
+        // Validación: solo permitir avanzar
+        if ($posNuevo === false || $posNuevo < $posActual) {
+            return redirect()->back()->with('error', 'No se puede retroceder el estado del pedido.');
+        }
+
+        $pedido->estado = $nuevoEstado;
+        $pedido->save();
+
+    return redirect()->route('cocina.pedidosCocina')->with('success', 'Estado actualizado correctamente.');
+    }
     public function actualizarEstado(Request $request, $id)
     {
         $pedido = Pedido::findOrFail($id);
