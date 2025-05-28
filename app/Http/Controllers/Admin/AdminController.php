@@ -368,7 +368,7 @@ class AdminController extends Controller
         // Calcular distancia con método interno (como respaldo y lógica extra)
         $distanciaManual = $this->calcularDistancia($lat_restaurante, $lon_restaurante, $latitud, $longitud);
         Log::info("Distancia manual calculada: {$distanciaManual} km");
-
+        Log::info("Distancia calculada: {$distancia_km} km");
 
         // Obtener día de la semana (0=domingo, 6=sábado)
         $diaSemana = now()->setTimezone('America/Tegucigalpa')->dayOfWeek;
@@ -380,6 +380,7 @@ class AdminController extends Controller
         } else {
             $costo_envio = max(60, 20 + (7.5 * $distancia_km) + (1.7 * $tiempo_min));
         }
+        Log::info("Valor del envio: {$costo_envio}");
 
 
         // Verificar que hay platillos
