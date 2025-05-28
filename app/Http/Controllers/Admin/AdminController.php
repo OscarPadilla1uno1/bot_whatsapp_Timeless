@@ -375,10 +375,10 @@ class AdminController extends Controller
         Log::info("Día de la semana: {$diaSemana}");
 
         // Evaluar si es sábado o si la distancia es ≤ 1 km
-        if ($diaSemana === 6 || $distanciaManual <= 1) {
+        if ($diaSemana === 6 || $distancia_km <= 0.7) {
             $costo_envio = 0;
         } else {
-            $costo_envio = max(60, 20 + (1.5 * $distancia_km) + (1 * $tiempo_min));
+            $costo_envio = max(60, 20 + (7.5 * $distancia_km) + (1.7 * $tiempo_min));
         }
 
 
@@ -894,10 +894,10 @@ class AdminController extends Controller
         Log::info("Día de la semana: {$diaSemana}");
 
         // Evaluar si es sábado o si la distancia es ≤ 1 km
-        if ($diaSemana === 6 || $distanciaManual <= 1) {
+        if ($diaSemana === 6 || $distancia_km <= 0.7) {
             $costo_envio = 0;
         } else {
-            $costo_envio = max(60, 20 + (1.5 * $distancia_km) + (1 * $tiempo_min));
+            $costo_envio = max(60, 20 + (7.5 * $distancia_km) + (1.7 * $tiempo_min));
         }
 
         try {
@@ -1103,10 +1103,10 @@ class AdminController extends Controller
         Log::info("Día de la semana: {$diaSemana}");
 
         // Evaluar si es sábado o si la distancia es ≤ 1 km
-        if ($diaSemana === 6 || $distanciaManual <= 1) {
+        if ($diaSemana === 6 || $distancia_km <= 0.7) {
             $costo_envio = 0;
         } else {
-            $costo_envio = max(60, 20 + (1.5 * $distancia_km) + (1 * $tiempo_min));
+            $costo_envio = max(60, 20 + (7.5 * $distancia_km) + (1.7 * $tiempo_min));
         }
 
 

@@ -1138,8 +1138,8 @@ class VroomController extends Controller
     
             // 3. Posición por defecto (Tegucigalpa) - mismo que usas en otras funciones
             return [
-                'lat' => 14.0667,
-                'lng' => -87.1875,
+                'lat' => 14.1072125,
+                'lng' => -87.1849813,
                 'source' => 'fallback'
             ];
     
@@ -1150,8 +1150,8 @@ class VroomController extends Controller
             ]);
             
             return [
-                'lat' => 14.0667,
-                'lng' => -87.1875,
+                'lat' => 14.1072125,
+                'lng' => -87.1849813,
                 'source' => 'error_fallback'
             ];
         }
