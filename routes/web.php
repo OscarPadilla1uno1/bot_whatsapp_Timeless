@@ -8,6 +8,31 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Middleware\CheckPermission;
 
 //Rutas publicas
+
+// En web.php - SOLO PARA DEBUG
+Route::get('/debug-assignments', [VroomController::class, 'debugAssignments']);
+// En web.php - TEMPORAL para debug
+// En web.php - Reemplaza la ruta anterior
+// En web.php - CORREGIDO
+use Illuminate\Http\Request;  // <- Agregar esta línea al inicio del archivo
+
+Route::post('/test-complete', function(Request $request) {
+    try {
+        return response()->json([
+            'success' => true,
+            'message' => 'Endpoint funciona',
+            'data' => $request->all(),  // <- Usar $request en lugar de Request
+            'user' => Auth::user() ? Auth::user()->name : 'No autenticado',
+            'session_id' => session()->getId()
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'error' => $e->getMessage()
+        ], 500);
+    }
+})->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class]);
+
 Route::get('/admin/menu/MenuHoy', [AdminController::class, 'obtenerMenuHoy'])->name('admin.menu.hoy');
 
 Route::get('/', function () {
@@ -68,5 +93,72 @@ Route::middleware('auth')->group(function () {
 
 });
 
+// Rutas existentes (mantener)
+Route::get('/vehicle', [VroomController::class, 'index'])->name('vehicle.show');
+Route::post('/vehicle/recalculate', [VroomController::class, 'recalculateRoutes'])->name('vehicle.recalculate');
+Route::post('/vehicle/calculate-distance', [VroomController::class, 'calculateDistanceFromVehicle'])->name('vehicle.calculate-distance');
+
+// RUTAS CORREGIDAS para el sistema de asignaciones específicas
+Route::group(['prefix' => 'vehicle', 'middleware' => ['auth']], function () {
+    
+    // Seguir ruta (navegación en tiempo real) - CORREGIDA
+    Route::post('/seguir-ruta', [VroomController::class, 'seguirRuta'])->name('vehicle.seguir-ruta');
+    
+    // Capturar ubicaciones GPS de vehículos (solo admin)
+    Route::post('/capture-locations', [VroomController::class, 'captureVehicleLocations'])
+         ->name('vehicle.capture-locations')
+         ->middleware('permission:Administrador');
+    
+    // Marcar trabajo como completado
+    Route::post('/complete-job', [VroomController::class, 'markJobCompleted'])
+         ->name('vehicle.complete-job');
+    
+    // Obtener estado de asignaciones de un vehículo
+    Route::get('/assignment-status', [VroomController::class, 'getVehicleAssignmentStatus'])
+         ->name('vehicle.assignment-status');
+    
+    // Obtener trabajos asignados a un vehículo específico
+    Route::get('/assigned-jobs/{vehicleId?}', [VroomController::class, 'getAssignedJobs'])
+         ->name('vehicle.assigned-jobs');
+    
+    // Cambiar estado de un trabajo (admin)
+    Route::patch('/job-status', [VroomController::class, 'updateJobStatus'])
+         ->name('vehicle.update-job-status')
+         ->middleware('permission:Administrador');
+    
+    // Reasignar trabajo a otro vehículo (admin)
+    Route::post('/reassign-job', [VroomController::class, 'reassignJob'])
+         ->name('vehicle.reassign-job')
+         ->middleware('permission:Administrador');
+
+    // Dashboard de administrador
+    Route::get('/admin-dashboard', [VroomController::class, 'getAdminDashboard'])
+         ->name('vehicle.admin-dashboard')
+         ->middleware('permission:Administrador');
+
+    // Limpiar asignaciones completadas (admin)
+    Route::delete('/cleanup-assignments', [VroomController::class, 'cleanupCompletedAssignments'])
+         ->name('vehicle.cleanup-assignments')
+         ->middleware('permission:Administrador');
+});
+
+// API Routes adicionales (si usas api.php)
+Route::group(['prefix' => 'api/vehicle', 'middleware' => ['auth:sanctum']], function () {
+    
+    // Versión API de las rutas principales
+    Route::post('/follow-route', [VroomController::class, 'seguirRuta']);
+    Route::post('/complete-job', [VroomController::class, 'markJobCompleted']);
+    Route::get('/assignment-status', [VroomController::class, 'getVehicleAssignmentStatus']);
+    Route::post('/capture-locations', [VroomController::class, 'captureVehicleLocations']);
+    Route::get('/assigned-jobs/{vehicleId?}', [VroomController::class, 'getAssignedJobs']);
+    Route::patch('/job-status', [VroomController::class, 'updateJobStatus']);
+    Route::get('/admin-dashboard', [VroomController::class, 'getAdminDashboard']);
+});
+Route::group(['prefix' => 'api/vehicle', 'middleware' => ['auth:sanctum']], function () {
+    Route::post('/follow-route', [VroomController::class, 'seguirRuta']);
+    Route::post('/complete-job', [VroomController::class, 'markJobCompleted']);
+    Route::get('/assignment-status', [VroomController::class, 'getVehicleAssignmentStatus']);
+    Route::post('/capture-locations', [VroomController::class, 'captureVehicleLocations']);
+});
 
 require __DIR__ . '/auth.php';
