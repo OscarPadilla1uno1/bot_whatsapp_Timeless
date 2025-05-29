@@ -38,7 +38,7 @@ public function store(LoginRequest $request): RedirectResponse
     } elseif ($user->hasPermissionTo('Motorista')) {
         return redirect()->route('motorista.dashboard');
     } elseif ($user->hasPermissionTo('Cocina')) {
-        return redirect()->route('cocina.dashboard');
+        return redirect()->route('cocina.pedidosCocina');
     }
 
     // Si el usuario no tiene permisos, cerrar sesión y mostrar error 403
