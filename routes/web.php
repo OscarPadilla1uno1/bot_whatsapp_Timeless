@@ -36,7 +36,26 @@ Route::post('/test-complete', function(Request $request) {
 Route::get('/admin/menu/MenuHoy', [AdminController::class, 'obtenerMenuHoy'])->name('admin.menu.hoy');
 
 Route::get('/', function () {
-    return view('welcome');
+    $user = Auth::user();
+
+    if (!$user) {
+        return redirect()->route('login');
+    }
+
+    // Redirigir según permisos
+    if ($user->hasPermissionTo('Administrador')) {
+        return redirect()->route('admin.dashboard');
+    } elseif ($user->hasPermissionTo('Motorista')) {
+        return redirect()->route('motorista.dashboard');
+    } elseif ($user->hasPermissionTo('Cocina')) {
+        return redirect()->route('cocina.pedidosCocina');
+    }
+
+    // Usuario sin permisos válidos
+    Auth::logout();
+    request()->session()->invalidate();
+    request()->session()->regenerateToken();
+    abort(403, 'No tienes permiso para acceder a esta página.');
 });
 
 Route::middleware(['auth'])->group(function () {

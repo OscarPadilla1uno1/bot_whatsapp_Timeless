@@ -32,7 +32,13 @@ class AdminController extends Controller
     {
         $pedido = Pedido::with(['cliente', 'detalles.platillo'])->findOrFail($id);
 
-        $pdf = PDF::loadView('pdf.factura', compact('pedido'));
+        $subtotal = $pedido->detalles->sum(function ($detalle) {
+            return $detalle->cantidad * $detalle->precio_unitario;
+        });
+
+        $costoEnvio = $pedido->total - $subtotal;
+
+        $pdf = PDF::loadView('pdf.factura', compact('pedido', 'subtotal', 'costoEnvio'));
         return $pdf->download("factura_pedido_{$pedido->id}.pdf");
     }
 
@@ -40,12 +46,26 @@ class AdminController extends Controller
     {
         $pedido = Pedido::with(['cliente', 'detalles.platillo'])->findOrFail($id);
 
-        $pdf = PDF::loadView('pdf.factura', compact('pedido'));
+        // Calcular el total de productos
+        $subtotal = $pedido->detalles->sum(function ($detalle) {
+            return $detalle->cantidad * $detalle->precio_unitario;
+        });
+
+        // Calcular el costo de envío
+        $envio = $pedido->total - $subtotal;
+
+        // Pasar también el total de productos y envío a la vista
+        $pdf = PDF::loadView('pdf.factura', [
+            'pedido' => $pedido,
+            'subtotal' => $subtotal,
+            'costoEnvio' => $envio,
+        ]);
 
         return response($pdf->output(), 200)
             ->header('Content-Type', 'application/pdf')
             ->header('Content-Disposition', 'inline; filename="factura_pedido_' . $pedido->id . '.pdf"');
     }
+
 
 
     ///////////////////////////////para el menu del dia
@@ -701,7 +721,7 @@ class AdminController extends Controller
         return view('admin.pedidos', compact('pedidos', 'pedidoSeleccionado', 'estados', 'tab'));
     }
 
-      public function pedidosStatusViewCocina(Request $request)
+    public function pedidosStatusViewCocina(Request $request)
     {
         $tab = $request->query('tab', 'hoy'); // Por defecto "hoy"
 
@@ -740,14 +760,14 @@ class AdminController extends Controller
             $pedidoSeleccionado = Pedido::with(['cliente', 'detalles.platillo'])->find($request->pedido_id);
         }
 
-                $estados = ['pendiente', 'en preparación', 'despachado', 'entregado', 'cancelado'];
+        $estados = ['pendiente', 'en preparación', 'despachado', 'entregado', 'cancelado'];
 
 
         return view('cocina.pedidos-cocina', compact('pedidos', 'pedidoSeleccionado', 'estados', 'tab'));
     }
 
 
-        public function actualizarEstadoCocina(Request $request, $id)
+    public function actualizarEstadoCocina(Request $request, $id)
     {
         $pedido = Pedido::findOrFail($id);
 
@@ -767,7 +787,7 @@ class AdminController extends Controller
         $pedido->estado = $nuevoEstado;
         $pedido->save();
 
-    return redirect()->route('cocina.pedidosCocina')->with('success', 'Estado actualizado correctamente.');
+        return redirect()->route('cocina.pedidosCocina')->with('success', 'Estado actualizado correctamente.');
     }
     public function actualizarEstado(Request $request, $id)
     {
