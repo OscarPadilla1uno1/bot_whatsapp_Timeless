@@ -57,7 +57,6 @@ Route::group(['prefix' => 'vehicle', 'middleware' => ['auth']], function () {
 Route::group(['prefix' => 'api/vehicle', 'middleware' => ['auth:sanctum']], function () {
     
     // Versión API de las rutas principales
-    Route::post('/follow-route', [VroomController::class, 'seguirRuta']);
     Route::post('/complete-job', [VroomController::class, 'markJobCompleted']);
     Route::get('/assignment-status', [VroomController::class, 'getVehicleAssignmentStatus']);
     Route::post('/capture-locations', [VroomController::class, 'captureVehicleLocations']);
@@ -79,5 +78,4 @@ Route::get('/test', function () {
     return response()->json(['message' => 'La API funciona!']);
 });
 
-Route::post('/seguir', [VroomController::class, 'seguirRuta']);
 

@@ -1,12 +1,12 @@
-<!DOCTYPE html>
+</html><!DOCTYPE html>
 <html lang="es">
 <head>
     <title>Navegación GPS en Tiempo Real - Sistema de Entregas</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="csrf-token" content="LzLCVJiNh7GWRwexmSawOsahUNHpn9OXATscc6Z8">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-    <!-- Leaflet MarkerCluster -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css">
     
@@ -713,14 +713,30 @@
     <!-- Mapa -->
     <div id="map"></div>
 
+    <!-- Datos desde el backend (ocultos) -->
+    <script id="backend-data" type="application/json">
+        {
+            "motorist": {
+                "id": {{ $user_id }},
+                "name": "{{ $user_name }}",
+                "is_admin": {{ $is_admin ? 'true' : 'false' }},
+                "is_motorista": {{ $is_motorista ? 'true' : 'false' }}
+            },
+            "routes": @json($routes),
+            "vehicles": @json($vehicles),
+            "jobs": @json($jobs),
+            "csrf_token": "{{ csrf_token() }}"
+        }
+    </script>
+
     <!-- Panel Principal de Control -->
     <div class="main-control-panel">
         <div class="panel-header">
             <div class="motorist-info">
-                <div class="motorist-avatar">M2</div>
+                <div class="motorist-avatar">{{ substr($user_name, 0, 2) }}</div>
                 <div class="motorist-details">
-                    <h3>Motorista 2</h3>
-                    <p>ID: 8 - <span class="status-indicator status-online">🟢 En línea</span></p>
+                    <h3>{{ $user_name }}</h3>
+                    <p>ID: {{ $user_id }} - <span class="status-indicator status-online">🟢 En línea</span></p>
                 </div>
             </div>
         </div>
@@ -745,7 +761,7 @@
 
             <div class="quick-stats" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px;">
                 <div style="background: #f1f5f9; padding: 12px; border-radius: 12px; text-align: center;">
-                    <div style="font-size: 20px; font-weight: bold; color: #3b82f6;" id="pending-count">2</div>
+                    <div style="font-size: 20px; font-weight: bold; color: #3b82f6;" id="pending-count">0</div>
                     <div style="font-size: 12px; color: #64748b;">Pendientes</div>
                 </div>
                 <div style="background: #f1f5f9; padding: 12px; border-radius: 12px; text-align: center;">
@@ -770,10 +786,10 @@
             <!-- Próxima Entrega -->
             <div class="next-delivery">
                 <div class="delivery-client">
-                    📦 <span id="next-client">Carlos Martínez</span>
+                    📦 <span id="next-client">Cargando...</span>
                 </div>
                 <div class="delivery-info" id="next-info">
-                    📍 Colonia Palmira • 📞 +504 9999-9999
+                    📍 Obteniendo información...
                 </div>
                 <div class="delivery-actions">
                     <button class="btn-small btn-start" onclick="startDelivery()">🚛 Iniciar</button>
@@ -835,23 +851,6 @@
 
         <div class="assignments-content" id="assignments-content">
             <!-- Las asignaciones se cargarán aquí dinámicamente -->
-            <div class="assignment-item">
-                <div class="assignment-client">📦 Carlos Martínez</div>
-                <div class="assignment-details">
-                    📍 Colonia Palmira, Tegucigalpa<br>
-                    📞 +504 9999-9999
-                </div>
-                <div class="assignment-status">Pendiente</div>
-            </div>
-
-            <div class="assignment-item">
-                <div class="assignment-client">📦 Juan Pérez</div>
-                <div class="assignment-details">
-                    📍 Barrio El Centro, Tegucigalpa<br>
-                    📞 +504 8888-8888
-                </div>
-                <div class="assignment-status">Pendiente</div>
-            </div>
         </div>
 
         <div style="padding: 16px; border-top: 1px solid rgba(255,255,255,0.2);">
@@ -878,7 +877,7 @@
     <div class="arrival-notification" id="arrival-notification">
         <div class="arrival-icon">🎯</div>
         <div class="arrival-text">¡Has llegado!</div>
-        <div class="arrival-client" id="arrival-client">Carlos Martínez</div>
+        <div class="arrival-client" id="arrival-client">Cliente</div>
     </div>
 
     <!-- Mensajes -->
@@ -901,6 +900,10 @@
     <script>
         // ========== CONFIGURACIÓN GLOBAL ==========
         console.log('🚀 Iniciando Sistema de Navegación GPS en Tiempo Real');
+
+        // Cargar datos desde el backend
+        const backendData = JSON.parse(document.getElementById('backend-data').textContent);
+        console.log('📊 Datos del backend cargados:', backendData);
 
         // Variables globales del sistema
         let map;
@@ -936,15 +939,6 @@
         let isAssignmentsPanelOpen = false;
         let currentDeliveryId = null;
 
-        // Datos que se cargarán desde el backend
-        const demoData = {
-            motoristId: 8,
-            motoristName: "Motorista 2",
-            assignments: [],
-            vehicleStartPosition: { lat: 14.0667, lng: -87.1875 },
-            currentRoute: null // Ruta completa desde VROOM
-        };
-
         // Variables para manejo de geometría de rutas reales
         let routeGeometry = null;
         let decodedRouteCoordinates = [];
@@ -952,9 +946,25 @@
         let totalRouteDistance = 0;
         let totalRouteDuration = 0;
 
+        // Datos del motorista desde el backend
+        const demoData = {
+            motoristId: backendData.motorist.id,
+            motoristName: backendData.motorist.name,
+            isAdmin: backendData.motorist.is_admin,
+            isMotorista: backendData.motorist.is_motorista,
+            assignments: [],
+            currentRoute: null
+        };
+
         // ========== INICIALIZACIÓN ==========
         document.addEventListener('DOMContentLoaded', function() {
             console.log('🎯 Inicializando aplicación...');
+            
+            // Agregar funciones de debug globales
+            window.debugGeometry = logGeometryStatus;
+            window.debugInfo = debugInfo;
+            window.simulateArrival = simulateArrival;
+            
             initializeApp();
         });
 
@@ -966,8 +976,8 @@
                 // Verificar geolocalización
                 checkGeolocationSupport();
                 
-                // Cargar datos iniciales
-                await loadInitialData();
+                // Cargar datos iniciales con geometría real
+                await loadInitialDataWithGeometry();
                 
                 // Configurar eventos
                 setupEventListeners();
@@ -976,7 +986,7 @@
                 hideLoading();
                 
                 console.log('✅ Aplicación inicializada correctamente');
-                showSuccessMessage('🎯 Sistema GPS listo. ¡Inicia tu navegación cuando estés preparado!');
+                showSuccessMessage('🎯 Sistema GPS listo con rutas reales de VROOM. ¡Inicia tu navegación!');
                 
             } catch (error) {
                 console.error('❌ Error en inicialización:', error);
@@ -1027,174 +1037,313 @@
             return true;
         }
 
-        async function loadInitialData() {
-            console.log('📊 Cargando datos iniciales desde el backend...');
+        // ========== CARGA DE DATOS CON GEOMETRÍA REAL ==========
+async function loadInitialDataWithGeometry() {
+    console.log('📊 Cargando datos iniciales con geometría real desde VROOM...');
+    
+    try {
+        // Buscar ruta del usuario actual en los datos del backend
+        const userRoute = backendData.routes.find(route => route.vehicle === demoData.motoristId);
+        
+        // 🔍 DEBUG: Mostrar todos los datos del backend
+        console.log('🔍 DEBUG - Datos completos del backend:', {
+            totalRoutes: backendData.routes.length,
+            routesAvailable: backendData.routes.map(r => ({
+                vehicle: r.vehicle,
+                hasGeometry: !!r.geometry,
+                geometryType: typeof r.geometry,
+                geometryLength: r.geometry?.length || 0,
+                geometryPreview: r.geometry?.substring(0, 50) + '...' || 'Sin geometría'
+            })),
+            currentMotorista: demoData.motoristId,
+            userRouteFound: !!userRoute
+        });
+        
+        if (userRoute && userRoute.geometry) {
+            console.log('✅ Ruta con geometría encontrada en datos del backend');
             
-            try {
-                // Cargar las rutas reales desde el backend (tu sistema VROOM existente)
-                const success = await loadRouteFromBackend();
-                
-                if (!success) {
-                    console.log('⚠️ No se pudieron cargar rutas del backend, usando datos de ejemplo');
-                    // Datos de ejemplo como fallback
-                    await loadFallbackData();
-                }
-                
-                // Actualizar UI
-                updateAssignmentCounts();
-                updateNextDeliveryInfo();
-                
-                console.log('✅ Datos cargados:', currentAssignments.length, 'asignaciones');
-                
-            } catch (error) {
-                console.error('❌ Error cargando datos:', error);
-                await loadFallbackData();
+            // 🔍 DEBUG: Mostrar geometría completa antes de procesar
+            console.log('🗺️ DEBUG - GEOMETRÍA CRUDA DE VROOM:', {
+                vehicle: userRoute.vehicle,
+                geometryString: userRoute.geometry,
+                geometryLength: userRoute.geometry.length,
+                geometryType: typeof userRoute.geometry,
+                first100chars: userRoute.geometry.substring(0, 100),
+                last100chars: userRoute.geometry.substring(userRoute.geometry.length - 100),
+                stepsCount: userRoute.steps?.length || 0,
+                distance: userRoute.distance,
+                duration: userRoute.duration
+            });
+            
+            await processVroomRoute(userRoute);
+        } else {
+            console.log('⚠️ No se encontró ruta con geometría para el usuario', demoData.motoristId);
+            
+            // 🔍 DEBUG: Mostrar por qué no se encontró
+            if (!userRoute) {
+                console.log('❌ DEBUG - No existe ruta para vehicle_id:', demoData.motoristId);
+                console.log('🔍 DEBUG - Vehículos disponibles:', backendData.routes.map(r => r.vehicle));
+            } else if (!userRoute.geometry) {
+                console.log('❌ DEBUG - Ruta existe pero sin geometría:', userRoute);
+            }
+            
+            const assignmentsLoaded = await loadAssignmentsFromBackend();
+            
+            if (!assignmentsLoaded) {
+                console.log('📝 Usando datos de ejemplo con geometría');
+                await loadFallbackDataWithGeometry();
             }
         }
+        
+        // 2. Actualizar UI
+        updateAssignmentCounts();
+        updateNextDeliveryInfo();
+        
+        console.log('✅ Datos cargados exitosamente:', {
+            assignments: currentAssignments.length,
+            destinations: currentDestinations.length,
+            hasGeometry: decodedRouteCoordinates.length > 0,
+            geometryPoints: decodedRouteCoordinates.length
+        });
+        
+    } catch (error) {
+        console.error('❌ Error cargando datos:', error);
+        await loadFallbackDataWithGeometry();
+    }
+}
 
-        // Cargar ruta completa desde tu backend existente con geometría incluida
-        async function loadRouteFromBackend() {
-            try {
-                console.log('🔄 Cargando ruta con geometría desde VROOM...');
-                
-                // Usar los datos que ya están disponibles en la página
-                // Tu sistema ya tiene las rutas calculadas con geometría
-                const routes = window.allRoutes || [];
-                const userRoute = routes.find(route => route.vehicle === demoData.motoristId);
-                
-                if (userRoute && userRoute.geometry) {
-                    console.log('✅ Ruta con geometría encontrada en datos existentes');
-                    await processVroomRoute(userRoute);
-                    return true;
+// 2. En processVroomRoute() - DESPUÉS de línea 820 aproximadamente
+async function processVroomRoute(route) {
+    console.log('🛣️ Procesando ruta VROOM con geometría incluida...');
+    
+    demoData.currentRoute = route;
+    routeGeometry = route.geometry;
+    routeSteps = route.steps || [];
+    totalRouteDistance = route.distance || 0;
+    totalRouteDuration = route.duration || 0;
+    
+    // 🔍 DEBUG: Información detallada de la geometría
+    console.log('📊 DEBUG - ANÁLISIS COMPLETO DE LA RUTA VROOM:', {
+        // Información básica
+        vehicle: route.vehicle,
+        hasGeometry: !!routeGeometry,
+        geometryType: typeof routeGeometry,
+        geometryLength: routeGeometry?.length || 0,
+        stepsCount: routeSteps.length,
+        distance: `${(totalRouteDistance/1000).toFixed(1)} km (${totalRouteDistance}m)`,
+        duration: `${Math.round(totalRouteDuration/60)} min (${totalRouteDuration}s)`,
+        
+        // Análisis de la geometría
+        geometryAnalysis: {
+            isEmpty: !routeGeometry || routeGeometry.length === 0,
+            isString: typeof routeGeometry === 'string',
+            startsWithUnderscore: routeGeometry?.startsWith('_') || false,
+            containsBackslashes: routeGeometry?.includes('\\') || false,
+            first50chars: routeGeometry?.substring(0, 50) || 'N/A',
+            last50chars: routeGeometry?.substring(Math.max(0, (routeGeometry?.length || 0) - 50)) || 'N/A',
+            // Intenta decodificar una pequeña muestra para ver si es válida
+            sampleDecodeTest: (() => {
+                try {
+                    if (routeGeometry && typeof routeGeometry === 'string' && routeGeometry.length > 10) {
+                        // Intenta decodificar solo los primeros 20 caracteres para test
+                        const testSample = routeGeometry.substring(0, 20);
+                        if (typeof polyline !== 'undefined' && polyline.decode) {
+                            polyline.decode(testSample);
+                            return 'VÁLIDA - Formato polyline correcto';
+                        }
+                        return 'LIBRERÍA POLYLINE NO DISPONIBLE';
+                    }
+                    return 'GEOMETRÍA VACÍA O INVÁLIDA';
+                } catch (e) {
+                    return `ERROR: ${e.message}`;
                 }
+            })()
+        },
+        
+        // Análisis de los pasos
+        stepsAnalysis: routeSteps.map((step, index) => ({
+            index,
+            type: step.type,
+            hasLocation: !!step.location,
+            location: step.location,
+            distance: step.distance,
+            duration: step.duration,
+            jobId: step.job,
+            jobDetails: step.job_details
+        })),
+        
+        // Toda la ruta completa para debugging
+        fullRouteObject: route
+    });
+    
+    // Decodificar la geometría
+    if (routeGeometry) {
+        console.log('🔄 DEBUG - Iniciando decodificación de geometría...');
+        console.log('🔍 DEBUG - Geometría a decodificar:', {
+            fullGeometry: routeGeometry,
+            length: routeGeometry.length,
+            type: typeof routeGeometry
+        });
+        
+        decodedRouteCoordinates = await decodeRouteGeometry(routeGeometry);
+        
+        console.log('📍 DEBUG - Resultado de decodificación:', {
+            success: decodedRouteCoordinates.length > 0,
+            pointsCount: decodedRouteCoordinates.length,
+            firstPoint: decodedRouteCoordinates[0],
+            lastPoint: decodedRouteCoordinates[decodedRouteCoordinates.length - 1],
+            samplePoints: decodedRouteCoordinates.slice(0, 5), // Primeros 5 puntos
+            coordinateTypes: decodedRouteCoordinates.slice(0, 3).map(coord => ({
+                lat: coord.lat,
+                lng: coord.lng,
+                isLatLng: coord instanceof L.LatLng
+            }))
+        });
+    } else {
+        console.warn('⚠️ DEBUG - No se encontró geometría en la ruta de VROOM');
+        decodedRouteCoordinates = [];
+    }
+    
+    // Resto del procesamiento...
+    currentDestinations = [];
+    currentAssignments = [];
+    
+    for (const step of routeSteps) {
+        if (step.type === 'job' && step.location) {
+            const assignment = {
+                id: step.job,
+                status: 'pending',
+                cliente: step.job_details?.cliente || 'Cliente desconocido',
+                telefono: step.job_details?.telefono || '',
+                direccion: step.job_details?.direccion || '',
+                coordenadas: {
+                    lat: step.location[1], // VROOM usa [lng, lat]
+                    lng: step.location[0]
+                }
+            };
+            
+            currentAssignments.push(assignment);
+            
+            currentDestinations.push({
+                id: step.job,
+                cliente: assignment.cliente,
+                telefono: assignment.telefono,
+                direccion: assignment.direccion,
+                lat: assignment.coordenadas.lat,
+                lng: assignment.coordenadas.lng,
+                status: 'pending',
+                stepInfo: step
+            });
+        }
+    }
+    
+    console.log('✅ DEBUG - Ruta VROOM procesada exitosamente:', {
+        destinations: currentDestinations.length,
+        assignments: currentAssignments.length,
+        geometryPoints: decodedRouteCoordinates.length,
+        hasRealRoute: decodedRouteCoordinates.length > 2,
+        processingSuccess: true
+    });
+}
+
+// 3. En decodeRouteGeometry() - REEMPLAZAR función completa
+async function decodeRouteGeometry(geometry) {
+    try {
+        console.log('🔄 DEBUG - Iniciando decodificación de polyline...');
+        console.log('🔍 DEBUG - Input para decodificación:', {
+            geometry: geometry,
+            type: typeof geometry,
+            length: geometry?.length || 0,
+            isEmpty: !geometry || geometry.length === 0,
+            isString: typeof geometry === 'string'
+        });
+        
+        // Verificar que tenemos una geometría válida
+        if (!geometry || typeof geometry !== 'string' || geometry.length === 0) {
+            console.error('❌ DEBUG - Geometría inválida para decodificación');
+            return [];
+        }
+        
+        // Si tienes la librería polyline disponible
+        if (typeof polyline !== 'undefined' && polyline.decode) {
+            console.log('✅ DEBUG - Usando librería polyline para decodificar');
+            
+            try {
+                const decoded = polyline.decode(geometry);
+                console.log('🔍 DEBUG - Resultado de polyline.decode():', {
+                    success: true,
+                    pointsCount: decoded.length,
+                    firstPoints: decoded.slice(0, 3),
+                    lastPoints: decoded.slice(-3),
+                    samplePoint: decoded[0]
+                });
                 
-                // Si no están en memoria, intentar obtener via AJAX
-                const response = await fetch(window.location.href, {
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
+                const leafletCoords = decoded.map(point => L.latLng(point[0], point[1]));
+                console.log('✅ DEBUG - Conversión a Leaflet exitosa:', {
+                    leafletCoordsCount: leafletCoords.length,
+                    firstLeafletCoord: leafletCoords[0],
+                    sampleCoordinate: {
+                        lat: leafletCoords[0]?.lat,
+                        lng: leafletCoords[0]?.lng
                     }
                 });
                 
-                if (response.ok) {
-                    const data = await response.json();
-                    
-                    if (data.routes) {
-                        const userRoute = data.routes.find(route => route.vehicle === demoData.motoristId);
-                        
-                        if (userRoute && userRoute.geometry) {
-                            console.log('✅ Ruta con geometría obtenida del servidor');
-                            await processVroomRoute(userRoute);
-                            return true;
-                        }
-                    }
-                }
-                
-                console.warn('⚠️ No se encontró ruta con geometría para el vehículo', demoData.motoristId);
-                return false;
-                
-            } catch (error) {
-                console.error('❌ Error cargando ruta desde backend:', error);
-                return false;
-            }
-        }
-
-        // Procesar la ruta directamente de VROOM (ya incluye geometría)
-        async function processVroomRoute(route) {
-            console.log('🛣️ Procesando ruta VROOM con geometría incluida...');
-            
-            demoData.currentRoute = route;
-            routeGeometry = route.geometry; // Geometría ya viene en la respuesta
-            routeSteps = route.steps || [];
-            totalRouteDistance = route.distance || 0;
-            totalRouteDuration = route.duration || 0;
-            
-            console.log('📊 Datos de ruta VROOM:', {
-                hasGeometry: !!routeGeometry,
-                geometryLength: routeGeometry?.length || 0,
-                stepsCount: routeSteps.length,
-                distance: `${(totalRouteDistance/1000).toFixed(1)} km`,
-                duration: `${Math.round(totalRouteDuration/60)} min`
-            });
-            
-            // Decodificar la geometría que ya viene en la respuesta de VROOM
-            if (routeGeometry) {
-                decodedRouteCoordinates = await decodeRouteGeometry(routeGeometry);
-                console.log('📍 Coordenadas decodificadas de VROOM:', decodedRouteCoordinates.length, 'puntos');
-            } else {
-                console.warn('⚠️ No se encontró geometría en la ruta de VROOM');
-                decodedRouteCoordinates = [];
-            }
-            
-            // Procesar pasos de la ruta para obtener destinos
-            currentDestinations = [];
-            currentAssignments = [];
-            
-            for (const step of routeSteps) {
-                if (step.type === 'job' && step.location) {
-                    const assignment = {
-                        id: step.job,
-                        status: 'pending',
-                        cliente: step.job_details?.cliente || 'Cliente desconocido',
-                        telefono: step.job_details?.telefono || '',
-                        direccion: step.job_details?.direccion || '',
-                        coordenadas: {
-                            lat: step.location[1], // VROOM usa [lng, lat]
-                            lng: step.location[0]
-                        }
-                    };
-                    
-                    currentAssignments.push(assignment);
-                    
-                    currentDestinations.push({
-                        id: step.job,
-                        cliente: assignment.cliente,
-                        telefono: assignment.telefono,
-                        direccion: assignment.direccion,
-                        lat: assignment.coordenadas.lat,
-                        lng: assignment.coordenadas.lng,
-                        status: 'pending',
-                        stepInfo: step
-                    });
-                }
-            }
-            
-            console.log('✅ Ruta VROOM procesada:', {
-                destinations: currentDestinations.length,
-                assignments: currentAssignments.length,
-                geometryPoints: decodedRouteCoordinates.length,
-                hasRealRoute: decodedRouteCoordinates.length > 2
-            });
-        }
-
-        // Decodificar la geometría de polyline de VROOM
-        async function decodeRouteGeometry(geometry) {
-            try {
-                // Si tienes la librería polyline disponible
-                if (typeof polyline !== 'undefined' && polyline.decode) {
-                    const decoded = polyline.decode(geometry);
-                    return decoded.map(point => L.latLng(point[0], point[1]));
-                }
-                
-                // Fallback: decodificación manual básica de polyline
-                return decodePolylineManual(geometry);
-                
-            } catch (error) {
-                console.error('❌ Error decodificando geometría:', error);
-                
-                // Último recurso: usar los puntos de los pasos
-                const coordinates = [];
-                routeSteps.forEach(step => {
-                    if (step.location) {
-                        coordinates.push(L.latLng(step.location[1], step.location[0]));
-                    }
+                return leafletCoords;
+            } catch (polylineError) {
+                console.error('❌ DEBUG - Error en polyline.decode():', {
+                    error: polylineError.message,
+                    geometryPreview: geometry.substring(0, 100),
+                    stack: polylineError.stack
                 });
-                
-                return coordinates;
+                throw polylineError;
             }
+        } else {
+            console.warn('⚠️ DEBUG - Librería polyline no disponible, usando decodificación manual');
+            
+            // Fallback: decodificación manual básica de polyline
+            const manualResult = decodePolylineManual(geometry);
+            console.log('🔍 DEBUG - Resultado de decodificación manual:', {
+                success: manualResult.length > 0,
+                pointsCount: manualResult.length,
+                firstPoint: manualResult[0],
+                lastPoint: manualResult[manualResult.length - 1]
+            });
+            
+            return manualResult;
         }
+        
+    } catch (error) {
+        console.error('❌ DEBUG - Error crítico decodificando geometría:', {
+            error: error.message,
+            stack: error.stack,
+            geometryPreview: geometry?.substring(0, 100) || 'N/A',
+            geometryLength: geometry?.length || 0
+        });
+        
+        // Último recurso: usar los puntos de los pasos
+        console.log('🔄 DEBUG - Usando coordenadas de pasos como último recurso');
+        const coordinates = [];
+        routeSteps.forEach((step, index) => {
+            if (step.location) {
+                coordinates.push(L.latLng(step.location[1], step.location[0]));
+                console.log(`📍 DEBUG - Paso ${index}:`, {
+                    type: step.type,
+                    location: step.location,
+                    converted: { lat: step.location[1], lng: step.location[0] }
+                });
+            }
+        });
+        
+        console.log('✅ DEBUG - Coordenadas de pasos extraídas:', {
+            pointsFromSteps: coordinates.length,
+            coordinates: coordinates
+        });
+        
+        return coordinates;
+    }
+}
 
-        // Decodificación manual básica de polyline (simplificada)
+
         function decodePolylineManual(encoded) {
             const coordinates = [];
             let index = 0;
@@ -1231,9 +1380,60 @@
             return coordinates;
         }
 
-        // Datos de fallback si no se puede cargar del backend
-        async function loadFallbackData() {
-            console.log('📝 Cargando datos de ejemplo...');
+        async function loadAssignmentsFromBackend() {
+            try {
+                console.log('🔄 Cargando asignaciones desde el controlador...');
+                
+                const response = await fetch(`/api/get-assigned-jobs/${demoData.motoristId}`, {
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRF-TOKEN': backendData.csrf_token
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.success && data.data && data.data.assigned_jobs) {
+                    currentAssignments = data.data.assigned_jobs.map(job => ({
+                        id: job.id,
+                        status: job.status || 'pending',
+                        cliente: job.cliente || job.assignment_data?.cliente || 'Cliente desconocido',
+                        telefono: job.assignment_data?.telefono || '',
+                        direccion: job.assignment_data?.direccion || '',
+                        coordenadas: {
+                            lat: job.location[1],
+                            lng: job.location[0]
+                        }
+                    }));
+                    
+                    currentDestinations = currentAssignments.map(assignment => ({
+                        id: assignment.id,
+                        cliente: assignment.cliente,
+                        telefono: assignment.telefono,
+                        direccion: assignment.direccion,
+                        lat: assignment.coordenadas.lat,
+                        lng: assignment.coordenadas.lng,
+                        status: assignment.status
+                    }));
+                    
+                    console.log('✅ Asignaciones cargadas desde el controlador:', currentAssignments.length);
+                    return true;
+                } else {
+                    throw new Error(data.error || 'Error obteniendo asignaciones del controlador');
+                }
+            } catch (error) {
+                console.error('❌ Error cargando asignaciones desde controlador:', error);
+                return false;
+            }
+        }
+
+        async function loadFallbackDataWithGeometry() {
+            console.log('📝 Cargando datos de ejemplo con geometría detallada...');
             
             currentAssignments = [
                 {
@@ -1264,14 +1464,60 @@
                 status: assignment.status
             }));
             
-            // Crear geometría simple para demo
+            // Crear geometría detallada simulando polyline decodificado de VROOM
             decodedRouteCoordinates = [
-                L.latLng(14.0667, -87.1875), // Inicio
-                L.latLng(14.08, -87.185),     // Punto intermedio
+                L.latLng(14.0667, -87.1875),    // Inicio
+                L.latLng(14.0680, -87.1870),    // Punto 1
+                L.latLng(14.0700, -87.1865),    // Punto 2
+                L.latLng(14.0720, -87.1862),    // Punto 3
+                L.latLng(14.0750, -87.1860),    // Punto 4
+                L.latLng(14.0780, -87.1858),    // Punto 5
+                L.latLng(14.0810, -87.1855),    // Punto 6
+                L.latLng(14.0840, -87.1852),    // Punto 7
+                L.latLng(14.0870, -87.1850),    // Punto 8
+                L.latLng(14.0900, -87.1848),    // Punto 9
                 L.latLng(14.094832223270211, -87.18619506686059), // Carlos
-                L.latLng(14.09, -87.18),      // Punto intermedio
+                L.latLng(14.0930, -87.1845),    // Salida de Carlos
+                L.latLng(14.0910, -87.1840),    // Punto intermedio
+                L.latLng(14.0890, -87.1835),    // Punto intermedio
+                L.latLng(14.0870, -87.1830),    // Punto intermedio
                 L.latLng(14.0849932, -87.1797737) // Juan
             ];
+            
+            // Simular datos de VROOM
+            totalRouteDistance = 5500; // 5.5 km
+            totalRouteDuration = 1080; // 18 minutos
+            
+            routeSteps = [
+                {
+                    type: 'start',
+                    location: [-87.1875, 14.0667],
+                    distance: 0,
+                    duration: 0
+                },
+                {
+                    type: 'job',
+                    job: 3,
+                    location: [-87.18619506686059, 14.094832223270211],
+                    distance: 3000,
+                    duration: 540,
+                    job_details: { cliente: 'Carlos Martínez' }
+                },
+                {
+                    type: 'job',
+                    job: 1,
+                    location: [-87.1797737, 14.0849932],
+                    distance: 2500,
+                    duration: 540,
+                    job_details: { cliente: 'Juan Pérez' }
+                }
+            ];
+            
+            console.log('✅ Datos de ejemplo con geometría detallada cargados:', {
+                destinations: currentDestinations.length,
+                geometryPoints: decodedRouteCoordinates.length,
+                steps: routeSteps.length
+            });
         }
 
         function setupEventListeners() {
@@ -1281,7 +1527,7 @@
             });
         }
 
-        // ========== NAVEGACIÓN GPS ==========
+        // ========== NAVEGACIÓN GPS CON GEOMETRÍA REAL ==========
         async function toggleNavigation() {
             if (isNavigating) {
                 stopNavigation();
@@ -1291,7 +1537,7 @@
         }
 
         async function startNavigation() {
-            console.log('🧭 Iniciando navegación GPS...');
+            console.log('🧭 Iniciando navegación GPS con geometría real...');
             
             if (!navigator.geolocation) {
                 showErrorMessage('Tu dispositivo no soporta geolocalización');
@@ -1301,7 +1547,7 @@
             try {
                 showLoading('Iniciando Navegación GPS', 'Obteniendo tu ubicación...');
                 
-                // Obtener ubicación actual
+                // 1. Obtener ubicación actual
                 const position = await getCurrentPosition();
                 currentPosition = {
                     lat: position.coords.latitude,
@@ -1314,33 +1560,239 @@
                 
                 console.log('📍 Ubicación obtenida:', currentPosition);
                 
-                // Calcular ruta hacia primer destino
-                await calculateRoute();
+                // 2. Asegurar que tenemos geometría real
+                showLoading('Iniciando Navegación GPS', 'Cargando ruta real desde VROOM...');
+                const hasGeometry = await ensureRouteGeometry();
                 
-                // Iniciar seguimiento en tiempo real
+                if (!hasGeometry) {
+                    console.warn('⚠️ No se pudo obtener geometría real, usando datos de ejemplo');
+                    await loadFallbackDataWithGeometry();
+                }
+                
+                // 3. Calcular ruta con geometría real
+                await calculateRouteWithGeometry();
+                
+                // 4. Iniciar seguimiento en tiempo real
                 startRealTimeTracking();
                 
-                // Actualizar interfaz
+                // 5. Actualizar interfaz
                 isNavigating = true;
                 showNavigationPanel();
                 updateNavigationButton();
                 updateStatusIndicator('navigating');
                 
-                // Anuncio de voz
-                if (voiceEnabled) {
-                    speak('Navegación GPS iniciada. Dirigiéndote hacia ' + currentDestinations[0].cliente);
+                // 6. Anuncio de voz
+                if (voiceEnabled && currentDestinations.length > 0) {
+                    speak('Navegación GPS iniciada con ruta real. Dirigiéndote hacia ' + currentDestinations[0].cliente);
                 }
                 
                 hideLoading();
-                showSuccessMessage('🧭 Navegación GPS iniciada exitosamente');
+                showSuccessMessage('🧭 Navegación GPS iniciada con ruta real de VROOM');
                 
-                console.log('✅ Navegación iniciada');
+                console.log('✅ Navegación iniciada con geometría real');
                 
             } catch (error) {
                 console.error('❌ Error al iniciar navegación:', error);
                 hideLoading();
                 showErrorMessage('Error al iniciar navegación: ' + error.message);
             }
+        }
+
+        async function ensureRouteGeometry() {
+            console.log('🔍 Verificando geometría de VROOM...');
+            
+            // Si ya tenemos geometría decodificada
+            if (decodedRouteCoordinates.length > 0) {
+                console.log('✅ Ya tenemos geometría decodificada con', decodedRouteCoordinates.length, 'puntos');
+                return true;
+            }
+            
+            // Si tenemos geometría cruda pero no decodificada
+            if (routeGeometry) {
+                console.log('🔄 Decodificando geometría existente...');
+                decodedRouteCoordinates = await decodeRouteGeometry(routeGeometry);
+                if (decodedRouteCoordinates.length > 0) {
+                    console.log('✅ Geometría decodificada exitosamente');
+                    return true;
+                }
+            }
+            
+            // Buscar en datos del backend nuevamente
+            const userRoute = backendData.routes.find(route => route.vehicle === demoData.motoristId);
+            if (userRoute && userRoute.geometry) {
+                console.log('🔄 Procesando ruta desde datos del backend...');
+                await processVroomRoute(userRoute);
+                return decodedRouteCoordinates.length > 0;
+            }
+            
+            // Solicitar nueva ruta al backend
+            if (currentPosition) {
+                console.log('🔄 Solicitando nueva ruta al backend...');
+                const newRoute = await requestNewRouteFromBackend();
+                if (newRoute) {
+                    await processVroomRoute(newRoute);
+                    return decodedRouteCoordinates.length > 0;
+                }
+            }
+            
+            console.warn('⚠️ No se pudo obtener geometría de VROOM');
+            return false;
+        }
+
+        async function requestNewRouteFromBackend() {
+            if (!currentPosition) {
+                console.warn('⚠️ No hay posición actual para solicitar ruta');
+                return null;
+            }
+            
+            try {
+                console.log('🔄 Solicitando nueva ruta con geometría al backend...');
+                
+                const response = await fetch('/vehicle/seguir-ruta', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': backendData.csrf_token,
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        current_location: [currentPosition.lat, currentPosition.lng],
+                        vehicle_id: demoData.motoristId,
+                        force_recalculate: true
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.success && data.routes && data.routes.length > 0) {
+                    const route = data.routes[0];
+                    
+                    if (route.geometry) {
+                        console.log('✅ Nueva ruta con geometría obtenida del backend');
+                        return route;
+                    } else {
+                        console.warn('⚠️ Ruta del backend no contiene geometría');
+                    }
+                } else {
+                    throw new Error(data.error || 'Respuesta inválida del backend');
+                }
+                
+                return null;
+                
+            } catch (error) {
+                console.error('❌ Error solicitando nueva ruta:', error);
+                return null;
+            }
+        }
+
+      async function calculateRouteWithGeometry() {
+    console.log('🗺️ DEBUG - Iniciando calculateRouteWithGeometry()');
+    
+    if (currentDestinations.length === 0) {
+        console.error('❌ DEBUG - No hay destinos disponibles');
+        throw new Error('No hay destinos disponibles');
+    }
+    
+    const destination = currentDestinations[currentDestinationIndex];
+    console.log('🎯 DEBUG - Calculando ruta hacia:', {
+        destination: destination,
+        destinationIndex: currentDestinationIndex,
+        totalDestinations: currentDestinations.length
+    });
+    
+    // Verificar que tenemos geometría decodificada
+    if (decodedRouteCoordinates.length === 0) {
+        console.error('❌ DEBUG - No hay geometría decodificada disponible');
+        console.log('🔍 DEBUG - Estado actual:', {
+            decodedRouteCoordinatesLength: decodedRouteCoordinates.length,
+            routeGeometryExists: !!routeGeometry,
+            routeGeometryLength: routeGeometry?.length || 0
+        });
+        throw new Error('No hay geometría decodificada disponible');
+    }
+    
+    console.log('✅ DEBUG - Usando geometría real de VROOM:', {
+        originalGeometryLength: routeGeometry?.length || 0,
+        decodedPointsCount: decodedRouteCoordinates.length,
+        firstPoint: decodedRouteCoordinates[0],
+        lastPoint: decodedRouteCoordinates[decodedRouteCoordinates.length - 1]
+    });
+    
+    // Usar las coordenadas decodificadas directamente
+    routeCoordinates = [...decodedRouteCoordinates];
+    
+    console.log('📋 DEBUG - Coordenadas asignadas a routeCoordinates:', {
+        routeCoordinatesLength: routeCoordinates.length,
+        copiedSuccessfully: routeCoordinates.length === decodedRouteCoordinates.length,
+        firstCoordinate: routeCoordinates[0],
+        lastCoordinate: routeCoordinates[routeCoordinates.length - 1]
+    });
+    
+    
+    // Generar instrucciones basadas en los pasos reales de VROOM
+    currentInstructions = generateInstructionsFromSteps();
+    
+    // Dibujar la ruta real en el mapa
+    console.log('🎨 DEBUG - Llamando a drawRoute() con geometría real');
+    drawRoute();
+    
+    console.log(`🛣️ DEBUG - Ruta real procesada exitosamente:`, {
+        distanceKm: (totalRouteDistance/1000).toFixed(1),
+        durationMin: Math.round(totalRouteDuration/60),
+        routeCoordinatesCount: routeCoordinates.length,
+        instructionsCount: currentInstructions.length,
+        drawRouteCompleted: true
+    });
+}
+
+        function generateInstructionsFromSteps() {
+            const instructions = [];
+            
+            if (routeSteps.length === 0) {
+                return [{
+                    instruction: 'Sigue la ruta indicada',
+                    distance: totalRouteDistance / 2
+                }];
+            }
+            
+            routeSteps.forEach((step, index) => {
+                let instruction = 'Continúa por la ruta';
+                
+                switch (step.type) {
+                    case 'start':
+                        instruction = '🚀 Inicia tu recorrido';
+                        break;
+                    case 'job':
+                        const client = step.job_details?.cliente || 'Cliente';
+                        instruction = `📦 Entrega para ${client}`;
+                        break;
+                    case 'end':
+                        instruction = '🏁 Fin de ruta';
+                        break;
+                    default:
+                        if (step.distance) {
+                            if (step.distance > 1000) {
+                                instruction = `→ Continúa ${(step.distance/1000).toFixed(1)} km`;
+                            } else {
+                                instruction = `→ Continúa ${step.distance} m`;
+                            }
+                        }
+                }
+                
+                instructions.push({
+                    instruction: instruction,
+                    distance: step.distance || 0,
+                    duration: step.duration || 0,
+                    location: step.location || null,
+                    stepIndex: index
+                });
+            });
+            
+            return instructions;
         }
 
         function stopNavigation() {
@@ -1389,141 +1841,6 @@
                         maximumAge: 5000
                     }
                 );
-            });
-        }
-
-        async function calculateRoute() {
-            if (currentDestinations.length === 0) {
-                throw new Error('No hay destinos disponibles');
-            }
-            
-            const destination = currentDestinations[currentDestinationIndex];
-            console.log('🗺️ Usando ruta real hacia:', destination.cliente);
-            
-            try {
-                // Si ya tenemos la ruta completa de VROOM, usarla
-                if (decodedRouteCoordinates.length > 0) {
-                    console.log('✅ Usando ruta real de VROOM con', decodedRouteCoordinates.length, 'puntos');
-                    routeCoordinates = decodedRouteCoordinates;
-                    
-                    // Calcular instrucciones basadas en los pasos reales
-                    currentInstructions = generateInstructionsFromSteps();
-                    
-                    // Dibujar ruta real en el mapa
-                    drawRoute();
-                    
-                    return;
-                }
-                
-                // Si no tenemos ruta, intentar obtenerla del backend
-                console.log('🔄 Solicitando nueva ruta al backend...');
-                const backendRoute = await getRouteFromBackend();
-                
-                if (backendRoute && backendRoute.geometry) {
-                    await processVroomRoute(backendRoute);
-                    routeCoordinates = decodedRouteCoordinates;
-                    currentInstructions = generateInstructionsFromSteps();
-                    drawRoute();
-                    return;
-                }
-                
-                // Último recurso: usar cálculo simple
-                console.warn('⚠️ Usando ruta simple como último recurso');
-                await calculateSimpleRoute(destination);
-                
-            } catch (error) {
-                console.error('❌ Error calculando ruta:', error);
-                await calculateSimpleRoute(destination);
-            }
-        }
-
-        // Generar instrucciones de navegación desde los pasos de VROOM
-        function generateInstructionsFromSteps() {
-            const instructions = [];
-            
-            if (routeSteps.length === 0) {
-                return [{
-                    instruction: 'Sigue la ruta indicada',
-                    distance: totalRouteDistance / 2
-                }];
-            }
-            
-            routeSteps.forEach((step, index) => {
-                let instruction = 'Continúa por la ruta';
-                
-                switch (step.type) {
-                    case 'start':
-                        instruction = '🚀 Inicia tu recorrido';
-                        break;
-                    case 'job':
-                        const client = step.job_details?.cliente || 'Cliente';
-                        instruction = `📦 Entrega para ${client}`;
-                        break;
-                    case 'end':
-                        instruction = '🏁 Fin de ruta';
-                        break;
-                    default:
-                        if (step.distance) {
-                            if (step.distance > 1000) {
-                                instruction = `→ Continúa ${(step.distance/1000).toFixed(1)} km`;
-                            } else {
-                                instruction = `→ Continúa ${step.distance} m`;
-                            }
-                        }
-                }
-                
-                instructions.push({
-                    instruction: instruction,
-                    distance: step.distance || 0,
-                    duration: step.duration || 0,
-                    location: step.location || null,
-                    stepIndex: index
-                });
-            });
-            
-            return instructions;
-        }
-
-        // Ruta simple como fallback
-        async function calculateSimpleRoute(destination) {
-            console.log('📏 Calculando ruta simple hacia:', destination.cliente);
-            
-            routeCoordinates = [
-                L.latLng(currentPosition.lat, currentPosition.lng),
-                L.latLng(destination.lat, destination.lng)
-            ];
-            
-            currentInstructions = [{
-                instruction: `Dirígete hacia ${destination.cliente}`,
-                distance: calculateDistance(currentPosition, destination) * 1000
-            }];
-            
-            drawRoute();
-        }
-
-        async function calculateRealRoute(startLat, startLng, endLat, endLng) {
-            // Simular llamada a servicio de routing (OSRM)
-            return new Promise((resolve) => {
-                setTimeout(() => {
-                    const distance = calculateDistance(
-                        {lat: startLat, lng: startLng},
-                        {lat: endLat, lng: endLng}
-                    );
-                    
-                    resolve({
-                        coordinates: [
-                            L.latLng(startLat, startLng),
-                            L.latLng(endLat, endLng)
-                        ],
-                        distance: distance,
-                        duration: distance * 60, // Estimación simple
-                        instructions: [
-                            { instruction: 'Inicia tu recorrido', distance: 0 },
-                            { instruction: 'Continúa recto', distance: distance * 500 },
-                            { instruction: 'Has llegado a tu destino', distance: distance * 1000 }
-                        ]
-                    });
-                }, 1000);
             });
         }
 
@@ -1713,7 +2030,6 @@
                 const backendSuccess = await completeDeliveryBackend(currentDeliveryId);
                 
                 if (!backendSuccess) {
-                    // Si falla el backend, preguntar si continuar localmente
                     const continueOffline = confirm('No se pudo conectar con el servidor. ¿Deseas marcar la entrega como completada localmente? Se sincronizará cuando se restaure la conexión.');
                     
                     if (!continueOffline) {
@@ -1731,7 +2047,7 @@
                 
                 if (currentDestinationIndex < currentDestinations.length) {
                     // Calcular ruta al siguiente destino
-                    await calculateRoute();
+                    await calculateRouteWithGeometry();
                     updateNextDeliveryInfo();
                     
                     const nextDestination = currentDestinations[currentDestinationIndex];
@@ -1750,147 +2066,6 @@
             } catch (error) {
                 console.error('❌ Error completando entrega:', error);
                 showErrorMessage('Error al completar entrega: ' + error.message);
-            }
-        }
-
-        // ========== FUNCIONES AUXILIARES PARA RUTAS REALES ==========
-
-        // Función simplificada para usar directamente los datos de VROOM existentes
-        async function useExistingRoutes() {
-            try {
-                console.log('🔄 Usando rutas VROOM ya calculadas...');
-                
-                // Opción 1: Datos pasados desde el controlador (más eficiente)
-                if (window.routesData && Array.isArray(window.routesData)) {
-                    const userRoute = window.routesData.find(route => route.vehicle === demoData.motoristId);
-                    
-                    if (userRoute && userRoute.geometry) {
-                        console.log('✅ Usando ruta de window.routesData');
-                        await processVroomRoute(userRoute);
-                        return true;
-                    }
-                }
-                
-                // Opción 2: Datos en sessionStorage
-                const sessionRoutes = sessionStorage.getItem('all_routes');
-                if (sessionRoutes) {
-                    const routes = JSON.parse(sessionRoutes);
-                    const userRoute = routes.find(route => route.vehicle === demoData.motoristId);
-                    
-                    if (userRoute && userRoute.geometry) {
-                        console.log('✅ Usando ruta de sessionStorage');
-                        await processVroomRoute(userRoute);
-                        return true;
-                    }
-                }
-                
-                // Opción 3: Intentar cargar desde el backend
-                return await loadRouteFromBackend();
-                
-            } catch (error) {
-                console.error('❌ Error usando rutas existentes:', error);
-                return false;
-            }
-        }
-
-        // Simplificar el cálculo de ruta para usar directamente la geometría de VROOM
-        async function calculateRoute() {
-            if (currentDestinations.length === 0) {
-                throw new Error('No hay destinos disponibles');
-            }
-            
-            const destination = currentDestinations[currentDestinationIndex];
-            console.log('🗺️ Usando ruta VROOM hacia:', destination.cliente);
-            
-            try {
-                // Si ya tenemos la geometría decodificada de VROOM, usarla directamente
-                if (decodedRouteCoordinates.length > 0) {
-                    console.log('✅ Usando geometría real de VROOM con', decodedRouteCoordinates.length, 'puntos');
-                    routeCoordinates = decodedRouteCoordinates;
-                    
-                    // Generar instrucciones basadas en los pasos reales de VROOM
-                    currentInstructions = generateInstructionsFromSteps();
-                    
-                    // Dibujar la ruta real en el mapa
-                    drawRoute();
-                    
-                    console.log(`🛣️ Ruta real cargada: ${(totalRouteDistance/1000).toFixed(1)}km, ${Math.round(totalRouteDuration/60)}min`);
-                    return;
-                }
-                
-                // Si no tenemos geometría, intentar cargar desde VROOM
-                console.log('🔄 Intentando obtener geometría de VROOM...');
-                const routeLoaded = await useExistingRoutes();
-                
-                if (routeLoaded && decodedRouteCoordinates.length > 0) {
-                    routeCoordinates = decodedRouteCoordinates;
-                    currentInstructions = generateInstructionsFromSteps();
-                    drawRoute();
-                    return;
-                }
-                
-                // Último recurso: ruta simple
-                console.warn('⚠️ No se pudo obtener geometría de VROOM, usando ruta simple');
-                await calculateSimpleRoute(destination);
-                
-            } catch (error) {
-                console.error('❌ Error calculando ruta:', error);
-                await calculateSimpleRoute(destination);
-            }
-        }
-
-        // Función para recargar rutas si es necesario
-        async function refreshRoutesIfNeeded() {
-            if (decodedRouteCoordinates.length === 0) {
-                console.log('🔄 No hay rutas cargadas, intentando cargar...');
-                
-                const success = await useExistingRoutes();
-                if (!success) {
-                    console.log('⚠️ No se pudieron cargar rutas, usando datos de ejemplo');
-                    await loadFallbackData();
-                }
-            }
-        }
-
-        // Mejorar la función de recálculo de rutas
-        async function recalculateRoute() {
-            if (!isNavigating || !currentPosition) {
-                showWarningMessage('No hay navegación activa');
-                return;
-            }
-            
-            try {
-                showLoading('Recalculando ruta', 'Obteniendo nueva ruta desde tu ubicación...');
-                
-                // Forzar recálculo desde el backend
-                const newRoute = await getRouteFromBackend();
-                
-                if (newRoute) {
-                    await processVroomRoute(newRoute);
-                    routeCoordinates = decodedRouteCoordinates;
-                    currentInstructions = generateInstructionsFromSteps();
-                    drawRoute();
-                    
-                    hideLoading();
-                    showSuccessMessage('✅ Ruta recalculada con nueva geometría');
-                    
-                    if (voiceEnabled) {
-                        speak('Ruta recalculada exitosamente');
-                    }
-                } else {
-                    throw new Error('No se pudo obtener nueva ruta del servidor');
-                }
-                
-            } catch (error) {
-                hideLoading();
-                console.error('❌ Error recalculando ruta:', error);
-                showErrorMessage('Error recalculando ruta: ' + error.message);
-                
-                // Intentar usar ruta simple como fallback
-                if (currentDestinationIndex < currentDestinations.length) {
-                    await calculateSimpleRoute(currentDestinations[currentDestinationIndex]);
-                    showWarningMessage('⚠️ Usando ruta simple como respaldo');
-                }
             }
         }
 
@@ -1934,40 +2109,87 @@
         }
 
         // ========== ELEMENTOS DEL MAPA ==========
-        function drawRoute() {
-            clearMapElements();
-            
-            if (routeCoordinates.length === 0) return;
-            
-            // Línea de ruta completa
-            remainingRouteLine = L.polyline(routeCoordinates, {
-                color: '#94a3b8',
-                weight: 6,
-                opacity: 0.7,
-                className: 'remaining-route'
-            }).addTo(map);
-            
-            // Línea de progreso completado
-            completedRouteLine = L.polyline([], {
-                color: '#10b981',
-                weight: 6,
-                opacity: 0.9,
-                className: 'completed-route'
-            }).addTo(map);
-            
-            // Marcador del vehículo
-            createVehicleMarker();
-            
-            // Marcadores de destinos
-            createDestinationMarkers();
-            
-            // Ajustar vista
-            const bounds = L.latLngBounds(routeCoordinates);
-            if (currentPosition) {
-                bounds.extend([currentPosition.lat, currentPosition.lng]);
-            }
-            map.fitBounds(bounds, { padding: [50, 50] });
+       function drawRoute() {
+    console.log('🎨 DEBUG - Iniciando drawRoute() con datos actuales:', {
+        routeCoordinatesCount: routeCoordinates.length,
+        decodedRouteCoordinatesCount: decodedRouteCoordinates.length,
+        currentDestinationsCount: currentDestinations.length,
+        hasRouteGeometry: !!routeGeometry,
+        routeGeometryLength: routeGeometry?.length || 0
+    });
+    
+    clearMapElements();
+    
+    if (routeCoordinates.length === 0) {
+        console.warn('⚠️ DEBUG - No hay coordenadas de ruta para dibujar');
+        console.log('🔍 DEBUG - Estado actual de coordenadas:', {
+            routeCoordinates: routeCoordinates,
+            decodedRouteCoordinates: decodedRouteCoordinates,
+            routeGeometry: routeGeometry
+        });
+        return;
+    }
+    
+    console.log('🗺️ DEBUG - Dibujando ruta en el mapa:', {
+        pointsCount: routeCoordinates.length,
+        firstPoint: routeCoordinates[0],
+        lastPoint: routeCoordinates[routeCoordinates.length - 1],
+        samplePoints: routeCoordinates.slice(0, 5),
+        allCoordinates: routeCoordinates
+    });
+    
+    // Línea de ruta completa (gris/azul)
+    try {
+        remainingRouteLine = L.polyline(routeCoordinates, {
+            color: '#94a3b8',
+            weight: 6,
+            opacity: 0.7,
+            className: 'remaining-route'
+        }).addTo(map);
+        
+        console.log('✅ DEBUG - Polyline principal agregada al mapa exitosamente');
+    } catch (polylineError) {
+        console.error('❌ DEBUG - Error creando polyline principal:', {
+            error: polylineError.message,
+            routeCoordinates: routeCoordinates,
+            stack: polylineError.stack
+        });
+        return;
+    }
+    
+    // Línea de progreso completado (verde)
+    completedRouteLine = L.polyline([], {
+        color: '#10b981',
+        weight: 6,
+        opacity: 0.9,
+        className: 'completed-route'
+    }).addTo(map);
+    
+    // Marcador del vehículo
+    createVehicleMarker();
+    
+    // Marcadores de destinos
+    createDestinationMarkers();
+    
+    // Ajustar vista del mapa
+    try {
+        const bounds = L.latLngBounds(routeCoordinates);
+        if (currentPosition) {
+            bounds.extend([currentPosition.lat, currentPosition.lng]);
         }
+        map.fitBounds(bounds, { padding: [50, 50] });
+        
+        console.log('✅ DEBUG - Vista del mapa ajustada:', {
+            bounds: bounds.toBBoxString(),
+            center: bounds.getCenter(),
+            includesCurrentPosition: !!currentPosition
+        });
+    } catch (boundsError) {
+        console.error('❌ DEBUG - Error ajustando bounds del mapa:', boundsError);
+    }
+    
+    console.log('✅ DEBUG - Ruta dibujada en el mapa exitosamente');
+}
 
         function createVehicleMarker() {
             if (vehicleMarker) {
@@ -2171,10 +2393,20 @@
         async function refreshAssignments() {
             console.log('🔄 Actualizando asignaciones...');
             
-            // Simular actualización
-            showSuccessMessage('🔄 Asignaciones actualizadas');
-            refreshAssignmentsList();
-            updateAssignmentCounts();
+            try {
+                const success = await loadAssignmentsFromBackend();
+                if (success) {
+                    showSuccessMessage('🔄 Asignaciones actualizadas desde el servidor');
+                } else {
+                    showSuccessMessage('🔄 Asignaciones actualizadas localmente');
+                }
+                refreshAssignmentsList();
+                updateAssignmentCounts();
+                updateNextDeliveryInfo();
+            } catch (error) {
+                console.error('Error actualizando asignaciones:', error);
+                showErrorMessage('Error actualizando asignaciones');
+            }
         }
 
         function updateAssignmentCounts() {
@@ -2319,12 +2551,30 @@
             }
             
             try {
-                showLoading('Recalculando ruta', 'Calculando nueva ruta...');
-                await calculateRoute();
-                hideLoading();
-                showSuccessMessage('✅ Ruta recalculada exitosamente');
+                showLoading('Recalculando ruta', 'Obteniendo nueva ruta desde tu ubicación...');
+                
+                // Forzar recálculo desde el backend
+                const newRoute = await requestNewRouteFromBackend();
+                
+                if (newRoute) {
+                    await processVroomRoute(newRoute);
+                    routeCoordinates = [...decodedRouteCoordinates];
+                    currentInstructions = generateInstructionsFromSteps();
+                    drawRoute();
+                    
+                    hideLoading();
+                    showSuccessMessage('✅ Ruta recalculada con nueva geometría');
+                    
+                    if (voiceEnabled) {
+                        speak('Ruta recalculada exitosamente');
+                    }
+                } else {
+                    throw new Error('No se pudo obtener nueva ruta del servidor');
+                }
+                
             } catch (error) {
                 hideLoading();
+                console.error('❌ Error recalculando ruta:', error);
                 showErrorMessage('Error recalculando ruta: ' + error.message);
             }
         }
@@ -2456,64 +2706,20 @@
         }
 
         // ========== INTEGRACIÓN CON BACKEND ==========
-        
-        // Función para enviar datos al backend de Laravel
-        async function sendToBackend(endpoint, data) {
-            try {
-                const response = await fetch(endpoint, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-                    },
-                    body: JSON.stringify(data)
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                
-                return await response.json();
-            } catch (error) {
-                console.error('Error enviando al backend:', error);
-                throw error;
-            }
-        }
-
-        // Completar entrega real (conecta con backend)
         async function completeDeliveryBackend(deliveryId) {
             try {
                 console.log('✅ Completando entrega en backend:', deliveryId);
                 
-                const response = await sendToBackend('/api/mark-job-completed', {
-                    job_id: deliveryId
-                });
-                
-                if (response.success) {
-                    console.log('✅ Entrega completada en backend exitosamente');
-                    return true;
-                } else {
-                    throw new Error(response.error || 'Error desconocido del servidor');
-                }
-            } catch (error) {
-                console.error('❌ Error completando entrega en backend:', error);
-                showErrorMessage('Error al completar entrega en el servidor: ' + error.message);
-                return false;
-            }
-        }
-
-        // Obtener asignaciones desde el controlador
-        async function loadAssignmentsFromBackend() {
-            try {
-                console.log('🔄 Cargando asignaciones desde el controlador...');
-                
-                // Usar el endpoint específico de tu controlador
-                const response = await fetch(`/api/get-assigned-jobs/${demoData.motoristId}`, {
+                const response = await fetch('/api/mark-job-completed', {
+                    method: 'POST',
                     headers: {
-                        'Accept': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
-                    }
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': backendData.csrf_token,
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        job_id: deliveryId
+                    })
                 });
                 
                 if (!response.ok) {
@@ -2522,95 +2728,19 @@
                 
                 const data = await response.json();
                 
-                if (data.success && data.data && data.data.assigned_jobs) {
-                    // Procesar asignaciones del formato de tu controlador
-                    currentAssignments = data.data.assigned_jobs.map(job => ({
-                        id: job.id,
-                        status: job.status || 'pending',
-                        cliente: job.cliente || job.assignment_data?.cliente || 'Cliente desconocido',
-                        telefono: job.assignment_data?.telefono || '',
-                        direccion: job.assignment_data?.direccion || '',
-                        coordenadas: {
-                            lat: job.location[1], // Tu controlador usa formato VROOM [lng, lat]
-                            lng: job.location[0]
-                        }
-                    }));
-                    
-                    currentDestinations = currentAssignments.map(assignment => ({
-                        id: assignment.id,
-                        cliente: assignment.cliente,
-                        telefono: assignment.telefono,
-                        direccion: assignment.direccion,
-                        lat: assignment.coordenadas.lat,
-                        lng: assignment.coordenadas.lng,
-                        status: assignment.status
-                    }));
-                    
-                    console.log('✅ Asignaciones cargadas desde el controlador:', currentAssignments.length);
+                if (data.success) {
+                    console.log('✅ Entrega completada en backend exitosamente');
                     return true;
                 } else {
-                    throw new Error(data.error || 'Error obteniendo asignaciones del controlador');
+                    throw new Error(data.error || 'Error desconocido del servidor');
                 }
             } catch (error) {
-                console.error('❌ Error cargando asignaciones desde controlador:', error);
+                console.error('❌ Error completando entrega en backend:', error);
                 return false;
             }
         }
 
-        async function completeCurrentDelivery() {
-            if (!currentDeliveryId) {
-                showErrorMessage('No hay entrega activa para completar');
-                return;
-            }
-            
-            try {
-                console.log('✅ Completando entrega:', currentDeliveryId);
-                
-                // Completar en el backend primero
-                const backendSuccess = await completeDeliveryBackend(currentDeliveryId);
-                
-                if (!backendSuccess) {
-                    // Si falla el backend, preguntar si continuar localmente
-                    const continueOffline = confirm('No se pudo conectar con el servidor. ¿Deseas marcar la entrega como completada localmente? Se sincronizará cuando se restaure la conexión.');
-                    
-                    if (!continueOffline) {
-                        return;
-                    }
-                }
-                
-                // Actualizar estado localmente
-                updateDeliveryStatus(currentDeliveryId, 'completed');
-                
-                // Avanzar al siguiente destino
-                currentDestinationIndex++;
-                currentDeliveryId = null;
-                hideCompleteButton();
-                
-                if (currentDestinationIndex < currentDestinations.length) {
-                    // Calcular ruta al siguiente destino
-                    await calculateRoute();
-                    updateNextDeliveryInfo();
-                    
-                    const nextDestination = currentDestinations[currentDestinationIndex];
-                    showSuccessMessage(`🎉 Entrega completada! Siguiente: ${nextDestination.cliente}`);
-                    
-                    if (voiceEnabled) {
-                        speak(`Entrega completada. Siguiente destino: ${nextDestination.cliente}`);
-                    }
-                } else {
-                    // Todas las entregas completadas
-                    completeAllDeliveries();
-                }
-                
-                updateAssignmentCounts();
-                
-            } catch (error) {
-                console.error('❌ Error completando entrega:', error);
-                showErrorMessage('Error al completar entrega: ' + error.message);
-            }
-        }
-                    
-        // Enviar ubicación actual al backend de manera eficiente
+        // Enviar ubicación actual al backend
         let lastLocationSent = 0;
         const LOCATION_SEND_INTERVAL = 10000; // 10 segundos
 
@@ -2619,17 +2749,25 @@
             
             const now = Date.now();
             if (now - lastLocationSent < LOCATION_SEND_INTERVAL) {
-                return; // No enviar muy frecuentemente
+                return;
             }
             
             try {
-                await sendToBackend('/api/capture-vehicle-locations', {
-                    locations: [{
-                        vehicle_id: demoData.motoristId,
-                        lat: currentPosition.lat,
-                        lng: currentPosition.lng,
-                        accuracy: currentPosition.accuracy
-                    }]
+                await fetch('/api/capture-vehicle-locations', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': backendData.csrf_token,
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        locations: [{
+                            vehicle_id: demoData.motoristId,
+                            lat: currentPosition.lat,
+                            lng: currentPosition.lng,
+                            accuracy: currentPosition.accuracy
+                        }]
+                    })
                 });
                 
                 lastLocationSent = now;
@@ -2640,75 +2778,109 @@
             }
         }
 
-        // Obtener ruta real desde el backend usando VROOM
-        async function getRouteFromBackend() {
-            if (!currentPosition) {
-                console.warn('⚠️ No hay posición actual para calcular ruta');
-                return null;
-            }
-            
-            try {
-                console.log('🔄 Solicitando ruta real al backend...');
-                
-                const response = await sendToBackend('/api/seguir-ruta', {
-                    current_location: [currentPosition.lat, currentPosition.lng],
-                    vehicle_id: demoData.motoristId,
-                    force_recalculate: true
-                });
-                
-                if (response.success && response.routes && response.routes.length > 0) {
-                    console.log('✅ Ruta obtenida del backend:', response.routes[0]);
-                    return response.routes[0];
+        // ========== FUNCIONES DE DEBUG ==========
+        function logGeometryStatus() {
+    console.log('🔍 ===== DEBUG COMPLETO DE GEOMETRÍA =====');
+    
+    // Estado de datos del backend
+    console.log('📊 1. DATOS DEL BACKEND:', {
+        backendDataExists: !!backendData,
+        routesCount: backendData?.routes?.length || 0,
+        currentMotorista: demoData.motoristId,
+        userRouteInBackend: backendData?.routes?.find(r => r.vehicle === demoData.motoristId),
+        allVehicleIds: backendData?.routes?.map(r => r.vehicle) || []
+    });
+    
+    // Estado de geometría cruda
+    console.log('🗺️ 2. GEOMETRÍA CRUDA:', {
+        hasRouteGeometry: !!routeGeometry,
+        routeGeometryType: typeof routeGeometry,
+        routeGeometryLength: routeGeometry?.length || 0,
+        routeGeometryPreview: routeGeometry?.substring(0, 100) || 'N/A',
+        routeGeometryFull: routeGeometry
+    });
+    
+    // Estado de geometría decodificada
+    console.log('📍 3. GEOMETRÍA DECODIFICADA:', {
+        hasDecodedCoordinates: decodedRouteCoordinates.length > 0,
+        decodedCoordinatesCount: decodedRouteCoordinates.length,
+        firstDecodedPoint: decodedRouteCoordinates[0],
+        lastDecodedPoint: decodedRouteCoordinates[decodedRouteCoordinates.length - 1],
+        allDecodedCoordinates: decodedRouteCoordinates
+    });
+    
+    // Estado de coordenadas de ruta actual
+    console.log('🛣️ 4. COORDENADAS DE RUTA ACTUAL:', {
+        hasRouteCoordinates: routeCoordinates.length > 0,
+        routeCoordinatesCount: routeCoordinates.length,
+        firstRoutePoint: routeCoordinates[0],
+        lastRoutePoint: routeCoordinates[routeCoordinates.length - 1],
+        allRouteCoordinates: routeCoordinates
+    });
+    
+    // Estado de pasos de ruta
+    console.log('👣 5. PASOS DE RUTA:', {
+        hasSteps: routeSteps.length > 0,
+        stepsCount: routeSteps.length,
+        steps: routeSteps,
+        totalDistance: totalRouteDistance,
+        totalDuration: totalRouteDuration
+    });
+    
+    // Estado de destinos y asignaciones
+    console.log('🎯 6. DESTINOS Y ASIGNACIONES:', {
+        destinationsCount: currentDestinations.length,
+        assignmentsCount: currentAssignments.length,
+        currentDestinationIndex: currentDestinationIndex,
+        destinations: currentDestinations,
+        assignments: currentAssignments
+    });
+    
+    // Estado del mapa
+    console.log('🗺️ 7. ESTADO DEL MAPA:', {
+        mapExists: !!map,
+        hasRemainingRouteLine: !!remainingRouteLine,
+        hasCompletedRouteLine: !!completedRouteLine,
+        hasVehicleMarker: !!vehicleMarker,
+        destinationMarkersCount: destinationMarkers.length
+    });
+    
+    console.log('🔍 ===== FIN DEBUG DE GEOMETRÍA =====');
+}
+
+        function debugInfo() {
+            console.log('🔍 Estado completo del sistema:', {
+                isNavigating,
+                currentPosition,
+                currentDestinationIndex,
+                currentDeliveryId,
+                assignmentsCount: currentAssignments.length,
+                destinationsCount: currentDestinations.length,
+                routeCoordinatesCount: routeCoordinates.length,
+                voiceEnabled,
+                isAssignmentsPanelOpen,
+                backendData: {
+                    motoristId: demoData.motoristId,
+                    routesAvailable: backendData.routes.length,
+                    vehiclesAvailable: backendData.vehicles.length,
+                    jobsAvailable: backendData.jobs.length
                 }
-                
-                console.warn('⚠️ Backend no devolvió rutas válidas');
-                return null;
-                
-            } catch (error) {
-                console.error('❌ Error obteniendo ruta desde backend:', error);
-                return null;
-            }
+            });
         }
 
-        // Obtener rutas pre-calculadas desde el endpoint principal
-        async function loadPreCalculatedRoutes() {
-            try {
-                console.log('🔄 Cargando rutas pre-calculadas...');
-                
-                const response = await fetch('/vehicle/data', {
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
-                }
-                
-                const data = await response.json();
-                
-                if (data.routes && Array.isArray(data.routes)) {
-                    const userRoute = data.routes.find(route => route.vehicle === demoData.motoristId);
-                    
-                    if (userRoute) {
-                        console.log('✅ Ruta pre-calculada encontrada');
-                        await processVroomRoute(userRoute);
-                        return true;
-                    }
-                }
-                
-                return false;
-                
-            } catch (error) {
-                console.error('❌ Error cargando rutas pre-calculadas:', error);
-                return false;
+        function simulateArrival() {
+            if (currentDestinationIndex < currentDestinations.length) {
+                const destination = currentDestinations[currentDestinationIndex];
+                showArrivalNotification(destination.cliente);
+                currentDeliveryId = destination.id;
+                showCompleteButton();
+                updateDeliveryStatus(destination.id, 'in_progress');
+                console.log('🧪 Simulando llegada a:', destination.cliente);
             }
         }
 
         // ========== EVENTOS DEL TECLADO ==========
         document.addEventListener('keydown', function(event) {
-            // Atajos de teclado para navegación rápida
             switch(event.key) {
                 case ' ': // Barra espaciadora - Toggle navegación
                     event.preventDefault();
@@ -2747,9 +2919,7 @@
             }
         });
 
-        // ========== NOTIFICACIONES PUSH (OPCIONAL) ==========
-        
-        // Solicitar permisos para notificaciones
+        // ========== NOTIFICACIONES (OPCIONAL) ==========
         function requestNotificationPermission() {
             if ('Notification' in window && Notification.permission === 'default') {
                 Notification.requestPermission().then(function(permission) {
@@ -2760,7 +2930,6 @@
             }
         }
 
-        // Mostrar notificación del sistema
         function showSystemNotification(title, message, icon = '🚛') {
             if ('Notification' in window && Notification.permission === 'granted') {
                 const notification = new Notification(title, {
@@ -2775,69 +2944,40 @@
                     notification.close();
                 };
                 
-                // Auto-cerrar después de 5 segundos
                 setTimeout(() => notification.close(), 5000);
             }
         }
 
-        // ========== MODO OFFLINE (OPCIONAL) ==========
-        
-        // Detectar estado de conexión
+        // ========== MODO OFFLINE ==========
         function handleConnectionChange() {
             if (navigator.onLine) {
                 showSuccessMessage('🌐 Conexión restaurada');
-                // Sincronizar datos pendientes
                 syncPendingData();
             } else {
                 showWarningMessage('📡 Sin conexión - Modo offline activado');
             }
         }
 
-        // Sincronizar datos cuando se restaure la conexión
         async function syncPendingData() {
-            // Aquí podrías implementar lógica para sincronizar
-            // entregas completadas offline, ubicaciones, etc.
             console.log('🔄 Sincronizando datos pendientes...');
+            try {
+                await loadAssignmentsFromBackend();
+                showSuccessMessage('🔄 Datos sincronizados con el servidor');
+            } catch (error) {
+                console.warn('⚠️ Error sincronizando datos:', error);
+            }
         }
 
         // Escuchar cambios de conexión
         window.addEventListener('online', handleConnectionChange);
         window.addEventListener('offline', handleConnectionChange);
 
-        // ========== FUNCIONES DE DESARROLLO/DEBUG ==========
-        
-        // Función para simular llegada a destino (solo para testing)
-        window.simulateArrival = function() {
-            if (currentDestinationIndex < currentDestinations.length) {
-                const destination = currentDestinations[currentDestinationIndex];
-                showArrivalNotification(destination.cliente);
-                currentDeliveryId = destination.id;
-                showCompleteButton();
-                updateDeliveryStatus(destination.id, 'in_progress');
-                console.log('🧪 Simulando llegada a:', destination.cliente);
-            }
-        };
-
-        // Función para mostrar información de debug
-        window.debugInfo = function() {
-            console.log('🔍 Estado actual del sistema:', {
-                isNavigating,
-                currentPosition,
-                currentDestinationIndex,
-                currentDeliveryId,
-                assignmentsCount: currentAssignments.length,
-                destinationsCount: currentDestinations.length,
-                routeCoordinatesCount: routeCoordinates.length,
-                voiceEnabled,
-                isAssignmentsPanelOpen
-            });
-        };
-
-        // Solicitar permisos de notificación al cargar
+        // Solicitar permisos de notificación
         setTimeout(requestNotificationPermission, 2000);
 
-        console.log('✅ Sistema de Navegación GPS cargado completamente');
-        console.log('⌨️ Atajos disponibles: Espacio=Nav, C=Completar, A=Asignaciones, V=Voz, R=Recalcular, L=Ubicar, F=Ajustar, M=Mapa');
+        console.log('✅ Sistema de Navegación GPS con geometría VROOM cargado completamente');
+        console.log('⌨️ Atajos: Espacio=Nav, C=Completar, A=Asignaciones, V=Voz, R=Recalcular, L=Ubicar, F=Ajustar, M=Mapa');
+        console.log('🔧 Debug: window.debugGeometry(), window.debugInfo(), window.simulateArrival()');
     </script>
 </body>
 </html>
