@@ -480,7 +480,8 @@ class AdminController extends Controller
                     'latitud' => $latitud,
                     'longitud' => $longitud,
                     'fecha_pedido' => $hoy,
-                    'total' => 0.00 // Se actualizará al final
+                    'total' => 0.00, // Se actualizará al final
+                    'estado' => 'en preparacion'
                 ]);
 
                 $pedido->save();
