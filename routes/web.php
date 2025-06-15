@@ -5,10 +5,13 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\VroomController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\DashboardController;
+use Illuminate\Support\Facades\Auth;
 use App\Http\Middleware\CheckPermission;
 
 //Rutas publicas
-
+Route::get('/route-viewer', function () {
+    return view('text');
+});
 // En web.php - SOLO PARA DEBUG
 Route::get('/debug-assignments', [VroomController::class, 'debugAssignments']);
 // En web.php - TEMPORAL para debug
@@ -128,10 +131,6 @@ Route::post('/vehicle/calculate-distance', [VroomController::class, 'calculateDi
 
 // RUTAS CORREGIDAS para el sistema de asignaciones específicas
 Route::group(['prefix' => 'vehicle', 'middleware' => ['auth']], function () {
-    
-    // Seguir ruta (navegación en tiempo real) - CORREGIDA
-    Route::post('/seguir-ruta', [VroomController::class, 'seguirRuta'])->name('vehicle.seguir-ruta');
-    
     // Capturar ubicaciones GPS de vehículos (solo admin)
     Route::post('/capture-locations', [VroomController::class, 'captureVehicleLocations'])
          ->name('vehicle.capture-locations')
@@ -174,7 +173,6 @@ Route::group(['prefix' => 'vehicle', 'middleware' => ['auth']], function () {
 Route::group(['prefix' => 'api/vehicle', 'middleware' => ['auth:sanctum']], function () {
     
     // Versión API de las rutas principales
-    Route::post('/follow-route', [VroomController::class, 'seguirRuta']);
     Route::post('/complete-job', [VroomController::class, 'markJobCompleted']);
     Route::get('/assignment-status', [VroomController::class, 'getVehicleAssignmentStatus']);
     Route::post('/capture-locations', [VroomController::class, 'captureVehicleLocations']);
@@ -183,7 +181,6 @@ Route::group(['prefix' => 'api/vehicle', 'middleware' => ['auth:sanctum']], func
     Route::get('/admin-dashboard', [VroomController::class, 'getAdminDashboard']);
 });
 Route::group(['prefix' => 'api/vehicle', 'middleware' => ['auth:sanctum']], function () {
-    Route::post('/follow-route', [VroomController::class, 'seguirRuta']);
     Route::post('/complete-job', [VroomController::class, 'markJobCompleted']);
     Route::get('/assignment-status', [VroomController::class, 'getVehicleAssignmentStatus']);
     Route::post('/capture-locations', [VroomController::class, 'captureVehicleLocations']);
