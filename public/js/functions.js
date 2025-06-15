@@ -23,6 +23,46 @@ function esFechaPasada(fechaSeleccionada) {
 
     return fecha < hoy;
 }
+
+function renderizarSwitchEnvioGratis(fecha) {
+    const container = document.getElementById('switch-envio-container');
+    const switchInput = document.getElementById('switch-envio-gratis');
+
+    if (esFechaPasada(fecha)) {
+        container.classList.add('hidden');
+        return;
+    }
+
+    // Consultar al backend
+    $.get(`/admin/envios-gratis/${fecha}`, function (data) {
+        if (!data.existe) {
+            container.classList.add('hidden');
+            return;
+        }
+
+        container.classList.remove('hidden');
+        switchInput.checked = data.activo;
+
+        switchInput.onchange = function () {
+            $.ajax({
+                url: `/admin/envios-gratis/${fecha}`,
+                method: 'PATCH',
+                data: {
+                    activo: this.checked,
+                    _token: document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                },
+                success: () => {
+                    console.log(`Estado de envío gratis para ${fecha} actualizado`);
+                },
+                error: () => {
+                    console.error('No se pudo actualizar el estado de envío gratis');
+                }
+            });
+        };
+    });
+}
+
+
 function manejarEstadoFormulario(fechaPasada) {
     const formulario = document.getElementById("agregar-platillo-form-menu");
     const botonesEliminar = document.querySelectorAll(
@@ -141,6 +181,7 @@ function eliminarPlatilloMenu(platilloId) {
                             showConfirmButton: false,
                         });
                         cargarMenuPorFecha(fecha);
+                        renderizarSwitchEnvioGratis(fecha);
                     } else {
                         Swal.fire({
                             icon: "error",
