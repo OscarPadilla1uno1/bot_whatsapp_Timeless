@@ -68,6 +68,13 @@
                         </tbody>
                     </table>
                 </div>
+                <div id="switch-envio-container" class="mb-4 hidden">
+                    <label class="flex items-center space-x-3">
+                        <input type="checkbox" id="switch-envio-gratis" class="form-checkbox h-5 w-5 text-green-600">
+                        <span class="text-sm">Envío gratis si se piden 3 o más platillos</span>
+                    </label>
+                </div>
+
             </div>
         </div>
 
@@ -124,6 +131,7 @@
             const today = obtenerFechaHoyTegucigalpa();
 
             manejarEstadoFormulario(esFechaPasada(today));
+            renderizarSwitchEnvioGratis(today);
 
 
             console.log('Fecha de hoy:', today);
@@ -142,6 +150,7 @@
                     const esPasada = esFechaPasada(this.value);
                     manejarEstadoFormulario(esPasada);
                     cargarMenuPorFecha(this.value);
+                    renderizarSwitchEnvioGratis(this.value);
                 });
             } else {
                 console.error('No se encontró el elemento con id "fecha"');
@@ -198,6 +207,7 @@
                             });
 
                             cargarMenuPorFecha(fecha);
+                            renderizarSwitchEnvioGratis(fecha);
                         }
                     })
                     .catch(err => console.error("Error al agregar:", err));

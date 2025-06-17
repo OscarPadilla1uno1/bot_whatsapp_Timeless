@@ -11,6 +11,7 @@ use App\Models\DetallePedido;
 use App\Models\MenuDiario;
 use App\Models\Pago;
 use App\Models\Pedido;
+use App\Models\EnvioGratisFecha;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -27,6 +28,30 @@ use App\Http\Controllers\VroomController;
 
 class AdminController extends Controller
 {
+
+    public function estadoEnvioGratis($fecha)
+    {
+        $registro = EnvioGratisFecha::where('fecha', $fecha)->first();
+
+        if (!$registro) {
+            return response()->json(['existe' => false]);
+        }
+
+        return response()->json([
+            'existe' => true,
+            'activo' => $registro->activo
+        ]);
+    }
+
+    public function actualizarEnvioGratis(Request $request, $fecha)
+    {
+        $registro = EnvioGratisFecha::where('fecha', $fecha)->firstOrFail();
+        $registro->activo = $request->boolean('activo');
+        $registro->save();
+
+        return response()->json(['success' => true]);
+    }
+
 
     public function descargarFactura($id)
     {
@@ -101,6 +126,11 @@ class AdminController extends Controller
             $request->cantidad,
             $request->fecha
         ]);
+
+        $fecha = Carbon::parse($request->fecha);
+
+        // Solo se crea el registro si aún no existe
+        EnvioGratisFecha::establecerSiNoExiste($fecha);
 
         return response()->json([
             'success' => true
@@ -348,6 +378,14 @@ class AdminController extends Controller
         $latitud = $request->latitud;
         $longitud = $request->longitud;
         $platillos = $request->platillos;
+        $cantidadPlatillos = 0;
+
+        foreach ($platillos as $i){
+
+            $cantidadPlatillos += $i['cantidad'];
+
+        }
+
 
         $hoy = now()->setTimezone('America/Tegucigalpa')->format('Y-m-d'); // Ajusta tu zona horaria
 
@@ -394,14 +432,30 @@ class AdminController extends Controller
         $diaSemana = now()->setTimezone('America/Tegucigalpa')->dayOfWeek;
         Log::info("Día de la semana: {$diaSemana}");
 
-        // Evaluar si es sábado o si la distancia es ≤ 1 km
-        if ($diaSemana === 6 || $distancia_km <= 0.7) {
+        $fechaCarbon = Carbon::parse($hoy);
+        $aplicaEnvioGratis = EnvioGratisFecha::tieneEnvioGratisParaFecha($fechaCarbon);
+
+        if ($aplicaEnvioGratis && $cantidadPlatillos >= 3) {
             $costo_envio = 0;
         } else {
-            $costo_envio = max(60, 20 + (7.5 * $distancia_km) + (1.7 * $tiempo_min));
+            // 2. Si está muy cerca, también es gratis
+            if ($distancia_km <= 0.7) {
+                $costo_envio = 0;
+            }
+            // 3. Rangos definidos
+            elseif ($distancia_km > 0.7 && $distancia_km <= 6.0) {
+                $costo_envio = 40;
+            } elseif ($distancia_km > 6.0 && $distancia_km <= 6.75) {
+                $costo_envio = 50;
+            } elseif ($distancia_km > 6.75 && $distancia_km <= 9.0) {
+                $costo_envio = 70;
+            } else { // mayor a 9.0
+                $costo_envio = 80;
+            }
         }
-        Log::info("Valor del envio: {$costo_envio}");
 
+        // Log para depuración
+        Log::info("Valor del envio para {$hoy}: L.{$costo_envio}");
 
         // Verificar que hay platillos
         if (empty($platillos)) {
@@ -426,7 +480,8 @@ class AdminController extends Controller
                     'latitud' => $latitud,
                     'longitud' => $longitud,
                     'fecha_pedido' => $hoy,
-                    'total' => 0.00 // Se actualizará al final
+                    'total' => 0.00, // Se actualizará al final
+                    'estado' => 'en preparacion'
                 ]);
 
                 $pedido->save();
@@ -909,17 +964,44 @@ class AdminController extends Controller
         $distanciaManual = $this->calcularDistancia($lat_restaurante, $lon_restaurante, $latitud, $longitud);
         Log::info("Distancia manual calculada: {$distanciaManual} km");
 
+        $cantidadPlatillos = 0;
 
         // Obtener día de la semana (0=domingo, 6=sábado)
         $diaSemana = now()->setTimezone('America/Tegucigalpa')->dayOfWeek;
         Log::info("Día de la semana: {$diaSemana}");
 
-        // Evaluar si es sábado o si la distancia es ≤ 1 km
-        if ($diaSemana === 6 || $distancia_km <= 0.7) {
+        foreach ($platillos as $i){
+
+            $cantidadPlatillos += $i['cantidad'];
+
+        }
+
+        $fechaCarbon = Carbon::parse($fecha);
+        $aplicaEnvioGratis = EnvioGratisFecha::tieneEnvioGratisParaFecha($fechaCarbon);
+        
+        
+        Log::info("estado del envio {$aplicaEnvioGratis} y cantidad de platillos pedidos {$cantidadPlatillos}");
+
+        if ($aplicaEnvioGratis && $cantidadPlatillos >= 3) {
             $costo_envio = 0;
         } else {
-            $costo_envio = max(60, 20 + (7.5 * $distancia_km) + (1.7 * $tiempo_min));
+            // 2. Si está muy cerca, también es gratis
+            if ($distancia_km <= 0.7) {
+                $costo_envio = 0;
+            }
+            // 3. Rangos definidos
+            elseif ($distancia_km > 0.7 && $distancia_km <= 6.0) {
+                $costo_envio = 40;
+            } elseif ($distancia_km > 6.0 && $distancia_km <= 6.75) {
+                $costo_envio = 50;
+            } elseif ($distancia_km > 6.75 && $distancia_km <= 9.0) {
+                $costo_envio = 70;
+            } else { // mayor a 9.0
+                $costo_envio = 80;
+            }
         }
+
+
 
         try {
             $result = DB::transaction(function () use ($nombre, $telefono, $latitud, $longitud, $platillos, $fecha, $costo_envio, $pago, &$subtotal) {
@@ -1081,6 +1163,8 @@ class AdminController extends Controller
         $platillosInput = collect($request->platillos)->keyBy('platillo_id');
         $platillosActuales = $pedido->detalles->keyBy('platillo_id');
 
+        $platillos = $request->platillos;
+
         $subtotal = 0.0;
 
         $distancia_km = 0;
@@ -1123,11 +1207,33 @@ class AdminController extends Controller
         $diaSemana = now()->setTimezone('America/Tegucigalpa')->dayOfWeek;
         Log::info("Día de la semana: {$diaSemana}");
 
-        // Evaluar si es sábado o si la distancia es ≤ 1 km
-        if ($diaSemana === 6 || $distancia_km <= 0.7) {
+        $cantidadPlatillos = 0;
+
+        foreach ($platillos as $i){
+
+            $cantidadPlatillos += $i['cantidad'];
+
+        }
+
+        $fechaCarbon = Carbon::parse($fecha);
+        $aplicaEnvioGratis = EnvioGratisFecha::tieneEnvioGratisParaFecha($fechaCarbon);
+        if ($aplicaEnvioGratis && $cantidadPlatillos >= 3) {
             $costo_envio = 0;
         } else {
-            $costo_envio = max(60, 20 + (7.5 * $distancia_km) + (1.7 * $tiempo_min));
+            // 2. Si está muy cerca, también es gratis
+            if ($distancia_km <= 0.7) {
+                $costo_envio = 0;
+            }
+            // 3. Rangos definidos
+            elseif ($distancia_km > 0.7 && $distancia_km <= 6.0) {
+                $costo_envio = 40;
+            } elseif ($distancia_km > 6.0 && $distancia_km <= 6.75) {
+                $costo_envio = 50;
+            } elseif ($distancia_km > 6.75 && $distancia_km <= 9.0) {
+                $costo_envio = 70;
+            } else { // mayor a 9.0
+                $costo_envio = 80;
+            }
         }
 
 
