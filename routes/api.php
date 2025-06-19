@@ -41,4 +41,6 @@ Route::get('/test', function () {
     return response()->json(['message' => 'La API funciona!']);
 });
 
+Route::get('/envio-gratis', [AdminController::class, 'verificar']);
+
 

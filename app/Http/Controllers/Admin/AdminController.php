@@ -29,6 +29,21 @@ use App\Http\Controllers\VroomController;
 class AdminController extends Controller
 {
 
+    public function verificar(Request $request)
+    {
+        $request->validate([
+            'fecha' => 'required|date_format:Y-m-d',
+        ]);
+
+        $fecha = Carbon::parse($request->input('fecha'))->startOfDay();
+        $aplicaEnvioGratis = EnvioGratisFecha::tieneEnvioGratisParaFecha($fecha);
+
+        return response()->json([
+            'fecha' => $fecha->toDateString(),
+            'envio_gratis' => $aplicaEnvioGratis,
+        ]);
+    }
+
     public function estadoEnvioGratis($fecha)
     {
         $registro = EnvioGratisFecha::where('fecha', $fecha)->first();
