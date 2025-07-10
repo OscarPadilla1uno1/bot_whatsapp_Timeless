@@ -395,7 +395,7 @@ class AdminController extends Controller
         $platillos = $request->platillos;
         $cantidadPlatillos = 0;
 
-        foreach ($platillos as $i){
+        foreach ($platillos as $i) {
 
             $cantidadPlatillos += $i['cantidad'];
 
@@ -572,6 +572,131 @@ class AdminController extends Controller
             ], 400);
         }
     }
+
+    public function cotizarPedido(Request $request)
+    {
+        $request->validate([
+            'nombre' => 'required|string',
+            'telefono' => 'required|string',
+            'latitud' => 'required|numeric',
+            'longitud' => 'required|numeric',
+            'platillos' => 'required|array',
+            'platillos.*.id' => 'required|integer',
+            'platillos.*.cantidad' => 'required|integer',
+        ]);
+
+        $latitud = $request->latitud;
+        $longitud = $request->longitud;
+        $platillos = $request->platillos;
+        $cantidadPlatillos = collect($platillos)->sum('cantidad');
+
+        $hoy = now()->setTimezone('America/Tegucigalpa')->format('Y-m-d');
+        $distancia_km = 0;
+        $tiempo_min = 0;
+
+        $distanceRequest = new Request([
+            'target_lat' => (float) $latitud,
+            'target_lng' => (float) $longitud
+        ]);
+
+        $response = app(VroomController::class)->calculateDistanceFromVehicle($distanceRequest);
+        $datosDistancia = $response->getData(true);
+
+        if (!isset($datosDistancia['success']) || !$datosDistancia['success']) {
+            return response()->json([
+                'success' => false,
+                'mensaje' => 'Error al calcular la distancia y el tiempo estimado',
+            ], 400);
+        }
+
+        $datos = $datosDistancia['data'] ?? [];
+        $distancia_km = $datos['route_info']['distance']['km'] ?? 0;
+
+        $fechaCarbon = Carbon::parse($hoy);
+        $aplicaEnvioGratis = EnvioGratisFecha::tieneEnvioGratisParaFecha($fechaCarbon);
+
+        if ($aplicaEnvioGratis && $cantidadPlatillos >= 3) {
+            $costo_envio = 0;
+        } else {
+            if ($distancia_km <= 0.7) {
+                $costo_envio = 0;
+            } elseif ($distancia_km <= 6.0) {
+                $costo_envio = 40;
+            } elseif ($distancia_km <= 6.75) {
+                $costo_envio = 50;
+            } elseif ($distancia_km <= 9.0) {
+                $costo_envio = 70;
+            } else {
+                $costo_envio = 80;
+            }
+        }
+
+        $detallePlatillos = [];
+        $subtotalBase = 0;
+        $totalISV = 0;
+        $totalPlatillosConISV = 0;
+
+        foreach ($platillos as $item) {
+            $platilloId = $item['id'];
+            $cantidad = $item['cantidad'];
+
+            $menuItem = MenuDiario::where('fecha', $hoy)
+                ->where('platillo_id', $platilloId)
+                ->first();
+
+            if (!$menuItem) {
+                return response()->json([
+                    'success' => false,
+                    'mensaje' => "Error: el platillo ID {$platilloId} no está en el menú de hoy.",
+                ], 400);
+            }
+
+            $platillo = Platillo::find($platilloId);
+            if (!$platillo) {
+                return response()->json([
+                    'success' => false,
+                    'mensaje' => "Error: el platillo ID {$platilloId} no existe.",
+                ], 400);
+            }
+
+            $precio = $platillo->precio_base;
+            $isv_unitario = round($precio * 0.12, 2);
+            $base_unitaria = round($precio - $isv_unitario, 2);
+
+            $total_unitario = round($precio, 2);
+            $subtotal_item = $total_unitario * $cantidad;
+            $subtotalBase += $base_unitaria * $cantidad;
+            $totalISV += $isv_unitario * $cantidad;
+            $totalPlatillosConISV += $subtotal_item;
+
+            $detallePlatillos[] = [
+                'nombre' => $platillo->nombre,
+                'cantidad' => $cantidad,
+                'precio_unitario' => $total_unitario,
+                'base_unitaria' => $base_unitaria,
+                'isv_unitario' => $isv_unitario,
+                'subtotal' => $subtotal_item,
+                'subtotal_base' => $base_unitaria * $cantidad,
+                'subtotal_isv' => $isv_unitario * $cantidad
+            ];
+        }
+
+        $totalFinal = $totalPlatillosConISV + $costo_envio;
+
+        return response()->json([
+            'success' => true,
+            'mensaje' => 'Cotización generada exitosamente.',
+            'detalle_platillos' => $detallePlatillos,
+            'resumen' => [
+                'subtotal_base' => round($subtotalBase, 2),
+                'total_isv' => round($totalISV, 2),
+                'total_platillos_con_isv' => round($totalPlatillosConISV, 2),
+                'envio' => round($costo_envio, 2),
+                'total_general' => round($totalFinal, 2)
+            ]
+        ]);
+    }
+
 
     public function procesarComprobante(Request $request)
     {
@@ -985,7 +1110,7 @@ class AdminController extends Controller
         $diaSemana = now()->setTimezone('America/Tegucigalpa')->dayOfWeek;
         Log::info("Día de la semana: {$diaSemana}");
 
-        foreach ($platillos as $i){
+        foreach ($platillos as $i) {
 
             $cantidadPlatillos += $i['cantidad'];
 
@@ -993,8 +1118,8 @@ class AdminController extends Controller
 
         $fechaCarbon = Carbon::parse($fecha);
         $aplicaEnvioGratis = EnvioGratisFecha::tieneEnvioGratisParaFecha($fechaCarbon);
-        
-        
+
+
         Log::info("estado del envio {$aplicaEnvioGratis} y cantidad de platillos pedidos {$cantidadPlatillos}");
 
         if ($aplicaEnvioGratis && $cantidadPlatillos >= 3) {
@@ -1224,7 +1349,7 @@ class AdminController extends Controller
 
         $cantidadPlatillos = 0;
 
-        foreach ($platillos as $i){
+        foreach ($platillos as $i) {
 
             $cantidadPlatillos += $i['cantidad'];
 

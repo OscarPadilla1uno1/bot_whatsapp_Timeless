@@ -32,6 +32,7 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
 
+Route::get('/cotizar', [AdminController::class, 'cotizarPedido']);
 
 Route::get('/factura/{id}', [AdminController::class, 'obtenerFacturaPDF']);
 
