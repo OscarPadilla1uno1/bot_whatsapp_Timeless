@@ -44,4 +44,5 @@ Route::get('/test', function () {
 
 Route::get('/envio-gratis', [AdminController::class, 'verificar']);
 
+Route::get('/verificar-cliente', [AdminController::class, 'verificarNumero']);
 

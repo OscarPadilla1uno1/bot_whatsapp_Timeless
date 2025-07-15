@@ -376,6 +376,27 @@ class AdminController extends Controller
         return $distancia;
     }
 
+    public function verificarNumero(Request $request)
+    {
+        $request->validate([
+            'telefono' => 'required|string'
+        ]);
+
+        $cliente = Cliente::where('telefono', $request->telefono)->first();
+
+        if ($cliente) {
+            return response()->json([
+                'existe' => true,
+                'nombre' => $cliente->nombre
+            ]);
+        } else {
+            return response()->json([
+                'existe' => false,
+                'mensaje' => 'Cliente no encontrado'
+            ]);
+        }
+    }
+
     public function storePedido(Request $request)
     {
         $request->validate([
