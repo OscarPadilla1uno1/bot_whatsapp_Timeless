@@ -8,6 +8,28 @@ use App\Http\Controllers\DashboardController;
 use Illuminate\Support\Facades\Auth;
 use App\Http\Middleware\CheckPermission;
 
+<<<<<<< HEAD
+=======
+Route::get('/routes', [VroomController::class, 'index'])->name('routes');
+
+// Nueva ruta para vista individual de motorista
+Route::middleware(['auth'])->group(function () {
+    Route::get('/motorista/mi-ruta', [VroomController::class, 'showDriverRoute'])
+        ->name('motorista.mi_ruta')
+        ->can('Motorista');
+    
+    Route::get('/motorista/{userId}/ruta', [VroomController::class, 'showDriverRoute'])
+        ->name('motorista.ruta')
+        ->can('Administrador'); // Solo admin puede ver rutas de otros motoristas
+});
+
+Route::post('/seguir', [VroomController::class, 'seguirRuta'])->name('seguir.ruta');
+Route::get('/seguir', [VroomController::class, 'seguirRuta'])->name('seguir.ruta.get');
+Route::get('/gps-data', [VroomController::class, 'getGpsData'])->name('gps.data')->middleware('auth');
+Route::post('/emergency', [VroomController::class, 'emergencyAlert'])->name('emergency.alert')->middleware('auth');
+Route::post('/get-optimized-route', [VroomController::class, 'getOptimizedRoute'])->name('get.optimized.route')->middleware('auth');
+
+>>>>>>> 499d89f (Hoy si; pinches rutas en tiempo real)
 //Rutas publicas
 Route::get('/route-viewer', function () {
     return view('text');
@@ -131,5 +153,7 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('/user-routes', [VroomController::class, 'destroy']);
     Route::get('/vroom', [VroomController::class, 'index'])->name('vroom.index');
 });
+
+
 
 require __DIR__ . '/auth.php';

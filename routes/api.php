@@ -42,7 +42,10 @@ Route::get('/test', function () {
     return response()->json(['message' => 'La API funciona!']);
 });
 
+<<<<<<< HEAD
 Route::get('/envio-gratis', [AdminController::class, 'verificar']);
 
 Route::get('/verificar-cliente', [AdminController::class, 'verificarNumero']);
+=======
+>>>>>>> 499d89f (Hoy si; pinches rutas en tiempo real)
 

@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\DB;
+<<<<<<< HEAD
 use Carbon\Carbon;
 
 class VroomController extends Controller
@@ -103,7 +104,265 @@ class VroomController extends Controller
                 'message' => 'Error interno: ' . $e->getMessage(),
                 'data' => []
             ]);
+=======
+use Illuminate\Support\Facades\Log;
+use App\Models\User;
+
+class VroomController extends Controller
+{
+    public function index(Request $request)
+    {
+        $jobs = $this->getValidJobs();
+
+        if (empty($jobs)) {
+            return back()->with('error', 'No hay pedidos válidos para procesar');
         }
+
+        // Obtener vehículos desde usuarios con permiso "motorista"
+        $vehicles = $this->getVehiclesFromDrivers();
+
+        if (empty($vehicles)) {
+            return back()->with('error', 'No hay motoristas disponibles');
+        }
+
+        $data = [
+            "vehicles" => $vehicles,
+            "jobs" => $jobs,
+            "options" => ["g" => true]
+        ];
+
+        $vroomUrl = 'http://154.38.191.25:3000';
+        $response = Http::timeout(30)->post($vroomUrl, $data);
+
+        if ($response->failed()) {
+            Log::error('Error en la respuesta de VROOM', [
+                'status' => $response->status(),
+                'body' => $response->body()
+            ]);
+            return back()->with('error', 'Error al contactar el servidor VROOM.');
+        }
+
+        $result = $response->json();
+
+        if (!isset($result['routes'])) {
+            Log::error('Respuesta inesperada de VROOM', $result);
+            return back()->with('error', 'Error al calcular rutas. Verifica los logs.');
+        }
+
+        // Asignar rutas a motoristas
+        $routes = $this->assignRoutesToDrivers($result['routes'], $vehicles, $jobs);
+
+        if (empty($routes)) {
+            return back()->with('error', 'No se generaron rutas con geometría válida');
+        }
+
+        return view('vehicle.show', [
+            'routes' => $routes,
+            'vehicles' => $vehicles,
+            'jobs' => $jobs
+        ]);
+    }
+
+    /**
+     * Vista individual para motorista
+     */
+    public function showDriverRoute(Request $request, $userId = null)
+    {
+        // Si no se especifica userId, usar el del usuario autenticado
+        if (!$userId) {
+            $userId = auth()->id();
+        }
+
+        // Verificar que el usuario sea motorista
+        $driver = User::where('id', $userId)
+            ->whereHas('permissions', function($query) {
+                $query->where('name', 'Motorista');
+            })
+            ->first();
+
+        if (!$driver) {
+            return back()->with('error', 'Usuario no encontrado o no es motorista');
+        }
+
+        // Verificar permisos: solo el mismo motorista o un admin pueden ver la ruta
+        if (auth()->id() != $userId && !auth()->user()->can('Administrador')) {
+            return back()->with('error', 'No tienes permisos para ver esta ruta');
+        }
+
+        $jobs = $this->getValidJobs();
+
+        if (empty($jobs)) {
+            return view('vehicle.driver', [
+                'driver' => $driver,
+                'route' => null,
+                'jobs' => []
+            ])->with('error', 'No hay pedidos válidos para procesar');
+        }
+
+        $vehicles = $this->getVehiclesFromDrivers();
+        
+        // Encontrar el vehículo del motorista
+        $driverVehicle = collect($vehicles)->firstWhere('driver_id', $userId);
+
+        if (!$driverVehicle) {
+            return view('vehicle.driver', [
+                'driver' => $driver,
+                'route' => null,
+                'jobs' => []
+            ])->with('error', 'No se encontró vehículo asignado');
+        }
+
+        $data = [
+            "vehicles" => $vehicles,
+            "jobs" => $jobs,
+            "options" => ["g" => true]
+        ];
+
+        $vroomUrl = 'http://154.38.191.25:3000';
+        $response = Http::timeout(30)->post($vroomUrl, $data);
+
+        if ($response->failed()) {
+            Log::error('Error en la respuesta de VROOM para motorista', [
+                'driver_id' => $userId,
+                'status' => $response->status(),
+                'body' => $response->body()
+            ]);
+            return view('vehicle.driver', [
+                'driver' => $driver,
+                'route' => null,
+                'jobs' => []
+            ])->with('error', 'Error al contactar el servidor VROOM.');
+        }
+
+        $result = $response->json();
+        $routes = $this->assignRoutesToDrivers($result['routes'], $vehicles, $jobs);
+
+        // Encontrar la ruta del motorista específico
+        $driverRoute = collect($routes)->firstWhere('driver_id', $userId);
+
+        return view('vehicle.driver', [
+            'driver' => $driver,
+            'route' => $driverRoute,
+            'jobs' => $jobs
+        ]);
+    }
+
+    /**
+     * Vista para admin - ver todas las rutas de motoristas
+     */
+    public function adminViewDriverRoutes(Request $request)
+    {
+        $jobs = $this->getValidJobs();
+        $vehicles = $this->getVehiclesFromDrivers();
+
+        if (empty($vehicles)) {
+            return view('admin.driver-routes', [
+                'drivers' => [],
+                'routes' => [],
+                'jobs' => []
+            ])->with('error', 'No hay motoristas disponibles');
+        }
+
+        if (empty($jobs)) {
+            return view('admin.driver-routes', [
+                'drivers' => $vehicles,
+                'routes' => [],
+                'jobs' => []
+            ])->with('error', 'No hay pedidos válidos para procesar');
+        }
+
+        $data = [
+            "vehicles" => $vehicles,
+            "jobs" => $jobs,
+            "options" => ["g" => true]
+        ];
+
+        $vroomUrl = 'http://154.38.191.25:3000';
+        $response = Http::timeout(30)->post($vroomUrl, $data);
+
+        if ($response->failed()) {
+            Log::error('Error en la respuesta de VROOM para admin', [
+                'status' => $response->status(),
+                'body' => $response->body()
+            ]);
+            return view('admin.driver-routes', [
+                'drivers' => $vehicles,
+                'routes' => [],
+                'jobs' => []
+            ])->with('error', 'Error al contactar el servidor VROOM.');
+        }
+
+        $result = $response->json();
+        $routes = $this->assignRoutesToDrivers($result['routes'], $vehicles, $jobs);
+
+        return view('admin.driver-routes', [
+            'drivers' => $vehicles,
+            'routes' => $routes,
+            'jobs' => $jobs
+        ]);
+    }
+
+    /**
+     * Obtener vehículos desde usuarios con permiso "Motorista"
+     */
+    private function getVehiclesFromDrivers()
+    {
+        $drivers = User::whereHas('permissions', function($query) {
+            $query->where('name', 'Motorista');
+        })->get();
+
+        $vehicles = [];
+        foreach ($drivers as $index => $driver) {
+            $vehicles[] = [
+                "id" => $index + 1,
+                "driver_id" => $driver->id,
+                "driver_name" => $driver->name,
+                "driver_email" => $driver->email,
+                "start" => [-87.1875, 14.0667], // Coordenadas base - punto de inicio
+                // SIN punto "end" para evitar ruta de regreso
+                "capacity" => [2]
+            ];
+>>>>>>> 499d89f (Hoy si; pinches rutas en tiempo real)
+        }
+
+        return $vehicles;
+    }
+
+    /**
+     * Asignar rutas a motoristas
+     */
+    private function assignRoutesToDrivers($vroomRoutes, $vehicles, $jobs)
+    {
+        $routes = [];
+        
+        // Verificar que $vroomRoutes sea un array válido
+        if (!is_array($vroomRoutes)) {
+            Log::warning('vroomRoutes no es un array válido', ['data' => $vroomRoutes]);
+            return [];
+        }
+
+        foreach ($vroomRoutes as $index => $route) {
+            if (!isset($route['geometry'])) {
+                Log::warning('Ruta sin geometría', $route);
+                continue;
+            }
+
+            $vehicle = $vehicles[$index] ?? null;
+            if (!$vehicle) {
+                continue;
+            }
+
+            $routes[] = [
+                'vehicle' => $index + 1,
+                'driver_id' => $vehicle['driver_id'],
+                'driver_name' => $vehicle['driver_name'],
+                'driver_email' => $vehicle['driver_email'],
+                'geometry' => $route['geometry'],
+                'steps' => $this->formatSteps($route['steps'] ?? [], $jobs)
+            ];
+        }
+
+        return $routes;
     }
 
     private function prepareVroomData($pedidos, $motoristas)
@@ -150,6 +409,7 @@ class VroomController extends Controller
         ];
     }
 
+<<<<<<< HEAD
     private function calculatePriority($pedido)
     {
         // Calcular prioridad basada en el total del pedido
@@ -159,6 +419,243 @@ class VroomController extends Controller
         if ($pedido->total >= 200) return 50;
         return 25;
     }
+=======
+    /**
+     * Obtener ruta optimizada usando servidor OSRM propio
+     */
+    public function getOptimizedRoute(Request $request)
+    {
+        try {
+            $currentLocation = $request->input('current_location');
+            $deliveryPoints = $request->input('delivery_points', []);
+            
+            if (!$currentLocation || empty($deliveryPoints)) {
+                return response()->json(['error' => 'Ubicación actual y puntos de entrega requeridos'], 400);
+            }
+
+            // Usar servidor OSRM propio para cálculo de ruta
+            $osrmUrl = 'http://154.38.191.25:5000';
+            
+            // Construir waypoints para OSRM
+            $coordinates = [];
+            $coordinates[] = $currentLocation[0] . ',' . $currentLocation[1]; // lng,lat actual
+            
+            foreach ($deliveryPoints as $point) {
+                $coordinates[] = $point['lng'] . ',' . $point['lat']; // lng,lat
+            }
+            
+            $coordinatesStr = implode(';', $coordinates);
+            
+            // Llamar a OSRM
+            $osrmRequestUrl = $osrmUrl . '/route/v1/driving/' . $coordinatesStr . '?overview=full&geometries=polyline&steps=true';
+            
+            $response = Http::timeout(30)->get($osrmRequestUrl);
+
+            if ($response->successful()) {
+                $result = $response->json();
+                
+                if (isset($result['routes']) && !empty($result['routes'])) {
+                    return response()->json([
+                        'success' => true,
+                        'route' => $result['routes'][0],
+                        'delivery_points' => $deliveryPoints,
+                        'current_location' => $currentLocation,
+                        'server_used' => 'OSRM_PROPIO'
+                    ]);
+                } else {
+                    return response()->json(['error' => 'No se encontraron rutas'], 404);
+                }
+            } else {
+                Log::error('Error en servidor OSRM propio', [
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                    'url' => $osrmRequestUrl
+                ]);
+                return response()->json(['error' => 'Error en servidor OSRM'], 500);
+            }
+
+        } catch (\Exception $e) {
+            Log::error('Error en getOptimizedRoute', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Método para seguimiento en tiempo real (actualizado para usar OSRM propio)
+     */
+    public function seguirRuta(Request $request)
+    {
+        try {
+            // Obtener ubicación actual del usuario
+            $currentLocation = $request->input('current_location');
+            
+            if (!$currentLocation || !is_array($currentLocation) || count($currentLocation) !== 2) {
+                return response()->json(['error' => 'Ubicación actual requerida'], 400);
+            }
+
+            // Obtener trabajos válidos
+            $jobs = $this->getValidJobs();
+            
+            if (empty($jobs)) {
+                return response()->json(['error' => 'No hay trabajos disponibles'], 404);
+            }
+
+            // Crear datos para VROOM
+            $vehicles = [[
+                "id" => 1,
+                "start" => $currentLocation,
+                "end" => $currentLocation,
+                "capacity" => [2]
+            ]];
+
+            $data = [
+                "vehicles" => $vehicles,
+                "jobs" => $jobs,
+                "options" => ["g" => true]
+            ];
+
+            // Llamar a VROOM
+            $vroomUrl = 'http://154.38.191.25:3000';
+            $response = Http::timeout(30)->post($vroomUrl, $data);
+
+            if ($response->failed()) {
+                Log::error('Error en VROOM seguimiento', [
+                    'status' => $response->status(),
+                    'body' => $response->body()
+                ]);
+                return response()->json(['error' => 'Error calculando ruta'], 500);
+            }
+
+            $result = $response->json();
+
+            if (!isset($result['routes']) || empty($result['routes'])) {
+                return response()->json(['error' => 'No se pudo calcular ruta'], 404);
+            }
+
+            // Formatear respuesta
+            $route = $result['routes'][0];
+            
+            return response()->json([
+                'routes' => [$route],
+                'current_location' => $currentLocation,
+                'timestamp' => now()->toISOString(),
+                'status' => 'success'
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error en seguirRuta', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return response()->json([
+                'error' => 'Error interno del servidor',
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Obtener datos GPS en tiempo real (para Leaflet Realtime)
+     */
+    public function getGpsData(Request $request)
+    {
+        try {
+            // Obtener datos GPS simulados o reales
+            $gpsData = [
+                'type' => 'FeatureCollection',
+                'features' => [
+                    [
+                        'type' => 'Feature',
+                        'properties' => [
+                            'id' => auth()->id(),
+                            'driver_name' => auth()->user()->name,
+                            'timestamp' => now()->toISOString(),
+                            'speed' => rand(0, 50),
+                            'heading' => rand(0, 360)
+                        ],
+                        'geometry' => [
+                            'type' => 'Point',
+                            'coordinates' => [
+                                -87.1875 + (rand(-100, 100) / 10000), // Longitud
+                                14.0667 + (rand(-100, 100) / 10000)   // Latitud
+                            ]
+                        ]
+                    ]
+                ]
+            ];
+
+            return response()->json($gpsData);
+
+        } catch (\Exception $e) {
+            Log::error('Error en getGpsData', [
+                'error' => $e->getMessage()
+            ]);
+            
+            return response()->json([
+                'error' => 'Error obteniendo datos GPS'
+            ], 500);
+        }
+    }
+
+    /**
+     * Manejar alertas de emergencia
+     */
+    public function emergencyAlert(Request $request)
+    {
+        try {
+            $driverId = $request->input('driver_id');
+            $location = $request->input('location');
+            
+            // Registrar la emergencia en logs
+            Log::emergency('ALERTA DE EMERGENCIA', [
+                'driver_id' => $driverId,
+                'driver_name' => auth()->user()->name,
+                'location' => $location,
+                'timestamp' => now(),
+                'ip' => $request->ip()
+            ]);
+            
+            // Aquí puedes agregar lógica adicional como:
+            // - Enviar notificación a supervisores
+            // - Guardar en base de datos
+            // - Enviar SMS/email
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Alerta de emergencia registrada',
+                'timestamp' => now()->toISOString()
+            ]);
+            
+        } catch (\Exception $e) {
+            Log::error('Error en emergencyAlert', [
+                'error' => $e->getMessage(),
+                'driver_id' => $request->input('driver_id')
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Error procesando alerta de emergencia'
+            ], 500);
+        }
+    }
+
+    private function formatSteps($steps, $jobs)
+    {
+        // Verificar que $steps sea un array válido
+        if (!is_array($steps)) {
+            return [];
+        }
+
+        return array_map(function ($step) use ($jobs) {
+            $formatted = [
+                'type' => $step['type'] ?? 'unknown',
+                'location' => $step['location'] ?? [0, 0]
+            ];
+>>>>>>> 499d89f (Hoy si; pinches rutas en tiempo real)
 
     private function callVroomAPI($data)
     {
@@ -250,6 +747,7 @@ class VroomController extends Controller
 
         return $processedRoutes;
     }
+<<<<<<< HEAD
 
     private function getStepDescription($step, $pedidosMap)
     {
@@ -421,4 +919,6 @@ class VroomController extends Controller
             'message' => $deleted ? 'Ruta eliminada correctamente' : 'No había ruta que eliminar'
         ]);
     }
+=======
+>>>>>>> 499d89f (Hoy si; pinches rutas en tiempo real)
 }
