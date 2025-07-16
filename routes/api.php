@@ -17,13 +17,6 @@ use App\Http\Controllers\Admin\AdminController;
 */
 
 // API Routes adicionales (si usas api.php)
-Route::group(['prefix' => 'api/vehicle', 'middleware' => ['auth:sanctum']], function () {
-    
-    // Versión API de las rutas principales
-    Route::post('/complete-job', [VroomController::class, 'markJobCompleted']);
-    Route::get('/assignment-status', [VroomController::class, 'getVehicleAssignmentStatus']);
-    Route::post('/capture-locations', [VroomController::class, 'captureVehicleLocations']);
-});
 
 // En routes/api.php
 
@@ -42,10 +35,8 @@ Route::get('/test', function () {
     return response()->json(['message' => 'La API funciona!']);
 });
 
-<<<<<<< HEAD
 Route::get('/envio-gratis', [AdminController::class, 'verificar']);
 
 Route::get('/verificar-cliente', [AdminController::class, 'verificarNumero']);
-=======
->>>>>>> 499d89f (Hoy si; pinches rutas en tiempo real)
+
 

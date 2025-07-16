@@ -8,8 +8,6 @@ use App\Http\Controllers\DashboardController;
 use Illuminate\Support\Facades\Auth;
 use App\Http\Middleware\CheckPermission;
 
-<<<<<<< HEAD
-=======
 Route::get('/routes', [VroomController::class, 'index'])->name('routes');
 
 // Nueva ruta para vista individual de motorista
@@ -28,35 +26,6 @@ Route::get('/seguir', [VroomController::class, 'seguirRuta'])->name('seguir.ruta
 Route::get('/gps-data', [VroomController::class, 'getGpsData'])->name('gps.data')->middleware('auth');
 Route::post('/emergency', [VroomController::class, 'emergencyAlert'])->name('emergency.alert')->middleware('auth');
 Route::post('/get-optimized-route', [VroomController::class, 'getOptimizedRoute'])->name('get.optimized.route')->middleware('auth');
-
->>>>>>> 499d89f (Hoy si; pinches rutas en tiempo real)
-//Rutas publicas
-Route::get('/route-viewer', function () {
-    return view('text');
-});
-// En web.php - SOLO PARA DEBUG
-Route::get('/debug-assignments', [VroomController::class, 'debugAssignments']);
-// En web.php - TEMPORAL para debug
-// En web.php - Reemplaza la ruta anterior
-// En web.php - CORREGIDO
-use Illuminate\Http\Request;  // <- Agregar esta línea al inicio del archivo
-
-Route::post('/test-complete', function(Request $request) {
-    try {
-        return response()->json([
-            'success' => true,
-            'message' => 'Endpoint funciona',
-            'data' => $request->all(),  // <- Usar $request en lugar de Request
-            'user' => Auth::user() ? Auth::user()->name : 'No autenticado',
-            'session_id' => session()->getId()
-        ]);
-    } catch (\Exception $e) {
-        return response()->json([
-            'success' => false,
-            'error' => $e->getMessage()
-        ], 500);
-    }
-})->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class]);
 
 Route::get('/admin/menu/MenuHoy', [AdminController::class, 'obtenerMenuHoy'])->name('admin.menu.hoy');
 
@@ -142,18 +111,5 @@ Route::middleware('auth')->group(function () {
 
 
 });
-
-Route::middleware(['auth'])->group(function () {
-    Route::post('/vroom/optimize-delivery-routes', [VroomController::class, 'optimizeDeliveryRoutes']);
-    Route::get('/vroom/daily-summary', [VroomController::class, 'getDailySummary']);
-    Route::get('/vroom/driver-route/{driverId}', [VroomController::class, 'getDriverRoute']);
-    // Rutas para manejar las rutas de usuarios
-    Route::post('/user-routes', [VroomController::class, 'store']);
-    Route::get('/user-routes', [VroomController::class, 'show']);
-    Route::delete('/user-routes', [VroomController::class, 'destroy']);
-    Route::get('/vroom', [VroomController::class, 'index'])->name('vroom.index');
-});
-
-
 
 require __DIR__ . '/auth.php';
