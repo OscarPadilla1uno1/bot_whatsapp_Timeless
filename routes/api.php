@@ -4,7 +4,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\VroomController;
 use App\Http\Controllers\Admin\AdminController;
-
+use App\Http\Controllers\PlacetoPayController;
+/*
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -40,3 +41,4 @@ Route::get('/envio-gratis', [AdminController::class, 'verificar']);
 Route::get('/verificar-cliente', [AdminController::class, 'verificarNumero']);
 
 
+Route::post('/placetopay/session', [PlacetoPayController::class, 'createSession']);
