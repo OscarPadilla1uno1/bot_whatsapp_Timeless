@@ -145,11 +145,12 @@
                         <label for="imagen" class="block text-sm font-medium text-gray-700">Imagen del Platillo:</label>
                         <div class="mt-1">
                             <!-- Contenedor para el input de tipo file -->
-                            <label for="imagen"
+                            <label for="imagen-input"
                                 class="cursor-pointer inline-flex items-center px-4 py-2 bg-indigo-600 text-white font-medium rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
                                 <span id="imagen-text">Seleccionar Imagen</span>
-                                <input type="file" name="imagen" id="imagen" accept="image/*" class="hidden"
-                                    onchange="updateButtonText()"/>
+                                <input type="file" name="imagen" id="imagen-input" accept="image/*" class="hidden"
+                                    onchange="updateButtonText()" />
+
                             </label>
                         </div>
                     </div>
@@ -166,54 +167,59 @@
     </div>
 
     <!-- Modal de edición -->
-<div id="modal-editar-platillo"
-    class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 hidden">
-    <div class="bg-white p-6 rounded shadow max-w-md w-full">
-        <h3 class="text-lg font-bold mb-4">Editar Platillo</h3>
+    <div id="modal-editar-platillo"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 hidden">
+        <div class="bg-white p-6 rounded shadow max-w-md w-full max-h-[90vh] overflow-y-auto">
 
-        <form id="form-editar-platillo" method="POST" action="{{ route('admin.platillos.actualizar') }}" enctype="multipart/form-data">
-            @csrf
-            <input type="hidden" name="id" id="edit-id">
+            <h3 class="text-lg font-bold mb-4">Editar Platillo</h3>
 
-            <div class="mb-4">
-                <label for="edit-nombre" class="block text-sm font-medium text-gray-700">Nombre:</label>
-                <input type="text" name="nombre" id="edit-nombre" required
-                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
-            </div>
+            <form id="form-editar-platillo" method="POST" action="{{ route('admin.platillos.actualizar') }}"
+                enctype="multipart/form-data">
+                @csrf
+                <input type="hidden" name="id" id="edit-id">
 
-            <div class="mb-4">
-                <label for="edit-descripcion" class="block text-sm font-medium text-gray-700">Descripción:</label>
-                <textarea name="descripcion" id="edit-descripcion" rows="3" required
-                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm"></textarea>
-            </div>
+                <div class="mb-4">
+                    <label for="edit-nombre" class="block text-sm font-medium text-gray-700">Nombre:</label>
+                    <input type="text" name="nombre" id="edit-nombre" required
+                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+                </div>
 
-            <div class="mb-4">
-                <label for="edit-precio_base" class="block text-sm font-medium text-gray-700">Precio Base
-                    (LPS.):</label>
-                <input type="number" name="precio_base" id="edit-precio_base" step="0.01" min="1" required
-                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
-            </div>
+                <div class="mb-4">
+                    <label for="edit-descripcion" class="block text-sm font-medium text-gray-700">Descripción:</label>
+                    <textarea name="descripcion" id="edit-descripcion" rows="3" required
+                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm"></textarea>
+                </div>
 
-            <div class="mb-4">
-                <label for="edit-imagen" class="block text-sm font-medium text-gray-700">Imagen:</label>
-                <input type="file" name="imagen" id="edit-imagen" accept="image/*"
-                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
-                <p id="imagen-previa" class="mt-2 text-sm text-gray-500"></p>
-                <button type="button" id="eliminar-imagen" class="text-red-600 hover:text-red-800 font-semibold text-xs sm:text-sm mt-2 hidden">
-                    Eliminar Imagen
-                </button>
-            </div>
+                <div class="mb-4">
+                    <label for="edit-precio_base" class="block text-sm font-medium text-gray-700">Precio Base
+                        (LPS.):</label>
+                    <input type="number" name="precio_base" id="edit-precio_base" step="0.01" min="1" required
+                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+                </div>
 
-            <div class="flex justify-end space-x-2">
-                <button type="button" onclick="cerrarModalEditar()"
-                    class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded">Cancelar</button>
-                <button type="submit"
-                    class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">Guardar</button>
-            </div>
+                <div class="mb-4">
+                    <label for="edit-imagen" class="block text-sm font-medium text-gray-700">Imagen:</label>
+                    <input type="file" name="imagen" id="edit-imagen" accept="image/*"
+                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+                    <p id="imagen-previa" class="mt-2 text-sm text-gray-500"></p>
+                    <button type="button" id="eliminar-imagen"
+                        class="text-red-600 hover:text-red-800 font-semibold text-xs sm:text-sm mt-2 hidden">
+                        Eliminar Imagen
+                    </button>
+                </div>
 
-        </form>
+                <div class="flex justify-end space-x-2">
+                    <button type="button" onclick="cerrarModalEditar()"
+                        class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded">Cancelar</button>
+                    <button type="submit"
+                        class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">Guardar</button>
+                </div>
+
+            </form>
+        </div>
     </div>
-</div>
+
+    
 
 
     <!-- Modal para ver la imagen -->
@@ -223,6 +229,135 @@
             <button onclick="closeImageModal()" class="mt-2 px-4 py-2 bg-red-600 text-white rounded-md">Cerrar</button>
         </div>
     </div>
+
+    <script>
+        window.routes = {
+            eliminarPlatillo: "{{route('admin.platillos.eliminar')}}",
+            actualizarPlatillo: "{{route('admin.platillos.actualizar')}}",
+            crearPlatillo: "{{route('admin.platillos.crear')}}"
+        }
+    </script>
+
+    <script>
+    window.csrfToken = "{{ csrf_token() }}";
+    </script>
+
+    <script>
+    document.addEventListener("DOMContentLoaded", () => {
+    const formEditar = document.getElementById("form-editar-platillo");
+    const formAgregar = document.getElementById("agregar-platillo-form");
+
+    if (formEditar) {
+        formEditar.addEventListener("submit", function (e) {
+            e.preventDefault();
+
+            const formData = new FormData(this);
+
+            fetch("{{route('admin.platillos.actualizar')}}", {
+                method: "POST",
+                headers: {
+                    "X-CSRF-TOKEN": csrfToken,
+                },
+                body: formData,
+            })
+                .then((response) => response.json())
+                .then((data) => {
+                    if (data.success) {
+                        Swal.fire(
+                            "Actualizado",
+                            "El platillo se actualizó correctamente.",
+                            "success"
+                        ).then(() => location.reload());
+                    } else {
+                        Swal.fire(
+                            "Error",
+                            "Hubo un problema al actualizar.",
+                            "error"
+                        );
+                    }
+                })
+                .catch((error) => {
+                    console.error("Error:", error);
+                    Swal.fire("Error", "Ocurrió un error inesperado.", "error");
+                });
+        });
+    }
+
+    if (formAgregar) {
+        formAgregar.addEventListener("submit", function (event) {
+            event.preventDefault();
+
+            const imagenInput = document.getElementById("imagen-input");
+            const file = imagenInput.files[0];
+
+            if (!file) {
+                Swal.fire({
+                    icon: "warning",
+                    title: "Imagen requerida",
+                    text: "Por favor, selecciona una imagen antes de guardar el platillo.",
+                    confirmButtonText: "Aceptar",
+                });
+                return;
+            }
+
+            if (!file.type.startsWith("image/")) {
+                Swal.fire({
+                    icon: "error",
+                    title: "Archivo no válido",
+                    text: "El archivo seleccionado no es una imagen.",
+                    confirmButtonText: "Aceptar",
+                });
+                return;
+            }
+
+            const formData = new FormData(this);
+            const paginaActual =
+                new URLSearchParams(window.location.search).get("page") || 1;
+            formData.append("page", paginaActual);
+
+            fetch("{{route('admin.platillos.crear')}}", {
+                method: "POST",
+                body: formData,
+            })
+                .then((response) => response.json())
+                .then((data) => {
+                    if (data.success) {
+                        Swal.fire({
+                            title: "¡Éxito!",
+                            text: "Platillo guardado correctamente.",
+                            icon: "success",
+                            confirmButtonText: "Aceptar",
+                            allowOutsideClick: false,
+                        }).then((result) => {
+                            if (result.isConfirmed) {
+                                location.reload();
+                            }
+                        });
+                    }
+                })
+                .catch((error) => {
+                    console.error("Error:", error);
+                });
+        });
+    }
+
+    document.querySelectorAll(".descripcion-cell").forEach((cell) => {
+        cell.addEventListener("click", () => {
+            const div = cell.querySelector("div");
+            if (div.classList.contains("truncate")) {
+                div.classList.remove("truncate");
+                div.classList.add("whitespace-normal");
+            } else {
+                div.classList.add("truncate");
+                div.classList.remove("whitespace-normal");
+            }
+        });
+    });
+});
+    </script>
+
+    
+
 
 
 

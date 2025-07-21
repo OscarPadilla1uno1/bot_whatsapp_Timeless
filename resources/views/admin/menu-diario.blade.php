@@ -122,7 +122,15 @@
             porFecha: "{{ route('admin.menu.fecha') }}",
             agregar: "{{ route('admin.menu.agregar') }}",
             eliminar: "{{ route('admin.menu.eliminar') }}",
-            actualizarCantidad: "{{ route('admin.menu.actualizarCantidad') }}"
+            actualizarCantidad: "{{ route('admin.menu.actualizarCantidad') }}",
+            envioGratisPorFecha() {
+            const fecha = document.getElementById('fecha')?.value;
+            if (!fecha) return null;
+
+            // Laravel nos da la ruta con un marcador para reemplazar
+            const base = "{{ route('admin.envios-gratis', ['fecha' => '__FECHA__']) }}";
+            return base.replace('__FECHA__', encodeURIComponent(fecha));
+        }
         };
     </script>
     <script>

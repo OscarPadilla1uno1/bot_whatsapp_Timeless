@@ -25,43 +25,58 @@ function esFechaPasada(fechaSeleccionada) {
 }
 
 function renderizarSwitchEnvioGratis(fecha) {
-    const container = document.getElementById('switch-envio-container');
-    const switchInput = document.getElementById('switch-envio-gratis');
+    const container = document.getElementById("switch-envio-container");
+    const switchInput = document.getElementById("switch-envio-gratis");
 
     if (esFechaPasada(fecha)) {
-        container.classList.add('hidden');
+        container.classList.add("hidden");
         return;
     }
 
+    const url = window.routes.envioGratisPorFecha();
+    if (!url) {
+        console.warn(
+            "No se pudo construir la URL de envío gratis (fecha no seleccionada)"
+        );
+        return;
+    }
+
+    console.log(url);
     // Consultar al backend
-    $.get(`/admin/envios-gratis/${fecha}`, function (data) {
+    $.get(url, function (data) {
+        console.log("Ejecutado desde el ur de windows variable con funcion");
         if (!data.existe) {
-            container.classList.add('hidden');
+            container.classList.add("hidden");
             return;
         }
 
-        container.classList.remove('hidden');
+        container.classList.remove("hidden");
         switchInput.checked = data.activo;
 
         switchInput.onchange = function () {
             $.ajax({
-                url: `/admin/envios-gratis/${fecha}`,
-                method: 'PATCH',
+                url: url,
+                method: "PATCH",
                 data: {
                     activo: this.checked,
-                    _token: document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                    _token: document
+                        .querySelector('meta[name="csrf-token"]')
+                        .getAttribute("content"),
                 },
                 success: () => {
-                    console.log(`Estado de envío gratis para ${fecha} actualizado`);
+                    console.log(
+                        `Estado de envío gratis para ${fecha} actualizado`
+                    );
                 },
                 error: () => {
-                    console.error('No se pudo actualizar el estado de envío gratis');
-                }
+                    console.error(
+                        "No se pudo actualizar el estado de envío gratis"
+                    );
+                },
             });
         };
     });
 }
-
 
 function manejarEstadoFormulario(fechaPasada) {
     const formulario = document.getElementById("agregar-platillo-form-menu");
@@ -392,7 +407,7 @@ function eliminarPlatillo(id) {
         cancelButtonText: "Cancelar",
     }).then((result) => {
         if (result.isConfirmed) {
-            fetch("/admin/platillos/eliminar", {
+            fetch(window.routes.eliminarPlatillo, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -425,117 +440,7 @@ function eliminarPlatillo(id) {
     });
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-    const formEditar = document.getElementById("form-editar-platillo");
-    const formAgregar = document.getElementById("agregar-platillo-form");
 
-    if (formEditar) {
-        formEditar.addEventListener("submit", function (e) {
-            e.preventDefault();
-
-            const formData = new FormData(this);
-
-            fetch("/admin/platillos/actualizar", {
-                method: "POST",
-                headers: {
-                    "X-CSRF-TOKEN": csrfToken,
-                },
-                body: formData,
-            })
-                .then((response) => response.json())
-                .then((data) => {
-                    if (data.success) {
-                        Swal.fire(
-                            "Actualizado",
-                            "El platillo se actualizó correctamente.",
-                            "success"
-                        ).then(() => location.reload());
-                    } else {
-                        Swal.fire(
-                            "Error",
-                            "Hubo un problema al actualizar.",
-                            "error"
-                        );
-                    }
-                })
-                .catch((error) => {
-                    console.error("Error:", error);
-                    Swal.fire("Error", "Ocurrió un error inesperado.", "error");
-                });
-        });
-    }
-
-    if (formAgregar) {
-        formAgregar.addEventListener("submit", function (event) {
-            event.preventDefault();
-
-            const imagenInput = document.getElementById("imagen");
-            const file = imagenInput.files[0];
-
-            if (!file) {
-                Swal.fire({
-                    icon: "warning",
-                    title: "Imagen requerida",
-                    text: "Por favor, selecciona una imagen antes de guardar el platillo.",
-                    confirmButtonText: "Aceptar",
-                });
-                return;
-            }
-
-            if (!file.type.startsWith("image/")) {
-                Swal.fire({
-                    icon: "error",
-                    title: "Archivo no válido",
-                    text: "El archivo seleccionado no es una imagen.",
-                    confirmButtonText: "Aceptar",
-                });
-                return;
-            }
-
-            const formData = new FormData(this);
-            const paginaActual =
-                new URLSearchParams(window.location.search).get("page") || 1;
-            formData.append("page", paginaActual);
-
-            fetch("/admin/platillos/crear", {
-                method: "POST",
-                body: formData,
-            })
-                .then((response) => response.json())
-                .then((data) => {
-                    if (data.success) {
-                        Swal.fire({
-                            title: "¡Éxito!",
-                            text: "Platillo guardado correctamente.",
-                            icon: "success",
-                            confirmButtonText: "Aceptar",
-                            allowOutsideClick: false,
-                        }).then((result) => {
-                            if (result.isConfirmed) {
-                                location.reload();
-                            }
-                        });
-                    }
-                })
-                .catch((error) => {
-                    console.error("Error:", error);
-                });
-        });
-    }
-
-    document.querySelectorAll(".descripcion-cell").forEach((cell) => {
-        cell.addEventListener("click", () => {
-            const div = cell.querySelector("div");
-            if (div.classList.contains("truncate")) {
-                div.classList.remove("truncate");
-                div.classList.add("whitespace-normal");
-            } else {
-                div.classList.add("truncate");
-                div.classList.remove("whitespace-normal");
-            }
-        });
-    });
-});
 
 // Función para mostrar la imagen en un modal
 function showImage(imagePath) {
@@ -667,7 +572,12 @@ function initEditarUsuario() {
                 el.textContent = "";
             });
 
-            fetch(`/admin/users/${userId}`)
+            const userUrl = window.routes.usuarioMostrar.replace(
+                "__ID__",
+                userId
+            );
+
+            fetch(userUrl)
                 .then((res) => res.json())
                 .then((user) => {
                     // Mostrar el formulario y ocultar el mensaje inicial
@@ -687,9 +597,11 @@ function initEditarUsuario() {
                             radio.checked = radio.value === user.permiso;
                         });
 
-                    document.getElementById(
-                        "form-editar-usuario"
-                    ).action = `/admin/users/${user.id}`;
+                    document.getElementById("form-editar-usuario").action =
+                        window.routes.usuarioActualizar.replace(
+                            "__ID__",
+                            user.id
+                        );
                 })
                 .catch((err) => {
                     console.error("Error al cargar el usuario:", err);
@@ -710,8 +622,12 @@ function initEditarUsuario() {
 
             const formData = new FormData(this);
             const userId = document.getElementById("edit-id").value;
+            const updateUrl = window.routes.usuarioActualizar.replace(
+                "__ID__",
+                userId
+            );
 
-            fetch(`/admin/users/${userId}`, {
+            fetch(updateUrl, {
                 method: "POST",
                 body: formData,
                 headers: {
@@ -783,7 +699,11 @@ function inicializarBotonesEliminarUsuario(idUsuarioActual) {
                 cancelButtonText: "Cancelar",
             }).then((result) => {
                 if (result.isConfirmed) {
-                    fetch(`/admin/usuarios/${userId}`, {
+                    const url = window.routes.usuarioEliminar.replace(
+                        "__ID__",
+                        userId
+                    );
+                    fetch(url, {
                         method: "DELETE",
                         headers: {
                             "X-CSRF-TOKEN": document
@@ -873,8 +793,12 @@ function cargarPedidosPorFecha(fecha) {
         $("#tabla-pedidos").DataTable().clear().draw();
     }
 
+    const url = `${window.routes.pedidosPorFecha}?fecha=${encodeURIComponent(
+        fecha
+    )}`;
+
     // Obtener pedidos programados
-    fetch(`/admin/pedidos/por-fecha?fecha=${fecha}`)
+    fetch(url)
         .then((response) => response.json())
         .then((data) => {
             const filas =
@@ -902,8 +826,12 @@ function cargarPedidosPorFecha(fecha) {
             console.error("Error al cargar pedidos:", error);
         });
 
+    urlmenu = `${window.routes.menuPorFecha}?fecha=${encodeURIComponent(
+        fecha
+    )}`;
+
     // Obtener menú de platillos
-    fetch(`/admin/menu/fecha?fecha=${fecha}`)
+    fetch(urlmenu)
         .then((response) => response.json())
         .then((data) => {
             contenedorMenu.innerHTML = "";
@@ -969,7 +897,9 @@ function cargarPedidosPorFecha(fecha) {
 }
 
 function abrirModalEditarPedido(pedidoId) {
-    fetch(`/admin/pedidos/${pedidoId}/edit`)
+    const url = window.routes.editarPedido.replace("__ID__", pedidoId);
+
+    fetch(url)
         .then((response) => response.json())
         .then((data) => {
             console.log("Datos del pedido:", data);
@@ -1225,7 +1155,9 @@ async function actualizarPedidoProgramado(form) {
         .getAttribute("content");
 
     try {
-        const res = await fetch(`/admin/pedidos/${pedido_id}`, {
+        const url = window.routes.actualizarPedido.replace("__ID__", pedido_id);
+
+        const res = await fetch(url, {
             method: "PUT",
             headers: {
                 "Content-Type": "application/json",
@@ -1277,7 +1209,12 @@ function eliminarPedido(id) {
         cancelButtonColor: "#3085d6",
     }).then((result) => {
         if (result.isConfirmed) {
-            fetch(`/admin/pedidos/${id}`, {
+            urlBorrar = window.routes.borrarPedido.replace(
+                "__ID__",
+                id
+            );
+
+            fetch(urlBorrar, {
                 method: "DELETE",
                 headers: {
                     "X-CSRF-TOKEN": document

@@ -170,10 +170,18 @@
 
         </div>
     </div>
+    <script>
+        window.routes = {
+            usuarioMostrar: "{{ route('admin.users.show', ['id' => '__ID__']) }}",
+            usuarioActualizar: "{{ route('admin.users.update', ['id' => '__ID__']) }}",
+            usuarioEliminar: "{{ route('admin.users.destroy', ['id' => '__ID__']) }}",
+        };
+    </script>
+
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            registrarNuevoUsuario('form-crear-usuario', '/admin/users/create');
+            registrarNuevoUsuario('form-crear-usuario', "{{ route('admin.users.create') }}");
             initEditarUsuario();
             const usuarioActual = @json(auth()->user()->id);
             inicializarBotonesEliminarUsuario(usuarioActual);

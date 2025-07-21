@@ -1,4 +1,10 @@
 <x-app-layout>
+    <script>
+        window.routes = {
+            borrarPedido: "{{ route('admin.borrar.programado', ['id' => '__ID__']) }}"
+        };
+    </script>
+
     <x-slot name="header">
         <h2 class="font-semibold text-xl text-gray-800 leading-tight">
             {{ __('Pedidos') }}
@@ -255,4 +261,6 @@
         @endif
         </div>
     </div>
+
+
 </x-app-layout>

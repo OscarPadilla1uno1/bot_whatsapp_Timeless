@@ -72,7 +72,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/admin/menu/fecha', [AdminController::class, 'obtenerMenuPorFecha'])->name('admin.menu.fecha')->can('Administrador');
     Route::post('/admin/menu/eliminar', [AdminController::class, 'eliminarPlatillo'])->name('admin.menu.eliminar')->can('Administrador');
     Route::post('/admin/menu/actualizar-cantidad', [AdminController::class, 'actualizarCantidad'])->name('admin.menu.actualizarCantidad')->can('Administrador');
-    Route::get('/admin/envios-gratis/{fecha}', [AdminController::class, 'estadoEnvioGratis']);
+    Route::get('/admin/envios-gratis/{fecha}', [AdminController::class, 'estadoEnvioGratis'])->name('admin.envios-gratis')->can('Administrador');
     Route::patch('/admin/envios-gratis/{fecha}', [AdminController::class, 'actualizarEnvioGratis']);
 
     // Rutas CRUD para platillos
@@ -101,10 +101,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/admin/pedidos/por-fecha', [AdminController::class, 'obtenerPedidosPorFecha'])->name('admin.pedidos.por_fecha')->can('Administrador');
     Route::post('/admin/pedidos/programado', [AdminController::class, 'storePedidoProgramado'])->name('admin.pedidos.programado.store')->can('Administrador');
     Route::get('/admin/pedidos/{pedido}/edit', [AdminController::class, 'editPedidoProgramado'])->name('admin.pedidos.programado.edit')->can('Administrador');
-    Route::put('/admin/pedidos/{id}', [AdminController::class, 'updatePedidoProgramado'])->can('Administrador');
+    Route::put('/admin/pedidos/{id}', [AdminController::class, 'updatePedidoProgramado'])->name('admin.pedidos.programado.actualizar')->can('Administrador');
 
     //Ruta de cancelacion de pedidos
-    Route::delete('/admin/pedidos/{id}', [AdminController::class, 'cancelarPedidoProgramado'])->can('Administrador');
+    Route::delete('/admin/pedidos/{id}', [AdminController::class, 'cancelarPedidoProgramado'])->name('admin.borrar.programado')->can('Administrador');
     Route::post('/admin/pedidos/{pedido}/descargar-factura', [AdminController::class, 'descargarFactura'])
     ->name('admin.pedidos.descargarFactura')
     ->can('Administrador');

@@ -150,6 +150,16 @@
         </div>
     </div>
 
+    <script>
+        window.routes = {
+            pedidosPorFecha: "{{ route('admin.pedidos.por_fecha') }}",
+            menuPorFecha: "{{ route('admin.menu.fecha') }}",
+            actualizarPedido: "{{ route('admin.pedidos.programado.actualizar', ['id' => '__ID__']) }}",
+            editarPedido: "{{ route('admin.pedidos.programado.edit', ['pedido' => '__ID__']) }}",
+            borrarPedido: "{{ route('admin.borrar.programado', ['id' => '__ID__']) }}"
+        };
+    </script>
+
 
 
     <script>
@@ -300,7 +310,7 @@
                 const url = document.getElementById("ruta-store-pedido").value;
 
                 try {
-                    const res = await fetch("/admin/pedidos/programado", {
+                    const res = await fetch(url, {
                         method: "POST",
                         headers: {
                             "Content-Type": "application/json",
