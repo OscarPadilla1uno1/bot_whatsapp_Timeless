@@ -376,6 +376,46 @@ class AdminController extends Controller
         return $distancia;
     }
 
+    public function prepararPedido($id)
+    {
+        try {
+            $pedido = Pedido::findOrFail($id);
+
+            // 1. Verificar que el estado del pedido sea "pendiente"
+            if ($pedido->estado !== 'pendiente') {
+                return response()->json([
+                    'mensaje' => 'El pedido no está en estado pendiente.',
+                    'codigo' => 1
+                ], 400);
+            }
+
+            // 2. Verificar que la fecha del pedido sea hoy (ignorando la hora)
+            $fechaPedido = Carbon::parse($pedido->fecha_pedido)->toDateString();
+            $hoy = Carbon::now('America/Tegucigalpa')->toDateString();
+
+            if ($fechaPedido !== $hoy) {
+                return response()->json([
+                    'mensaje' => 'El pedido no es del día de hoy.',
+                    'codigo' => 2
+                ], 400);
+            }
+
+            // 3. Actualizar el estado a "en preparación"
+            $pedido->estado = 'en preparación';
+            $pedido->save();
+
+            return response()->json([
+                'mensaje' => 'El pedido fue actualizado a "en preparación" correctamente.',
+                'codigo' => 0
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'mensaje' => 'Ocurrió un error al actualizar el pedido.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
     public function verificarNumero(Request $request)
     {
         $request->validate([
@@ -517,7 +557,7 @@ class AdminController extends Controller
                     'longitud' => $longitud,
                     'fecha_pedido' => $hoy,
                     'total' => 0.00, // Se actualizará al final
-                    'estado' => 'en preparacion'
+                    'estado' => 'pendiente'
                 ]);
 
                 $pedido->save();
@@ -1528,6 +1568,62 @@ class AdminController extends Controller
             return response()->json(['success' => true, 'mensaje' => 'Pedido cancelado y stock restaurado.']);
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'mensaje' => $e->getMessage()], 400);
+        }
+    }
+
+
+    public function cancelarPedidoBot($id)
+    {
+        try {
+            $pedido = Pedido::with(['detalles', 'pago'])->findOrFail($id);
+
+            // Validar que el pedido esté en estado "pendiente"
+            if ($pedido->estado !== 'pendiente') {
+                return response()->json([
+                    'success' => false,
+                    'mensaje' => 'Solo se pueden cancelar pedidos en estado pendiente.'
+                ], 400);
+            }
+
+            // Validar que la fecha del pedido sea hoy
+            $fechaPedido = Carbon::parse($pedido->fecha_pedido)->toDateString();
+            $hoy = Carbon::now('America/Tegucigalpa')->toDateString();
+
+            if ($fechaPedido !== $hoy) {
+                return response()->json([
+                    'success' => false,
+                    'mensaje' => 'Solo se pueden cancelar pedidos programados para hoy.'
+                ], 400);
+            }
+
+            // Transacción para cancelar el pedido y restaurar el stock
+            DB::transaction(function () use ($pedido, $fechaPedido) {
+                foreach ($pedido->detalles as $detalle) {
+                    $menuItem = MenuDiario::where('fecha', $fechaPedido)
+                        ->where('platillo_id', $detalle->platillo_id)
+                        ->first();
+
+                    if ($menuItem) {
+                        $menuItem->cantidad_disponible += $detalle->cantidad;
+                        $menuItem->save();
+                    }
+                }
+
+                // Marcar el pedido como cancelado
+                $pedido->estado = 'cancelado';
+                $pedido->save();
+            });
+
+            return response()->json([
+                'success' => true,
+                'mensaje' => 'Pedido cancelado y stock restaurado correctamente.'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'mensaje' => 'Error al cancelar el pedido.',
+                'error' => $e->getMessage()
+            ], 500);
         }
     }
 
