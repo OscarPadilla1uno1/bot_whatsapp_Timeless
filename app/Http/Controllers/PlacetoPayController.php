@@ -86,4 +86,37 @@ class PlacetoPayController extends Controller
             ], 500);
         }
     }
+
+    public function checkPaymentStatus($requestId)
+{
+    $placetopay = new PlacetoPay([
+        'login' => env('PLACETOPAY_LOGIN'),
+        'tranKey' => env('SecretKey'),
+        'baseUrl' => env('PLACETOPAY_BASE_URL'),
+        'timeout' => env('PLACETOPAY_TIMEOUT', 10),
+    ]);
+
+    try {
+        $response = $placetopay->query($requestId);
+        
+        if ($response->isSuccessful()) {
+            return response()->json([
+                'success' => true,
+                'status' => $response->status()->status(),
+                'isApproved' => $response->status()->isApproved(),
+                'message' => $response->status()->message()
+            ]);
+        } else {
+            return response()->json([
+                'success' => false,
+                'message' => $response->status()->message()
+            ], 400);
+        }
+    } catch (Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Error al consultar el estado del pago'
+        ], 500);
+    }
+}
 }

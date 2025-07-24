@@ -42,3 +42,4 @@ Route::get('/verificar-cliente', [AdminController::class, 'verificarNumero']);
 
 
 Route::post('/placetopay/session', [PlacetoPayController::class, 'createSession']);
+Route::get('/placetopay/status/{requestId}', [PlacetoPayController::class, 'checkPaymentStatus']);
