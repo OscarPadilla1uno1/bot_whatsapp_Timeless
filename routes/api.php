@@ -42,4 +42,7 @@ Route::get('/verificar-cliente', [AdminController::class, 'verificarNumero']);
 
 
 Route::post('/placetopay/session', [PlacetoPayController::class, 'createSession']);
+
+Route::post('/pedido/{id}/preparar', [AdminController::class, 'prepararPedido']);
+Route::post('/pedido/{id}/cancelar', [AdminController::class, 'cancelarPedidoBot']);
 Route::get('/placetopay/status/{requestId}', [PlacetoPayController::class, 'checkPaymentStatus']);

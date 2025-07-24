@@ -13,8 +13,7 @@ use Illuminate\Database\Eloquent\Model;
 // Modelo Cliente
 class Cliente extends Model
 {
-        public $timestamps = false; // AGREGAR ESTA LÍNEA
-
+    public $timestamps = false; // Si no usas created_at y updated_at
     protected $fillable = [
         'nombre',
         'telefono'
