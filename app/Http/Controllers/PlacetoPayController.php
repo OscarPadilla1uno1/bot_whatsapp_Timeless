@@ -30,7 +30,7 @@ class PlacetoPayController extends Controller
             'timeout' => env('PLACETOPAY_TIMEOUT', 10),
         ]);
         
-        $reference = 'TEST_' . time();
+        $reference = 'TEST_'  . uniqid();
         
         // Datos de la sesión de pago usando los datos del JSON
         $requestData = [
