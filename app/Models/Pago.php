@@ -6,11 +6,23 @@ use Illuminate\Database\Eloquent\Model;
 class Pago extends Model
 {
     protected $table = 'pagos';
-    protected $fillable = ['pedido_id', 'metodo_pago', 'estado_pago', 'fecha_pago', 'referencia_transaccion'];
-    
+
+    protected $fillable = [
+        'pedido_id',
+        'metodo_pago',
+        'estado_pago',
+        'fecha_pago',
+        'referencia_transaccion',
+        'request_id',
+        'process_url',
+        'metodo_interno',
+        'canal',
+        'observaciones',
+    ];
+
     // Si tu tabla no tiene timestamps
     public $timestamps = false;
-    
+
     // Relación con pedido
     public function pedido()
     {

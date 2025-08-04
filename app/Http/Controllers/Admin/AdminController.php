@@ -608,6 +608,21 @@ class AdminController extends Controller
                 $pedido->total = $subtotal + $costo_envio;
                 $pedido->save();
 
+                $pago = new Pago([
+                    'pedido_id' => $pedido->id,
+                    'metodo_pago' => 'tarjeta',
+                    'estado_pago' => 'pendiente',
+                    'fecha_pago' => null, // se actualizará al confirmar pago
+                    'referencia_transaccion' => null,
+                    'request_id' => null,
+                    'process_url' => null,
+                    'metodo_interno' => null,
+                    'canal' => 'whatsapp', // por ejemplo, si el canal es siempre WhatsApp
+                    'observaciones' => 'Pago creado automáticamente en ambiente de pruebas'
+                ]);
+
+                $pago->save();
+
                 return [
                     'mensaje' => 'Pedido registrado exitosamente.',
                     'total_final' => $subtotal,
@@ -1326,6 +1341,36 @@ class AdminController extends Controller
             }),
             'metodo_pago' => optional($pedido->pago)->metodo_pago,
             'menu_dia' => $menu,
+        ]);
+    }
+
+
+    public function actualizarDatosPago(Request $request, $pedidoId)
+    {
+        $request->validate([
+            'request_id' => 'required|string',
+            'referencia_transaccion' => 'required|string',
+        ]);
+
+
+        $pago = Pago::where('pedido_id', $pedidoId)->first();
+
+        if (!$pago) {
+            return response()->json([
+                'success' => false,
+                'mensaje' => 'Pago no encontrado para este pedido.',
+            ], 404);
+        }
+
+        // Actualizar los datos del pago
+        $pago->request_id = $request->input('request_id');
+        $pago->referencia_transaccion = $request->input('referencia_transaccion');
+        $pago->save();
+
+        return response()->json([
+            'success' => true,
+            'mensaje' => 'Datos de pago actualizados correctamente.',
+            'pago' => $pago,
         ]);
     }
 

@@ -46,3 +46,7 @@ Route::post('/placetopay/session', [PlacetoPayController::class, 'createSession'
 Route::post('/pedido/{id}/preparar', [AdminController::class, 'prepararPedido']);
 Route::post('/pedido/{id}/cancelar', [AdminController::class, 'cancelarPedidoBot']);
 Route::get('/placetopay/status/{requestId}', [PlacetoPayController::class, 'checkPaymentStatus']);
+
+
+Route::post('/placetopay/webhook', [PlacetoPayController::class, 'handleWebhook']);
+Route::put('/pagos/actualizar/{pedidoId}', [AdminController::class, 'actualizarDatosPago']);
