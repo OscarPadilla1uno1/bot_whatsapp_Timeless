@@ -194,7 +194,7 @@
                 const cantidad = document.getElementById('cantidad').value;
                 const fecha = document.getElementById('fecha').value;
 
-                fetch(window.routes.agregar, {
+                fetch("{{ route('admin.menu.agregar') }}", {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
