@@ -183,7 +183,7 @@ class PlacetoPayController extends Controller
                 'name' => $nombre
             ];
 
-            $botResponse = Http::post(env('BUILDERBOT_WEBHOOK_URL', 'http://localhost:3000/v1/process-payment'), $payload);
+            $botResponse = Http::post(env('BUILDERBOT_WEBHOOK_URL', 'http://localhost:3008/v1/process-payment'), $payload);
 
             if (!$botResponse->successful()) {
                 Log::warning("Error notificando al bot: " . $botResponse->body());

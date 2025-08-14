@@ -15,6 +15,7 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule)
     {
+        \Log::info('⏲️ Entrando al scheduler');
         $schedule->command('pagos:verificar')->everyFifteenMinutes();
     }
 
