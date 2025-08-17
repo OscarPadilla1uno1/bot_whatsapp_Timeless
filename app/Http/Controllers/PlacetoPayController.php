@@ -51,8 +51,9 @@ class PlacetoPayController extends Controller
                     'total' => $validatedData['total'],
                 ],
             ],
-            'expiration' => date('c', strtotime('+2 days')),
-            'returnUrl' => $validatedData['returnUrl'] ?? 'http://example.com/response?reference=' . $reference,
+            'expiration' => date('c', strtotime('+30 minutes')),
+            'returnUrl' => route('pago.exito') . '?reference=' . $reference,
+            'cancelUrl' => route('pago.cancelado') . '?reference=' . $reference,
             'ipAddress' => request()->ip(), // Usar la IP real del cliente
             'userAgent' => request()->userAgent(), // Usar el user agent real
         ];

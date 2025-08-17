@@ -15,7 +15,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/motorista/mi-ruta', [VroomController::class, 'showDriverRoute'])
         ->name('motorista.mi_ruta')
         ->can('Motorista');
-    
+
     Route::get('/motorista/{userId}/ruta', [VroomController::class, 'showDriverRoute'])
         ->name('motorista.ruta')
         ->can('Administrador'); // Solo admin puede ver rutas de otros motoristas
@@ -80,18 +80,18 @@ Route::middleware('auth')->group(function () {
     Route::post('/admin/platillos/crear', [AdminController::class, 'crearPlatillo'])->name('admin.platillos.crear')->can('Administrador');
     Route::post('/admin/platillos/actualizar', [AdminController::class, 'actualizarPlatillo'])->name('admin.platillos.actualizar')->can('Administrador');
     Route::post('/admin/platillos/eliminar', [AdminController::class, 'eliminarPlatilloCatalogo'])->name('admin.platillos.eliminar')->can('Administrador');
-    Route::get('/admin/platillos/todosPlatillos', [AdminController::class,'obtenerTodosPlatillos'])->name('admin.platillos.obtener')->can('Administrador');
+    Route::get('/admin/platillos/todosPlatillos', [AdminController::class, 'obtenerTodosPlatillos'])->name('admin.platillos.obtener')->can('Administrador');
     // Rutas CRUD para usuarios
-    Route::get('/admin/users', [AdminController::class,'vistaUsuarios'])->name('admin.users')->can('Administrador');
+    Route::get('/admin/users', [AdminController::class, 'vistaUsuarios'])->name('admin.users')->can('Administrador');
     Route::post('/admin/users/create', [AdminController::class, 'UserStore'])->name('admin.users.create')->can('Administrador');
     Route::get('/admin/users/{id}', [AdminController::class, 'showUser'])->name('admin.users.show')->can('Administrador');
     Route::put('/admin/users/{id}', [AdminController::class, 'updateUser'])->name('admin.users.update')->can('Administrador');
     Route::delete('/admin/usuarios/{id}', [AdminController::class, 'destroyUser'])->name('admin.users.destroy')->can('Administrador');
     // Rutas de manejo de pedidos
     Route::get('/admin/pedidos', [AdminController::class, 'pedidosStatusView'])->name('admin.pedidos')->can('Administrador');
-        Route::post('pedidos/{id}/actualizar-estado', [AdminController::class, 'actualizarEstado'])->name('admin.pedidos.actualizarEstado')->can('Administrador');
+    Route::post('pedidos/{id}/actualizar-estado', [AdminController::class, 'actualizarEstado'])->name('admin.pedidos.actualizarEstado')->can('Administrador');
 
-     // Para manejo de pedidos cocina cocina
+    // Para manejo de pedidos cocina cocina
     Route::get('/cocina/pedidos-Cocina', [AdminController::class, 'pedidosStatusViewCocina'])->name('cocina.pedidosCocina')->can('Cocina');
     Route::post('pedidos/{id}/actualizar-estado-cocina', [AdminController::class, 'actualizarEstadoCocina'])->name('cocina.pedidos.actualizarEstado.cocina')->can('Cocina');
 
@@ -106,10 +106,17 @@ Route::middleware('auth')->group(function () {
     //Ruta de cancelacion de pedidos
     Route::delete('/admin/pedidos/{id}', [AdminController::class, 'cancelarPedidoProgramado'])->name('admin.borrar.programado')->can('Administrador');
     Route::post('/admin/pedidos/{pedido}/descargar-factura', [AdminController::class, 'descargarFactura'])
-    ->name('admin.pedidos.descargarFactura')
-    ->can('Administrador');
-
+        ->name('admin.pedidos.descargarFactura')
+        ->can('Administrador');
 
 });
+
+Route::get('/pago/exito', function () {
+    return view('pago.exito');
+})->name('pago.exito');
+
+Route::get('/pago/cancelado', function () {
+    return view('pago.cancelado');
+})->name('pago.cancelado');
 
 require __DIR__ . '/auth.php';
