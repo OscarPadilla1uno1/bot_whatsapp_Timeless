@@ -181,7 +181,8 @@ class PlacetoPayController extends Controller
                 'reference' => $pago->referencia_transaccion,
                 'number' => $telefono,
                 'status' => $pago->estado_pago === 'confirmado' ? 'approved' : 'rejected',
-                'name' => $nombre
+                'name' => $nombre,
+                'pedido_id' => $pedido->id,
             ];
 
             $botResponse = Http::post(env('BUILDERBOT_WEBHOOK_URL', 'http://localhost:3008/v1/process-payment'), $payload);

@@ -1673,8 +1673,47 @@ class AdminController extends Controller
     }
 
 
+    public function verificarPagoPendiente(Request $request)
+    {
+        $telefono = $request->input('telefono');
 
+        // Buscar cliente por teléfono
+        $cliente = Cliente::where('telefono', $telefono)->first();
 
+        if (!$cliente) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cliente no encontrado',
+            ], 404);
+        }
+
+        // Fecha de hoy (sin hora)
+        $hoy = Carbon::today();
+
+        // Buscar pedidos del cliente con pagos pendientes hoy
+        $pedidoPendiente = $cliente->pedidos()
+            ->whereDate('fecha_pedido', $hoy)
+            ->whereHas('pago', function ($query) {
+                $query->where('estado_pago', 'pendiente');
+            })
+            ->first();
+
+        if ($pedidoPendiente) {
+            return response()->json([
+                'success' => true,
+                'message' => 'El cliente tiene un pedido con pago pendiente para hoy',
+                'cliente' => $cliente->nombre,
+                'pedido_id' => $pedidoPendiente->id,
+                'total' => $pedidoPendiente->total,
+            ]);
+        }
+
+        return response()->json([
+            'success' => false,
+            'message' => 'El cliente no tiene pagos pendientes para hoy',
+            'cliente' => $cliente->nombre,
+        ]);
+    }
 
 }
 
