@@ -29,6 +29,11 @@ use App\Http\Controllers\VroomController;
 class AdminController extends Controller
 {
 
+    public function todayDate(Request $request)
+    {
+        return response()->json(['fecha' => Carbon::today()->toDateString()]);
+    }
+
     public function verificar(Request $request)
     {
         $request->validate([
