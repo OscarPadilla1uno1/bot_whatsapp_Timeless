@@ -111,8 +111,13 @@ Route::middleware('auth')->group(function () {
 
 });
 
-Route::get('/pago/exito', function () {
-    return view('pago.exito');
+Route::get('/pago/exito', function (Illuminate\Http\Request $request) {
+    $reference = $request->query('reference');
+
+    // Buscar el pago en base de datos
+    $pago = \App\Models\Pago::where('referencia_transaccion', $reference)->firstOrFail();
+
+    return view('pago.exito', compact('pago'));
 })->name('pago.exito');
 
 Route::get('/pago/cancelado', function () {
