@@ -7,6 +7,8 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\DashboardController;
 use Illuminate\Support\Facades\Auth;
 use App\Http\Middleware\CheckPermission;
+use App\Http\Controllers\HoraController;
+
 
 Route::get('/routes', [VroomController::class, 'index'])->name('routes');
 
@@ -74,6 +76,11 @@ Route::middleware('auth')->group(function () {
     Route::post('/admin/menu/actualizar-cantidad', [AdminController::class, 'actualizarCantidad'])->name('admin.menu.actualizarCantidad')->can('Administrador');
     Route::get('/admin/envios-gratis/{fecha}', [AdminController::class, 'estadoEnvioGratis'])->name('admin.envios-gratis')->can('Administrador');
     Route::patch('/admin/envios-gratis/{fecha}', [AdminController::class, 'actualizarEnvioGratis']);
+
+    //Horario bot
+    Route::get('/configuracion/hora', [HoraController::class, 'index'])->name('configuracion.index')->can('Administrador');
+    Route::put('/configuracion/hora', [HoraController::class, 'update'])->name('configuracion.update')->can('Administrador');
+
 
     // Rutas CRUD para platillos
     Route::get('/admin/platillos', [AdminController::class, 'vistaPlatillos'])->name('admin.platillos')->can('Administrador');
