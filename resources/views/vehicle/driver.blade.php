@@ -797,7 +797,7 @@
 
         // Función para probar conectividad con servidor OSRM
         function testOSRMConnectivity() {
-            const osrmUrl = 'http://154.38.191.25:5000';
+            const osrmUrl = 'https://xn--lacampaafoodservice-13b.com/osrm';
             
             // Prueba simple con coordenadas de Honduras
             const testUrl = `${osrmUrl}/route/v1/driving/-87.2065,14.0821;-87.1875,14.0667?overview=full&geometries=polyline`;
