@@ -864,10 +864,10 @@
                 }
 
                 // Usar directamente tu servidor OSRM (más simple y confiable)
-                console.log('Usando servidor OSRM propio: http://154.38.191.25:5000');
+                console.log('Usando servidor OSRM propio: https://xn--lacampaafoodservice-13b.com/osrm');
                 
                 const router = L.Routing.osrm({
-                    serviceUrl: 'http://154.38.191.25:5000/route/v1',
+                    serviceUrl: 'https://xn--lacampaafoodservice-13b.com/osrm/route/v1',
                     timeout: 20000,
                     profile: 'driving'
                 });
