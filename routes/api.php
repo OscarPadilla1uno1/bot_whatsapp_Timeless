@@ -5,6 +5,11 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\VroomController;
 use App\Http\Controllers\Admin\AdminController;
 use App\Http\Controllers\PlacetoPayController;
+use App\Http\Controllers\HoraController;
+
+// API para obtener la configuración
+Route::get('/bot/configuracion', [HoraController::class, 'getConfiguracion']);
+Route::get('/bot/activo', [HoraController::class, 'verificarActivo']);
 /*
 /*
 |--------------------------------------------------------------------------

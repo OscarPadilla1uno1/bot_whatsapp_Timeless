@@ -145,6 +145,26 @@ class PlacetoPayController extends Controller
                 return response()->json(['error' => 'Datos incompletos'], 400);
             }
 
+            $response2 = $placetopay->query($requestId);
+
+            if (!$response2->isSuccessful()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se pudo verificar el estado con PlacetoPay: ' . $response2->status()->message()
+                ], 400);
+            }
+
+            $estadoWebhook = $notification->status()->status();
+            $estadoReal = $response2->status()->status();
+
+            if ($estadoWebhook !== $estadoReal) {
+                Log::warning("Estado del webhook ($estadoWebhook) no coincide con el estado real ($estadoReal)");
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Estado de pago no coincide con PlacetoPay'
+                ], 400);
+            }
+
             $pago = Pago::where('request_id', $requestId)
                 ->where('referencia_transaccion', $reference)
                 ->first();

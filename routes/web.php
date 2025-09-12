@@ -7,6 +7,8 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\DashboardController;
 use Illuminate\Support\Facades\Auth;
 use App\Http\Middleware\CheckPermission;
+use App\Http\Controllers\HoraController;
+
 
 Route::get('/routes', [VroomController::class, 'index'])->name('routes');
 
@@ -75,6 +77,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/admin/envios-gratis/{fecha}', [AdminController::class, 'estadoEnvioGratis'])->name('admin.envios-gratis')->can('Administrador');
     Route::patch('/admin/envios-gratis/{fecha}', [AdminController::class, 'actualizarEnvioGratis']);
 
+    //Horario bot
+    Route::get('/configuracion/hora', [HoraController::class, 'index'])->name('configuracion.index')->can('Administrador');
+    Route::put('/configuracion/hora', [HoraController::class, 'update'])->name('configuracion.update')->can('Administrador');
+
+
     // Rutas CRUD para platillos
     Route::get('/admin/platillos', [AdminController::class, 'vistaPlatillos'])->name('admin.platillos')->can('Administrador');
     Route::post('/admin/platillos/crear', [AdminController::class, 'crearPlatillo'])->name('admin.platillos.crear')->can('Administrador');
@@ -111,8 +118,13 @@ Route::middleware('auth')->group(function () {
 
 });
 
-Route::get('/pago/exito', function () {
-    return view('pago.exito');
+Route::get('/pago/exito', function (Illuminate\Http\Request $request) {
+    $reference = $request->query('reference');
+
+    // Buscar el pago en base de datos
+    $pago = \App\Models\Pago::where('referencia_transaccion', $reference)->firstOrFail();
+
+    return view('pago.exito', compact('pago'));
 })->name('pago.exito');
 
 Route::get('/pago/cancelado', function () {
