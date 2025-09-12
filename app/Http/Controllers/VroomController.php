@@ -33,7 +33,7 @@ class VroomController extends Controller
             "options" => ["g" => true]
         ];
 
-        $vroomUrl = 'http://154.38.191.25:3000';
+        $vroomUrl = 'https://lacampañafoodservice.com/vroom/';
         $response = Http::timeout(30)->post($vroomUrl, $data);
 
         if ($response->failed()) {
@@ -120,7 +120,7 @@ class VroomController extends Controller
             "options" => ["g" => true]
         ];
 
-        $vroomUrl = 'http://154.38.191.25:3000';
+        $vroomUrl = 'https://lacampañafoodservice.com/vroom/';
         $response = Http::timeout(30)->post($vroomUrl, $data);
 
         if ($response->failed()) {
@@ -179,7 +179,7 @@ class VroomController extends Controller
             "options" => ["g" => true]
         ];
 
-        $vroomUrl = 'http://154.38.191.25:3000';
+        $vroomUrl = 'https://lacampañafoodservice.com/vroom/';
         $response = Http::timeout(30)->post($vroomUrl, $data);
 
         if ($response->failed()) {
@@ -388,7 +388,7 @@ class VroomController extends Controller
             ];
 
             // Llamar a VROOM
-            $vroomUrl = 'http://154.38.191.25:3000';
+            $vroomUrl = 'https://lacampañafoodservice.com/vroom/';
             $response = Http::timeout(30)->post($vroomUrl, $data);
 
             if ($response->failed()) {
