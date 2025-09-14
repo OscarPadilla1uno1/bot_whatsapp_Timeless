@@ -18,7 +18,6 @@ class PlacetoPayController extends Controller
         // Validar los datos recibidos del JSON
         $validatedData = $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'required|email|max:255',
             'mobile' => 'required|numeric',
             'description' => 'required|string|max:255',
             'total' => 'required|numeric|min:0.01',
@@ -40,7 +39,7 @@ class PlacetoPayController extends Controller
         $requestData = [
             "buyer" => [
                 "name" => $validatedData['name'],
-                "email" => $validatedData['email'],
+                
                 "mobile" => $validatedData['mobile']
             ],
             'payment' => [

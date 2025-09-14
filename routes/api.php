@@ -8,8 +8,11 @@ use App\Http\Controllers\PlacetoPayController;
 use App\Http\Controllers\HoraController;
 
 // API para obtener la configuración
-Route::get('/bot/configuracion', [HoraController::class, 'getConfiguracion']);
-Route::get('/bot/activo', [HoraController::class, 'verificarActivo']);
+Route::get('/bot/configuracion', [HoraController::class, 'getConfiguracion'])
+    ->name('bot.configuracion');
+
+Route::get('/bot/activo', [HoraController::class, 'verificarActivo'])
+    ->name('bot.activo');
 /*
 /*
 |--------------------------------------------------------------------------
