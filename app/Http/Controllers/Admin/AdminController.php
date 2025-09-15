@@ -381,6 +381,68 @@ class AdminController extends Controller
         return $distancia;
     }
 
+    public function cancelarPedidoRepartidor($id)
+    {
+        try {
+            $pedido = Pedido::with(['detalles', 'pago'])->findOrFail($id);
+
+            // Validar que el pedido esté en estado "pendiente"
+            if ($pedido->estado !== 'pendiente') {
+                return response()->json([
+                    'success' => false,
+                    'mensaje' => 'Solo se pueden cancelar pedidos en estado pendiente.'
+                ], 400);
+            }
+
+            // Validar que la fecha del pedido sea hoy
+            $fechaPedido = Carbon::parse($pedido->fecha_pedido)->toDateString();
+            $hoy = Carbon::now('America/Tegucigalpa')->toDateString();
+
+            if ($fechaPedido !== $hoy) {
+                return response()->json([
+                    'success' => false,
+                    'mensaje' => 'Solo se pueden cancelar pedidos programados para hoy.'
+                ], 400);
+            }
+
+            // Transacción para cancelar el pedido, reembolsar y restaurar el stock
+            DB::transaction(function () use ($pedido, $fechaPedido) {
+                foreach ($pedido->detalles as $detalle) {
+                    $menuItem = MenuDiario::where('fecha', $fechaPedido)
+                        ->where('platillo_id', $detalle->platillo_id)
+                        ->first();
+
+                    if ($menuItem) {
+                        $menuItem->cantidad_disponible += $detalle->cantidad;
+                        $menuItem->save();
+                    }
+                }
+
+                // Marcar el pedido como cancelado
+                $pedido->estado = 'cancelado';
+                $pedido->save();
+
+                // Si hay un pago asociado, actualizarlo a reembolsado
+                if ($pedido->pago) {
+                    $pedido->pago->estado_pago = 'reembolsado';
+                    $pedido->pago->save();
+                }
+            });
+
+            return response()->json([
+                'success' => true,
+                'mensaje' => 'Pedido cancelado, stock restaurado y pago marcado como reembolsado.'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'mensaje' => 'Error al cancelar el pedido.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+
     public function prepararPedido($id)
     {
         try {

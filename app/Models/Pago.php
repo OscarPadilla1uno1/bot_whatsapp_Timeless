@@ -18,6 +18,7 @@ class Pago extends Model
         'metodo_interno',
         'canal',
         'observaciones',
+        'internal_reference',
     ];
 
     // Si tu tabla no tiene timestamps

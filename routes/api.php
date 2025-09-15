@@ -60,3 +60,4 @@ Route::post('/placetopay/webhook', [PlacetoPayController::class, 'handleWebhook'
 Route::put('/pagos/actualizar/{pedidoId}', [AdminController::class, 'actualizarDatosPago']);
 Route::post('/verificar-pago', [AdminController::class, 'verificarPagoPendiente']);
 Route::get('/fecha-hoy', [AdminController::class, 'todayDate']);
+Route::post('/pagos/{requestId}/reverse', [PlacetoPayController::class, 'reversePayment']);

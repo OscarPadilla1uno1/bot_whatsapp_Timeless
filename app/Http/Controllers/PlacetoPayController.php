@@ -39,7 +39,7 @@ class PlacetoPayController extends Controller
         $requestData = [
             "buyer" => [
                 "name" => $validatedData['name'],
-                
+
                 "mobile" => $validatedData['mobile']
             ],
             'payment' => [
@@ -124,6 +124,67 @@ class PlacetoPayController extends Controller
         }
     }
 
+    public function reversePayment(Request $request, $requestId)
+    {
+        try {
+            $placetopay = new PlacetoPay([
+                'login' => env('PLACETOPAY_LOGIN'),
+                'tranKey' => env('SecretKey'),
+                'baseUrl' => env('PLACETOPAY_BASE_URL'),
+                'timeout' => env('PLACETOPAY_TIMEOUT', 10),
+            ]);
+
+            // 1. Consultar el estado del pago
+            $response = $placetopay->query((int) $requestId);
+
+            if (!$response->isSuccessful()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se pudo consultar el pago: ' . $response->status()->message(),
+                ], 400);
+            }
+
+            // 2. Extraer el internalReference si existe
+            $payments = $response->toArray()['payment'] ?? [];
+            if (empty($payments) || empty($payments[0]['internalReference'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No hay internalReference disponible (pago no aprobado o pendiente).',
+                ], 400);
+            }
+
+            $internalReference = (string) $payments[0]['internalReference'];
+
+            // 3. Hacer el reverso
+            $reverseResponse = $placetopay->reverse($internalReference);
+
+            \Log::info('Reverse Response: ' . json_encode($reverseResponse->toArray()));
+
+            if ($reverseResponse->isSuccessful()) {
+                $status = $reverseResponse->status()->status();
+                $message = $reverseResponse->status()->message();
+
+                return response()->json([
+                    'success' => true,
+                    'status' => $status,
+                    'message' => $message,
+                ]);
+            }
+
+            return response()->json([
+                'success' => false,
+                'message' => 'PlacetoPay rechazó el reembolso: ' . $reverseResponse->status()->message(),
+            ], 400);
+
+        } catch (Exception $e) {
+            \Log::error('Error en reversePayment: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error interno al procesar el reembolso',
+            ], 500);
+        }
+    }
+
     public function handleWebhook(Request $request)
     {
         try {
@@ -182,6 +243,10 @@ class PlacetoPayController extends Controller
 
             if ($notification->isApproved()) {
                 $pago->estado_pago = 'confirmado';
+                $payments = $response2->toArray()['payment'] ?? [];
+                if (!empty($payments) && !empty($payments[0]['internalReference'])) {
+                    $pago->internal_reference = $payments[0]['internalReference'];
+                }
             } elseif ($notification->isRejected() || $estado === 'FAILED') {
                 $pago->estado_pago = 'fallido';
             } else {
@@ -216,5 +281,4 @@ class PlacetoPayController extends Controller
             return response()->json(['error' => 'Webhook error'], 500);
         }
     }
-
 }
