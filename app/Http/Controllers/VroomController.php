@@ -68,86 +68,95 @@ class VroomController extends Controller
     /**
      * Vista individual para motorista
      */
-    public function showDriverRoute(Request $request, $userId = null)
-    {
-        // Si no se especifica userId, usar el del usuario autenticado
-        if (!$userId) {
-            $userId = auth()->id();
-        }
+public function showDriverRoute(Request $request, $userId = null)
+{
+    if (!$userId) {
+        $userId = auth()->id();
+    }
 
-        // Verificar que el usuario sea motorista
-        $driver = User::where('id', $userId)
-            ->whereHas('permissions', function($query) {
-                $query->where('name', 'Motorista');
-            })
-            ->first();
+    $driver = User::where('id', $userId)
+        ->whereHas('permissions', function($query) {
+            $query->where('name', 'Motorista');
+        })
+        ->first();
 
-        if (!$driver) {
-            return back()->with('error', 'Usuario no encontrado o no es motorista');
-        }
+    if (!$driver) {
+        return back()->with('error', 'Usuario no encontrado o no es motorista');
+    }
 
-        // Verificar permisos: solo el mismo motorista o un admin pueden ver la ruta
-        if (auth()->id() != $userId && !auth()->user()->can('Administrador')) {
-            return back()->with('error', 'No tienes permisos para ver esta ruta');
-        }
+    // Obtener jornada activa del repartidor
+    $jornadaActiva = DB::table('jornadas_entrega')
+        ->where('driver_id', $userId)
+        ->where('fecha', now()->toDateString())
+        ->whereIn('estado', ['asignada', 'en_progreso'])
+        ->first();
 
-        $jobs = $this->getValidJobs();
-
-        if (empty($jobs)) {
-            return view('vehicle.driver', [
-                'driver' => $driver,
-                'route' => null,
-                'jobs' => []
-            ])->with('error', 'No hay pedidos válidos para procesar');
-        }
-
-        $vehicles = $this->getVehiclesFromDrivers();
-        
-        // Encontrar el vehículo del motorista
-        $driverVehicle = collect($vehicles)->firstWhere('driver_id', $userId);
-
-        if (!$driverVehicle) {
-            return view('vehicle.driver', [
-                'driver' => $driver,
-                'route' => null,
-                'jobs' => []
-            ])->with('error', 'No se encontró vehículo asignado');
-        }
-
-        $data = [
-            "vehicles" => $vehicles,
-            "jobs" => $jobs,
-            "options" => ["g" => true]
-        ];
-
-        $vroomUrl = 'https://lacampañafoodservice.com/vroom/';
-        $response = Http::timeout(30)->post($vroomUrl, $data);
-
-        if ($response->failed()) {
-            Log::error('Error en la respuesta de VROOM para motorista', [
-                'driver_id' => $userId,
-                'status' => $response->status(),
-                'body' => $response->body()
-            ]);
-            return view('vehicle.driver', [
-                'driver' => $driver,
-                'route' => null,
-                'jobs' => []
-            ])->with('error', 'Error al contactar el servidor VROOM.');
-        }
-
-        $result = $response->json();
-        $routes = $this->assignRoutesToDrivers($result['routes'], $vehicles, $jobs);
-
-        // Encontrar la ruta del motorista específico
-        $driverRoute = collect($routes)->firstWhere('driver_id', $userId);
-
+    if (!$jornadaActiva) {
         return view('vehicle.driver', [
             'driver' => $driver,
-            'route' => $driverRoute,
-            'jobs' => $jobs
-        ]);
+            'route' => null,
+            'jobs' => []
+        ])->with('message', 'No tienes jornadas asignadas actualmente.');
     }
+
+    // Obtener pedidos de la jornada
+    $pedidosJornada = DB::table('pedidos')
+        ->join('clientes', 'pedidos.cliente_id', '=', 'clientes.id')
+        ->select(
+            'pedidos.id',
+            'pedidos.latitud',
+            'pedidos.longitud',
+            'pedidos.estado',
+            'clientes.nombre as cliente_nombre',
+            'clientes.telefono as cliente_telefono'
+        )
+        ->where('pedidos.jornada_id', $jornadaActiva->id)
+        ->whereNotNull('pedidos.latitud')
+        ->whereNotNull('pedidos.longitud')
+        ->get();
+
+    // Formatear como ruta para la vista existente
+    $route = [
+        'vehicle' => 1,
+        'driver_id' => $driver->id,
+        'driver_name' => $driver->name,
+        'jornada_id' => $jornadaActiva->id,
+        'geometry' => $jornadaActiva->route_geometry,
+        'steps' => $this->formatStepsFromJornada($pedidosJornada, $jornadaActiva)
+    ];
+
+    return view('vehicle.driver', [
+        'driver' => $driver,
+        'route' => $route,
+        'jobs' => $pedidosJornada->toArray()
+    ]);
+}
+
+private function formatStepsFromJornada($pedidos, $jornada)
+{
+    $steps = [];
+    
+    // Agregar punto de inicio
+    $steps[] = [
+        'type' => 'start',
+        'location' => [-87.1875, 14.0667] // Punto base
+    ];
+
+    // Agregar cada pedido como un job
+    foreach ($pedidos as $index => $pedido) {
+        $steps[] = [
+            'type' => 'job',
+            'job' => $pedido->id,
+            'location' => [(float)$pedido->longitud, (float)$pedido->latitud],
+            'job_details' => [
+                'cliente' => $pedido->cliente_nombre,
+                'telefono' => $pedido->cliente_telefono
+            ]
+        ];
+    }
+
+    return $steps;
+}
 
     /**
      * Vista para admin - ver todas las rutas de motoristas
@@ -280,6 +289,7 @@ class VroomController extends Controller
             )
             ->whereNotNull('pedidos.latitud')
             ->whereNotNull('pedidos.longitud')
+            ->where('pedidos.estado', 'despachado')
             ->whereDate('pedidos.fecha_pedido', now()->toDateString())
             ->get();
 
@@ -898,116 +908,104 @@ private function adjustVroomTime($baseTimeSeconds, $deliveryType, $trafficCondit
     /**
      * Actualizar estado de entrega
      */
-    public function updateDeliveryStatus(Request $request)
-    {
-        try {
-            $validated = $request->validate([
-                'delivery_id' => 'required|integer',
-                'status' => 'required|string|in:entregado,devuelto,pendiente',
-                'driver_id' => 'required|integer|exists:users,id',
-                'timestamp' => 'sometimes|string',
-                'notes' => 'sometimes|string|max:500',
-                'latitude' => 'sometimes|numeric|between:-90,90',
-                'longitude' => 'sometimes|numeric|between:-180,180'
-            ]);
+   public function updateDeliveryStatus(Request $request)
+{
+    try {
+        $validated = $request->validate([
+            'delivery_id' => 'required|integer',
+            'status' => 'required|string|in:entregado,devuelto',
+            'driver_id' => 'required|integer|exists:users,id',
+            'timestamp' => 'sometimes|string',
+            'notes' => 'sometimes|string|max:500',
+            'latitude' => 'sometimes|numeric|between:-90,90',
+            'longitude' => 'sometimes|numeric|between:-180,180'
+        ]);
 
-            // Verificar que el pedido existe
-            $pedido = DB::table('pedidos')->where('id', $validated['delivery_id'])->first();
-            
-            if (!$pedido) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Pedido no encontrado'
-                ], 404);
-            }
-
-            // Verificar permisos: solo el motorista asignado o admin pueden actualizar
-            $user = Auth::user();
-            if (!$user->can('Administrador') && $pedido->vehiculo_asignado != $validated['driver_id']) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'No tienes permisos para actualizar esta entrega'
-                ], 403);
-            }
-
-            // Mapear estados del frontend a la base de datos
-            $estadoMapping = [
-                'entregado' => 'entregado',
-                'devuelto' => 'devuelto',
-                'pendiente' => 'pendiente'
-            ];
-
-            $nuevoEstado = $estadoMapping[$validated['status']];
-
-            // Actualizar el pedido
-            $updateData = [
-                'estado' => $nuevoEstado,
-                'updated_at' => now()
-            ];
-
-            // Si se marca como entregado, agregar timestamp de entrega
-            if ($nuevoEstado === 'entregado') {
-                $updateData['fecha_entrega'] = $validated['timestamp'] ? 
-                    Carbon::parse($validated['timestamp']) : now();
-            }
-
-            $updated = DB::table('pedidos')
-                ->where('id', $validated['delivery_id'])
-                ->update($updateData);
-
-            if (!$updated) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Error al actualizar el pedido'
-                ], 500);
-            }
-
-            // Registrar en tabla de historial de entregas (opcional)
-            $this->logDeliveryHistory($validated['delivery_id'], $validated['driver_id'], $nuevoEstado, $validated);
-
-            // Obtener información actualizada del pedido
-            $pedidoActualizado = DB::table('pedidos')
-                ->join('clientes', 'pedidos.cliente_id', '=', 'clientes.id')
-                ->select(
-                    'pedidos.*',
-                    'clientes.nombre as cliente_nombre'
-                )
-                ->where('pedidos.id', $validated['delivery_id'])
-                ->first();
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Estado de entrega actualizado correctamente',
-                'data' => [
-                    'delivery_id' => $validated['delivery_id'],
-                    'old_status' => $pedido->estado,
-                    'new_status' => $nuevoEstado,
-                    'driver_id' => $validated['driver_id'],
-                    'timestamp' => now()->toISOString(),
-                    'pedido' => $pedidoActualizado
-                ]
-            ]);
-
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        // Verificar que el pedido existe y está en estado correcto
+        $pedido = DB::table('pedidos')->where('id', $validated['delivery_id'])->first();
+        
+        if (!$pedido) {
             return response()->json([
                 'success' => false,
-                'error' => 'Datos inválidos',
-                'details' => $e->errors()
-            ], 422);
+                'error' => 'Pedido no encontrado'
+            ], 404);
+        }
 
-        } catch (\Exception $e) {
-            Log::error('Error en updateDeliveryStatus', [
-                'error' => $e->getMessage(),
-                'user_id' => Auth::id(),
-                'delivery_id' => $request->input('delivery_id')
-            ]);
-            
+        // Mapear estados del frontend a la base de datos
+        $nuevoEstado = $validated['status'];
+
+        // Actualizar el pedido
+        $updateData = [
+            'estado' => $nuevoEstado,
+            'updated_at' => now()
+        ];
+
+        // Si se marca como entregado, agregar timestamp de entrega
+        if ($nuevoEstado === 'entregado') {
+            $updateData['fecha_entrega'] = $validated['timestamp'] ? 
+                \Carbon\Carbon::parse($validated['timestamp']) : now();
+        }
+
+        $updated = DB::table('pedidos')
+            ->where('id', $validated['delivery_id'])
+            ->update($updateData);
+
+        if (!$updated) {
             return response()->json([
                 'success' => false,
-                'error' => 'Error interno del servidor'
+                'error' => 'Error al actualizar el pedido'
             ], 500);
         }
+
+        // Actualizar en tabla de relación si existe
+        if (DB::getSchemaBuilder()->hasTable('jornada_pedidos')) {
+            DB::table('jornada_pedidos')
+                ->where('pedido_id', $validated['delivery_id'])
+                ->update([
+                    'estado' => $nuevoEstado,
+                    'updated_at' => now()
+                ]);
+        }
+
+        // Registrar en historial si la tabla existe
+        if (DB::getSchemaBuilder()->hasTable('delivery_history')) {
+            DB::table('delivery_history')->insert([
+                'delivery_id' => $validated['delivery_id'],
+                'driver_id' => $validated['driver_id'],
+                'action' => $nuevoEstado,
+                'latitude' => $validated['latitude'] ?? null,
+                'longitude' => $validated['longitude'] ?? null,
+                'notes' => $validated['notes'] ?? null,
+                'metadata' => json_encode($validated),
+                'created_at' => now(),
+                'updated_at' => now()
+            ]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Estado de entrega actualizado correctamente',
+            'data' => [
+                'delivery_id' => $validated['delivery_id'],
+                'new_status' => $nuevoEstado,
+                'driver_id' => $validated['driver_id'],
+                'timestamp' => now()->toISOString()
+            ]
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Error en updateDeliveryStatus', [
+            'error' => $e->getMessage(),
+            'user_id' => auth()->id(),
+            'delivery_id' => $request->input('delivery_id')
+        ]);
+        
+        return response()->json([
+            'success' => false,
+            'error' => 'Error interno del servidor'
+        ], 500);
     }
+}
 
     /**
      * Marcar entrega como completada (método simplificado)
@@ -1015,7 +1013,6 @@ private function adjustVroomTime($baseTimeSeconds, $deliveryType, $trafficCondit
     // En el controlador VroomController
 public function markDeliveryCompleted(Request $request)
 {
-    // Método muy permisivo para testing
     $deliveryId = $request->input('delivery_id');
     $driverId = $request->input('driver_id');
     
@@ -1026,15 +1023,70 @@ public function markDeliveryCompleted(Request $request)
         ], 400);
     }
     
-    // Actualizar sin validación estricta
     try {
         DB::table('pedidos')
             ->where('id', $deliveryId)
-            ->update(['estado' => 'entregado']);
+            ->update([
+                'estado' => 'entregado',
+                'fecha_entrega' => now()
+            ]);
+
+        // Verificar si todos los pedidos de la jornada están completados
+        $this->checkJornadaCompletion($driverId);
             
-        return response()->json(['success' => true, 'message' => 'Entrega completada']);
+        return response()->json([
+            'success' => true, 
+            'message' => 'Entrega completada'
+        ]);
     } catch (\Exception $e) {
-        return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
+        return response()->json([
+            'success' => false, 
+            'error' => $e->getMessage()
+        ], 500);
+    }
+}
+
+private function checkJornadaCompletion($driverId)
+{
+    $jornadaActiva = DB::table('jornadas_entrega')
+        ->where('driver_id', $driverId)
+        ->where('fecha', now()->toDateString())
+        ->whereIn('estado', ['asignada', 'en_progreso'])
+        ->first();
+
+    if (!$jornadaActiva) return;
+
+    $pedidosPendientes = DB::table('pedidos')
+        ->where('jornada_id', $jornadaActiva->id)
+        ->where('estado', 'despachado')
+        ->count();
+
+    // Si no hay pedidos pendientes, completar jornada y buscar siguiente
+    if ($pedidosPendientes === 0) {
+        DB::table('jornadas_entrega')
+            ->where('id', $jornadaActiva->id)
+            ->update([
+                'estado' => 'completada',
+                'fecha_completada' => now()
+            ]);
+
+        // Buscar siguiente jornada y asignar automáticamente
+        $siguienteJornada = DB::table('jornadas_entrega')
+            ->where('fecha', now()->toDateString())
+            ->where('estado', 'planificada')
+            ->whereNull('driver_id')
+            ->orderBy('hora_inicio')
+            ->first();
+
+        if ($siguienteJornada) {
+            DB::table('jornadas_entrega')
+                ->where('id', $siguienteJornada->id)
+                ->update([
+                    'driver_id' => $driverId,
+                    'estado' => 'asignada',
+                    'fecha_asignacion' => now()
+                ]);
+        }
     }
 }
 
@@ -1301,8 +1353,1938 @@ public function markDeliveryCompleted(Request $request)
         }
     }
 
+    /**
+ * Crear una nueva jornada de trabajo
+ */
+public function createNewShift(Request $request)
+{
+    try {
+        $validated = $request->validate([
+            'nombre_jornada' => 'required|string|max:255',
+            'fecha' => 'required|date',
+            'hora_inicio' => 'required|date_format:H:i',
+            'hora_fin' => 'nullable|date_format:H:i',
+            'tipo_jornada' => 'required|string|in:mañana,tarde,noche,express',
+            'pedidos_asignados' => 'required|array|min:1',
+            'pedidos_asignados.*' => 'integer|exists:pedidos,id'
+        ]);
+
+        // Verificar que todos los pedidos estén en estado "despachado"
+        $pedidosValidos = DB::table('pedidos')
+            ->whereIn('id', $validated['pedidos_asignados'])
+            ->where('estado', 'despachado')
+            ->count();
+
+        if ($pedidosValidos !== count($validated['pedidos_asignados'])) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Solo se pueden asignar pedidos en estado "despachado" a las jornadas'
+            ], 400);
+        }
+
+        // Crear la jornada
+        $jornadaId = DB::table('jornadas_entrega')->insertGetId([
+            'nombre' => $validated['nombre_jornada'],
+            'fecha' => $validated['fecha'],
+            'hora_inicio' => $validated['hora_inicio'],
+            'hora_fin' => $validated['hora_fin'],
+            'tipo' => $validated['tipo_jornada'],
+            'estado' => 'planificada',
+            'created_by' => auth()->id(),
+            'created_at' => now(),
+            'updated_at' => now()
+        ]);
+
+        // Verificar si existe la columna jornada_id en pedidos
+        if (DB::getSchemaBuilder()->hasColumn('pedidos', 'jornada_id')) {
+            // Asignar pedidos a la jornada
+            DB::table('pedidos')
+                ->whereIn('id', $validated['pedidos_asignados'])
+                ->update([
+                    'jornada_id' => $jornadaId,
+                    'estado' => 'asignado_jornada', // Cambiar estado para indicar que está en jornada
+                    'updated_at' => now()
+                ]);
+        }
+
+        // Crear registros en tabla de relación si existe
+        if (DB::getSchemaBuilder()->hasTable('jornada_pedidos')) {
+            $pedidosData = [];
+            foreach ($validated['pedidos_asignados'] as $pedidoId) {
+                $pedidosData[] = [
+                    'jornada_id' => $jornadaId,
+                    'pedido_id' => $pedidoId,
+                    'estado' => 'pendiente',
+                    'created_at' => now(),
+                    'updated_at' => now()
+                ];
+            }
+            DB::table('jornada_pedidos')->insert($pedidosData);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Jornada creada exitosamente con pedidos despachados',
+            'jornada_id' => $jornadaId,
+            'pedidos_count' => count($validated['pedidos_asignados'])
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Error creando jornada', [
+            'error' => $e->getMessage(),
+            'user_id' => auth()->id()
+        ]);
+        
+        return response()->json([
+            'success' => false,
+            'error' => 'Error al crear jornada: ' . $e->getMessage()
+        ], 500);
+    }
+}
 
 
+/**
+ * Asignar jornada a repartidor disponible
+ */
+public function assignShiftToDriver(Request $request)
+{
+    try {
+        $validated = $request->validate([
+            'jornada_id' => 'required|integer|exists:jornadas_entrega,id',
+            'driver_id' => 'nullable|integer|exists:users,id'
+        ]);
+
+        $jornada = DB::table('jornadas_entrega')
+            ->where('id', $validated['jornada_id'])
+            ->first();
+
+        if (!$jornada) {
+            return response()->json(['error' => 'Jornada no encontrada'], 404);
+        }
+
+        if ($jornada->estado !== 'planificada') {
+            return response()->json(['error' => 'Jornada ya asignada o completada'], 400);
+        }
+
+        $driverId = $validated['driver_id'];
+
+        // Si no se especifica driver, buscar uno disponible
+        if (!$driverId) {
+            $driverId = $this->findAvailableDriver($jornada->fecha);
+            
+            if (!$driverId) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'No hay repartidores disponibles'
+                ], 404);
+            }
+        } else {
+            // Verificar que el driver esté disponible
+            if (!$this->isDriverAvailable($driverId, $jornada->fecha)) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Repartidor no disponible'
+                ], 400);
+            }
+        }
+
+        // Asignar jornada al repartidor
+        DB::table('jornadas_entrega')
+            ->where('id', $validated['jornada_id'])
+            ->update([
+                'driver_id' => $driverId,
+                'estado' => 'asignada',
+                'fecha_asignacion' => now(),
+                'updated_at' => now()
+            ]);
+
+        // Actualizar pedidos
+        DB::table('pedidos')
+            ->where('jornada_id', $validated['jornada_id'])
+            ->update([
+                'vehiculo_asignado' => $driverId,
+                'estado' => 'asignado_repartidor',
+                'updated_at' => now()
+            ]);
+
+        // Generar ruta optimizada para la jornada
+        $routeResult = $this->generateShiftRoute($validated['jornada_id'], $driverId);
+
+        $driver = User::find($driverId);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Jornada asignada exitosamente',
+            'data' => [
+                'jornada_id' => $validated['jornada_id'],
+                'driver_id' => $driverId,
+                'driver_name' => $driver->name,
+                'route_generated' => $routeResult['success'] ?? false,
+                'pedidos_count' => $this->getShiftOrdersCount($validated['jornada_id'])
+            ]
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Error asignando jornada', [
+            'error' => $e->getMessage(),
+            'jornada_id' => $request->input('jornada_id')
+        ]);
+        
+        return response()->json([
+            'success' => false,
+            'error' => 'Error al asignar jornada'
+        ], 500);
+    }
+}
+
+/**
+ * Marcar jornada como completada y buscar siguiente
+ */
+public function completeShiftAndAssignNext(Request $request)
+{
+    try {
+        $validated = $request->validate([
+            'jornada_id' => 'required|integer|exists:jornadas_entrega,id',
+            'driver_id' => 'required|integer|exists:users,id',
+            'completion_notes' => 'nullable|string|max:1000'
+        ]);
+
+        // Verificar que el repartidor puede completar esta jornada
+        $jornada = DB::table('jornadas_entrega')
+            ->where('id', $validated['jornada_id'])
+            ->where('driver_id', $validated['driver_id'])
+            ->first();
+
+        if (!$jornada) {
+            return response()->json(['error' => 'Jornada no encontrada o no asignada a este repartidor'], 404);
+        }
+
+        // Verificar que todos los pedidos estén completados o devueltos
+        $pedidosPendientes = DB::table('pedidos')
+            ->where('jornada_id', $validated['jornada_id'])
+            ->whereNotIn('estado', ['entregado', 'devuelto'])
+            ->count();
+
+        if ($pedidosPendientes > 0) {
+            return response()->json([
+                'success' => false,
+                'error' => "Aún hay {$pedidosPendientes} pedidos pendientes en esta jornada",
+                'pendientes' => $pedidosPendientes
+            ], 400);
+        }
+
+        // Marcar jornada como completada
+        DB::table('jornadas_entrega')
+            ->where('id', $validated['jornada_id'])
+            ->update([
+                'estado' => 'completada',
+                'fecha_completada' => now(),
+                'completion_notes' => $validated['completion_notes'],
+                'updated_at' => now()
+            ]);
+
+        // Buscar siguiente jornada disponible
+        $siguienteJornada = $this->findNextAvailableShift($validated['driver_id']);
+
+        $response = [
+            'success' => true,
+            'message' => 'Jornada completada exitosamente',
+            'completed_shift' => [
+                'jornada_id' => $validated['jornada_id'],
+                'completion_time' => now()->toISOString()
+            ]
+        ];
+
+        if ($siguienteJornada) {
+            // Asignar automáticamente la siguiente jornada
+            $assignResult = $this->assignShiftToDriver(new \Illuminate\Http\Request([
+                'jornada_id' => $siguienteJornada->id,
+                'driver_id' => $validated['driver_id']
+            ]));
+
+            $response['next_shift'] = [
+                'jornada_id' => $siguienteJornada->id,
+                'nombre' => $siguienteJornada->nombre,
+                'tipo' => $siguienteJornada->tipo,
+                'assigned' => $assignResult->getData()->success ?? false
+            ];
+        } else {
+            $response['next_shift'] = null;
+            $response['message'] .= '. No hay más jornadas disponibles por hoy.';
+        }
+
+        return response()->json($response);
+
+    } catch (\Exception $e) {
+        Log::error('Error completando jornada', [
+            'error' => $e->getMessage(),
+            'jornada_id' => $request->input('jornada_id'),
+            'driver_id' => $request->input('driver_id')
+        ]);
+        
+        return response()->json([
+            'success' => false,
+            'error' => 'Error al completar jornada'
+        ], 500);
+    }
+}
+
+/**
+ * Obtener jornadas pendientes y en progreso
+ */
+public function getShiftStatus(Request $request)
+{
+    try {
+        $fecha = $request->input('fecha', now()->toDateString());
+        
+        $jornadas = DB::table('jornadas_entrega as j')
+            ->leftJoin('users as u', 'j.driver_id', '=', 'u.id')
+            ->select([
+                'j.*',
+                'u.name as driver_name',
+                'u.email as driver_email',
+                DB::raw('(SELECT COUNT(*) FROM pedidos WHERE jornada_id = j.id) as total_pedidos'),
+                DB::raw('(SELECT COUNT(*) FROM pedidos WHERE jornada_id = j.id AND estado = "entregado") as pedidos_entregados'),
+                DB::raw('(SELECT COUNT(*) FROM pedidos WHERE jornada_id = j.id AND estado = "devuelto") as pedidos_devueltos')
+            ])
+            ->where('j.fecha', $fecha)
+            ->orderBy('j.hora_inicio')
+            ->get();
+
+        $estadisticas = [
+            'total_jornadas' => $jornadas->count(),
+            'planificadas' => $jornadas->where('estado', 'planificada')->count(),
+            'asignadas' => $jornadas->where('estado', 'asignada')->count(),
+            'en_progreso' => $jornadas->where('estado', 'en_progreso')->count(),
+            'completadas' => $jornadas->where('estado', 'completada')->count()
+        ];
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'fecha' => $fecha,
+                'jornadas' => $jornadas,
+                'estadisticas' => $estadisticas
+            ]
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Error obteniendo estado de jornadas', [
+            'error' => $e->getMessage(),
+            'fecha' => $request->input('fecha')
+        ]);
+        
+        return response()->json([
+            'success' => false,
+            'error' => 'Error obteniendo estado de jornadas'
+        ], 500);
+    }
+}
+
+/**
+ * Métodos auxiliares
+ */
+private function findAvailableDriver($fecha)
+{
+    // Buscar repartidores que no tienen jornadas asignadas para esta fecha
+    $availableDrivers = DB::table('users')
+        ->join('model_has_permissions', 'users.id', '=', 'model_has_permissions.model_id')
+        ->join('permissions', 'model_has_permissions.permission_id', '=', 'permissions.id')
+        ->leftJoin('jornadas_entrega', function($join) use ($fecha) {
+            $join->on('users.id', '=', 'jornadas_entrega.driver_id')
+                 ->where('jornadas_entrega.fecha', $fecha)
+                 ->whereIn('jornadas_entrega.estado', ['asignada', 'en_progreso']);
+        })
+        ->where('permissions.name', 'Motorista')
+        ->whereNull('jornadas_entrega.id') // No tiene jornadas asignadas hoy
+        ->select('users.id')
+        ->first();
+
+    return $availableDrivers ? $availableDrivers->id : null;
+}
+
+private function isDriverAvailable($driverId, $fecha)
+{
+    $activeShifts = DB::table('jornadas_entrega')
+        ->where('driver_id', $driverId)
+        ->where('fecha', $fecha)
+        ->whereIn('estado', ['asignada', 'en_progreso'])
+        ->count();
+
+    return $activeShifts === 0;
+}
+
+private function findNextAvailableShift($driverId)
+{
+    return DB::table('jornadas_entrega')
+        ->where('fecha', now()->toDateString())
+        ->where('estado', 'planificada')
+        ->whereNull('driver_id')
+        ->orderBy('hora_inicio')
+        ->first();
+}
+
+private function generateShiftRoute($jornadaId, $driverId)
+{
+    try {
+        // Obtener pedidos de la jornada
+        $pedidos = DB::table('pedidos')
+            ->join('clientes', 'pedidos.cliente_id', '=', 'clientes.id')
+            ->where('pedidos.jornada_id', $jornadaId)
+            ->whereNotNull('pedidos.latitud')
+            ->whereNotNull('pedidos.longitud')
+            ->select(
+                'pedidos.id',
+                'pedidos.latitud',
+                'pedidos.longitud',
+                'clientes.nombre as cliente_nombre',
+                'clientes.telefono as cliente_telefono'
+            )
+            ->get();
+
+        if ($pedidos->isEmpty()) {
+            return ['success' => false, 'error' => 'No hay pedidos con ubicación válida'];
+        }
+
+        // Preparar datos para VROOM
+        $jobs = $pedidos->map(function ($pedido) {
+            return [
+                "id" => $pedido->id,
+                "location" => [(float) $pedido->longitud, (float) $pedido->latitud],
+                "delivery" => [1],
+                "cliente" => $pedido->cliente_nombre,
+                "telefono" => $pedido->cliente_telefono
+            ];
+        })->toArray();
+
+        $vehicles = [[
+            "id" => 1,
+            "driver_id" => $driverId,
+            "start" => [-87.1875, 14.0667], // Punto base
+            "capacity" => [count($jobs)]
+        ]];
+
+        $data = [
+            "vehicles" => $vehicles,
+            "jobs" => $jobs,
+            "options" => ["g" => true]
+        ];
+
+        // Llamar a VROOM
+        $vroomUrl = 'https://lacampañafoodservice.com/vroom/';
+        $response = Http::timeout(30)->post($vroomUrl, $data);
+
+        if ($response->successful()) {
+            $result = $response->json();
+            
+            // Guardar ruta en la jornada
+            DB::table('jornadas_entrega')
+                ->where('id', $jornadaId)
+                ->update([
+                    'route_geometry' => $result['routes'][0]['geometry'] ?? null,
+                    'route_data' => json_encode($result),
+                    'updated_at' => now()
+                ]);
+
+            return ['success' => true, 'route_data' => $result];
+        }
+
+        return ['success' => false, 'error' => 'Error en VROOM API'];
+
+    } catch (\Exception $e) {
+        Log::error('Error generando ruta de jornada', [
+            'error' => $e->getMessage(),
+            'jornada_id' => $jornadaId
+        ]);
+        
+        return ['success' => false, 'error' => $e->getMessage()];
+    }
+}
+
+private function getShiftOrdersCount($jornadaId)
+{
+    return DB::table('pedidos')
+        ->where('jornada_id', $jornadaId)
+        ->count();
+}
+
+/**
+ * Obtener jornada actual del repartidor
+ */
+public function getCurrentShift(Request $request)
+{
+    try {
+        $driverId = $request->input('driver_id', auth()->id());
+        
+        // Verificar permisos
+        if (auth()->id() != $driverId && !auth()->user()->can('Administrador')) {
+            return response()->json([
+                'success' => false,
+                'error' => 'No tienes permisos para ver esta información'
+            ], 403);
+        }
+
+        $jornadaActual = DB::table('jornadas_entrega as j')
+            ->leftJoin('users as u', 'j.driver_id', '=', 'u.id')
+            ->select([
+                'j.*',
+                'u.name as driver_name',
+                DB::raw('(SELECT COUNT(*) FROM pedidos WHERE jornada_id = j.id) as total_pedidos'),
+                DB::raw('(SELECT COUNT(*) FROM pedidos WHERE jornada_id = j.id AND estado = "entregado") as pedidos_entregados'),
+                DB::raw('(SELECT COUNT(*) FROM pedidos WHERE jornada_id = j.id AND estado = "devuelto") as pedidos_devueltos')
+            ])
+            ->where('j.driver_id', $driverId)
+            ->where('j.fecha', now()->toDateString())
+            ->whereIn('j.estado', ['asignada', 'en_progreso'])
+            ->first();
+
+        if (!$jornadaActual) {
+            return response()->json([
+                'success' => true,
+                'data' => null,
+                'message' => 'No hay jornadas activas'
+            ]);
+        }
+
+        // Obtener pedidos de la jornada
+        $pedidos = DB::table('pedidos')
+            ->join('clientes', 'pedidos.cliente_id', '=', 'clientes.id')
+            ->where('pedidos.jornada_id', $jornadaActual->id)
+            ->select(
+                'pedidos.*',
+                'clientes.nombre as cliente_nombre',
+                'clientes.telefono as cliente_telefono'
+            )
+            ->orderBy('pedidos.id')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'jornada' => $jornadaActual,
+                'pedidos' => $pedidos,
+                'progreso' => [
+                    'total' => $jornadaActual->total_pedidos,
+                    'completados' => $jornadaActual->pedidos_entregados + $jornadaActual->pedidos_devueltos,
+                    'pendientes' => $jornadaActual->total_pedidos - ($jornadaActual->pedidos_entregados + $jornadaActual->pedidos_devueltos),
+                    'porcentaje' => $jornadaActual->total_pedidos > 0 ? 
+                        round((($jornadaActual->pedidos_entregados + $jornadaActual->pedidos_devueltos) / $jornadaActual->total_pedidos) * 100, 1) : 0
+                ]
+            ]
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Error obteniendo jornada actual', [
+            'error' => $e->getMessage(),
+            'driver_id' => $driverId
+        ]);
+        
+        return response()->json([
+            'success' => false,
+            'error' => 'Error obteniendo jornada actual'
+        ], 500);
+    }
+}
+
+/**
+ * Iniciar una jornada
+ */
+public function startShift(Request $request)
+{
+    try {
+        $validated = $request->validate([
+            'jornada_id' => 'required|integer|exists:jornadas_entrega,id',
+            'driver_id' => 'sometimes|integer|exists:users,id'
+        ]);
+
+        $driverId = $validated['driver_id'] ?? auth()->id();
+
+        // Verificar permisos
+        if (auth()->id() != $driverId && !auth()->user()->can('Administrador')) {
+            return response()->json([
+                'success' => false,
+                'error' => 'No tienes permisos para iniciar esta jornada'
+            ], 403);
+        }
+
+        $jornada = DB::table('jornadas_entrega')
+            ->where('id', $validated['jornada_id'])
+            ->where('driver_id', $driverId)
+            ->where('estado', 'asignada')
+            ->first();
+
+        if (!$jornada) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Jornada no encontrada o no está en estado para iniciar'
+            ], 404);
+        }
+
+        // Marcar jornada como en progreso
+        DB::table('jornadas_entrega')
+            ->where('id', $validated['jornada_id'])
+            ->update([
+                'estado' => 'en_progreso',
+                'fecha_inicio_real' => now(),
+                'updated_at' => now()
+            ]);
+
+        // Actualizar pedidos
+        DB::table('pedidos')
+            ->where('jornada_id', $validated['jornada_id'])
+            ->update([
+                'estado' => 'en_ruta',
+                'updated_at' => now()
+            ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Jornada iniciada exitosamente',
+            'jornada_id' => $validated['jornada_id'],
+            'inicio_real' => now()->toISOString()
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Error iniciando jornada', [
+            'error' => $e->getMessage(),
+            'jornada_id' => $request->input('jornada_id')
+        ]);
+        
+        return response()->json([
+            'success' => false,
+            'error' => 'Error al iniciar jornada'
+        ], 500);
+    }
+}
+
+/**
+ * Auto-asignar jornadas pendientes
+ */
+public function autoAssignNextShifts(Request $request)
+{
+    try {
+        $fecha = $request->input('fecha', now()->toDateString());
+        
+        // Obtener jornadas pendientes
+        $jornadasPendientes = DB::table('jornadas_entrega')
+            ->where('fecha', $fecha)
+            ->where('estado', 'planificada')
+            ->whereNull('driver_id')
+            ->orderBy('hora_inicio')
+            ->get();
+
+        if ($jornadasPendientes->isEmpty()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'No hay jornadas pendientes para asignar',
+                'assigned_count' => 0
+            ]);
+        }
+
+        // Obtener repartidores disponibles
+        $repartidoresDisponibles = $this->getAvailableDriversForDate($fecha);
+
+        $assignedCount = 0;
+        $errors = [];
+
+        foreach ($jornadasPendientes as $jornada) {
+            if (empty($repartidoresDisponibles)) {
+                $errors[] = "No hay más repartidores disponibles para jornada {$jornada->nombre}";
+                break;
+            }
+
+            $driverId = array_shift($repartidoresDisponibles);
+            
+            try {
+                // Asignar jornada
+                DB::table('jornadas_entrega')
+                    ->where('id', $jornada->id)
+                    ->update([
+                        'driver_id' => $driverId,
+                        'estado' => 'asignada',
+                        'fecha_asignacion' => now(),
+                        'updated_at' => now()
+                    ]);
+
+                // Actualizar pedidos
+                DB::table('pedidos')
+                    ->where('jornada_id', $jornada->id)
+                    ->update([
+                        'vehiculo_asignado' => $driverId,
+                        'estado' => 'asignado_repartidor',
+                        'updated_at' => now()
+                    ]);
+
+                // Generar ruta
+                $this->generateShiftRoute($jornada->id, $driverId);
+
+                $assignedCount++;
+                
+                Log::info('Jornada auto-asignada', [
+                    'jornada_id' => $jornada->id,
+                    'driver_id' => $driverId
+                ]);
+
+            } catch (\Exception $e) {
+                $errors[] = "Error asignando jornada {$jornada->nombre}: {$e->getMessage()}";
+                Log::error('Error en auto-asignación', [
+                    'jornada_id' => $jornada->id,
+                    'driver_id' => $driverId,
+                    'error' => $e->getMessage()
+                ]);
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => "Se asignaron {$assignedCount} jornadas automáticamente",
+            'assigned_count' => $assignedCount,
+            'errors' => $errors
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Error en auto-asignación de jornadas', [
+            'error' => $e->getMessage(),
+            'fecha' => $request->input('fecha')
+        ]);
+        
+        return response()->json([
+            'success' => false,
+            'error' => 'Error en la auto-asignación'
+        ], 500);
+    }
+}
+
+/**
+ * Obtener repartidores disponibles para una fecha
+ */
+private function getAvailableDriversForDate($fecha)
+{
+    return DB::table('users')
+        ->join('model_has_permissions', 'users.id', '=', 'model_has_permissions.model_id')
+        ->join('permissions', 'model_has_permissions.permission_id', '=', 'permissions.id')
+        ->leftJoin('jornadas_entrega', function($join) use ($fecha) {
+            $join->on('users.id', '=', 'jornadas_entrega.driver_id')
+                 ->where('jornadas_entrega.fecha', $fecha)
+                 ->whereIn('jornadas_entrega.estado', ['asignada', 'en_progreso']);
+        })
+        ->where('permissions.name', 'Motorista')
+        ->whereNull('jornadas_entrega.id')
+        ->pluck('users.id')
+        ->toArray();
+}
+/**
+ * Dashboard de jornadas para admin
+ */
+public function shiftDashboard(Request $request)
+{
+    $fecha = $request->input('fecha', now()->toDateString());
+    
+    return view('admin.jornadas', [
+        'fecha' => $fecha,
+        'titulo' => 'Dashboard de Jornadas'
+    ]);
+}
+
+/**
+ * Obtener métricas del dashboard
+ */
+public function getDashboardMetrics(Request $request)
+{
+    try {
+        $fecha = $request->input('fecha', now()->toDateString());
+        
+        $metricas = [
+            'jornadas' => [
+                'total' => DB::table('jornadas_entrega')->where('fecha', $fecha)->count(),
+                'planificadas' => DB::table('jornadas_entrega')->where('fecha', $fecha)->where('estado', 'planificada')->count(),
+                'asignadas' => DB::table('jornadas_entrega')->where('fecha', $fecha)->where('estado', 'asignada')->count(),
+                'en_progreso' => DB::table('jornadas_entrega')->where('fecha', $fecha)->where('estado', 'en_progreso')->count(),
+                'completadas' => DB::table('jornadas_entrega')->where('fecha', $fecha)->where('estado', 'completada')->count()
+            ],
+            'pedidos' => [
+                'total' => DB::table('pedidos')->whereDate('fecha_pedido', $fecha)->count(),
+                'asignados' => DB::table('pedidos')->whereDate('fecha_pedido', $fecha)->whereNotNull('jornada_id')->count(),
+                'entregados' => DB::table('pedidos')->whereDate('fecha_pedido', $fecha)->where('estado', 'entregado')->count(),
+                'devueltos' => DB::table('pedidos')->whereDate('fecha_pedido', $fecha)->where('estado', 'devuelto')->count()
+            ],
+            'repartidores' => [
+                'total' => DB::table('users')
+                    ->join('model_has_permissions', 'users.id', '=', 'model_has_permissions.model_id')
+                    ->join('permissions', 'model_has_permissions.permission_id', '=', 'permissions.id')
+                    ->where('permissions.name', 'Motorista')
+                    ->count(),
+                'ocupados' => DB::table('jornadas_entrega')
+                    ->where('fecha', $fecha)
+                    ->whereIn('estado', ['asignada', 'en_progreso'])
+                    ->distinct('driver_id')
+                    ->count('driver_id')
+            ]
+        ];
+
+        return response()->json([
+            'success' => true,
+            'data' => $metricas,
+            'fecha' => $fecha
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Error obteniendo métricas del dashboard', [
+            'error' => $e->getMessage(),
+            'fecha' => $request->input('fecha')
+        ]);
+        
+        return response()->json([
+            'success' => false,
+            'error' => 'Error obteniendo métricas'
+        ], 500);
+    }
+}
+
+/**
+ * Actualizar ubicación del repartidor
+ */
+public function updateDriverLocation(Request $request)
+{
+    try {
+        $validated = $request->validate([
+            'latitude' => 'required|numeric|between:-90,90',
+            'longitude' => 'required|numeric|between:-180,180',
+            'accuracy' => 'sometimes|numeric',
+            'speed' => 'sometimes|numeric',
+            'heading' => 'sometimes|numeric|between:0,360'
+        ]);
+
+        $driverId = auth()->id();
+
+        // Guardar ubicación en tabla de tracking
+        DB::table('driver_locations')->insert([
+            'driver_id' => $driverId,
+            'latitude' => $validated['latitude'],
+            'longitude' => $validated['longitude'],
+            'accuracy' => $validated['accuracy'] ?? null,
+            'speed' => $validated['speed'] ?? null,
+            'heading' => $validated['heading'] ?? null,
+            'created_at' => now()
+        ]);
+
+        // Mantener solo las últimas 50 ubicaciones por repartidor
+        $this->cleanupOldLocations($driverId);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Ubicación actualizada',
+            'timestamp' => now()->toISOString()
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Error actualizando ubicación de repartidor', [
+            'error' => $e->getMessage(),
+            'driver_id' => auth()->id()
+        ]);
+        
+        return response()->json([
+            'success' => false,
+            'error' => 'Error actualizando ubicación'
+        ], 500);
+    }
+}
+
+/**
+ * Limpiar ubicaciones antiguas
+ */
+private function cleanupOldLocations($driverId, $limit = 50)
+{
+    $totalLocations = DB::table('driver_locations')
+        ->where('driver_id', $driverId)
+        ->count();
+
+    if ($totalLocations > $limit) {
+        $oldLocationIds = DB::table('driver_locations')
+            ->where('driver_id', $driverId)
+            ->orderBy('created_at', 'desc')
+            ->skip($limit)
+            ->pluck('id');
+
+        DB::table('driver_locations')
+            ->whereIn('id', $oldLocationIds)
+            ->delete();
+    }
+}
+
+/**
+ * Obtener pedidos disponibles para asignar a jornadas
+ */
+public function getAvailableOrders(Request $request)
+{
+    try {
+        $fecha = $request->input('fecha', now()->toDateString());
+        
+        // Primero obtener pedidos despachados (sabemos que esto funciona)
+        $pedidos = DB::table('pedidos')
+            ->select('id', 'estado', 'fecha_pedido', 'total', 'cliente_id')
+            ->whereDate('fecha_pedido', $fecha)
+            ->where('estado', 'despachado')
+            ->get();
+            
+        // Verificar si existe tabla clientes
+        $hasClientes = DB::getSchemaBuilder()->hasTable('clientes');
+        
+        if (!$hasClientes) {
+            // Sin tabla clientes, devolver pedidos básicos
+            $result = $pedidos->map(function($pedido) {
+                return [
+                    'id' => $pedido->id,
+                    'total' => $pedido->total ?? 0,
+                    'estado' => $pedido->estado,
+                    'fecha_pedido' => $pedido->fecha_pedido,
+                    'cliente_nombre' => 'Cliente #' . $pedido->cliente_id,
+                    'cliente_telefono' => 'N/A'
+                ];
+            })->toArray();
+            
+            return response()->json($result);
+        }
+        
+        // Con tabla clientes - hacer JOIN solo si la tabla existe
+        $result = [];
+        
+        foreach ($pedidos as $pedido) {
+            $cliente = DB::table('clientes')
+                ->where('id', $pedido->cliente_id)
+                ->first();
+                
+            $result[] = [
+                'id' => $pedido->id,
+                'total' => $pedido->total ?? 0,
+                'estado' => $pedido->estado,
+                'fecha_pedido' => $pedido->fecha_pedido,
+                'cliente_nombre' => $cliente->nombre ?? 'Cliente #' . $pedido->cliente_id,
+                'cliente_telefono' => $cliente->telefono ?? 'N/A'
+            ];
+        }
+        
+        return response()->json($result);
+        
+    } catch (\Exception $e) {
+        Log::error('Error en getAvailableOrders', [
+            'message' => $e->getMessage(),
+            'line' => $e->getLine()
+        ]);
+        
+        return response()->json([
+            'error' => true,
+            'message' => $e->getMessage()
+        ], 500);
+    }
+}
+
+
+/**
+ * Obtener repartidores disponibles para asignar jornadas
+ */
+public function getAvailableDriversAPI(Request $request)
+{
+    try {
+        $fecha = $request->input('fecha', now()->toDateString());
+        
+        $repartidores = DB::table('users')
+            ->join('model_has_permissions', 'users.id', '=', 'model_has_permissions.model_id')
+            ->join('permissions', 'model_has_permissions.permission_id', '=', 'permissions.id')
+            ->leftJoin('jornadas_entrega', function($join) use ($fecha) {
+                $join->on('users.id', '=', 'jornadas_entrega.driver_id')
+                     ->where('jornadas_entrega.fecha', $fecha)
+                     ->whereIn('jornadas_entrega.estado', ['asignada', 'en_progreso']);
+            })
+            ->where('permissions.name', 'Motorista')
+            ->whereNull('jornadas_entrega.id') // No tienen jornadas activas
+            ->select('users.id', 'users.name', 'users.email')
+            ->distinct()
+            ->get();
+
+        return response()->json($repartidores);
+
+    } catch (\Exception $e) {
+        Log::error('Error obteniendo repartidores disponibles', [
+            'error' => $e->getMessage(),
+            'fecha' => $request->input('fecha')
+        ]);
+        
+        return response()->json([
+            'error' => 'Error obteniendo repartidores disponibles'
+        ], 500);
+    }
+}
+
+/**
+ * Crear vista para mostrar la gestión de jornadas
+ * Este método maneja la vista principal donde se gestionan las jornadas
+ */
+public function adminJornadasIndex(Request $request)
+{
+    // Verificar permisos
+    if (!auth()->user()->can('Administrador')) {
+        abort(403, 'No tienes permisos para acceder a esta página');
+    }
+
+    $fecha = $request->input('fecha', now()->toDateString());
+    
+    // Obtener estadísticas básicas para la vista
+    $estadisticas = [
+        'total_jornadas' => DB::table('jornadas_entrega')->where('fecha', $fecha)->count(),
+        'jornadas_pendientes' => DB::table('jornadas_entrega')->where('fecha', $fecha)->where('estado', 'planificada')->count(),
+        'jornadas_activas' => DB::table('jornadas_entrega')->where('fecha', $fecha)->whereIn('estado', ['asignada', 'en_progreso'])->count(),
+        'pedidos_disponibles' => DB::table('pedidos')->whereDate('fecha_pedido', $fecha)->whereNull('jornada_id')->count(),
+        'repartidores_libres' => $this->getAvailableDriversCount($fecha)
+    ];
+    
+    return view('admin.jornadas', compact('fecha', 'estadisticas'));
+}
+
+/**
+ * Método auxiliar para contar repartidores disponibles
+ */
+private function getAvailableDriversCount($fecha)
+{
+    return DB::table('users')
+        ->join('model_has_permissions', 'users.id', '=', 'model_has_permissions.model_id')
+        ->join('permissions', 'model_has_permissions.permission_id', '=', 'permissions.id')
+        ->leftJoin('jornadas_entrega', function($join) use ($fecha) {
+            $join->on('users.id', '=', 'jornadas_entrega.driver_id')
+                 ->where('jornadas_entrega.fecha', $fecha)
+                 ->whereIn('jornadas_entrega.estado', ['asignada', 'en_progreso']);
+        })
+        ->where('permissions.name', 'Motorista')
+        ->whereNull('jornadas_entrega.id')
+        ->count();
+}
+
+/**
+ * Método para debugging - obtener información del sistema
+ */
+public function systemStatus(Request $request)
+{
+    // Solo para administradores
+    if (!auth()->user()->can('Administrador')) {
+        return response()->json(['error' => 'No autorizado'], 403);
+    }
+
+    try {
+        $info = [
+            'user' => [
+                'id' => auth()->id(),
+                'name' => auth()->user()->name,
+                'permissions' => auth()->user()->permissions->pluck('name')->toArray()
+            ],
+            'tables_exist' => [
+                'jornadas_entrega' => DB::getSchemaBuilder()->hasTable('jornadas_entrega'),
+                'jornada_pedidos' => DB::getSchemaBuilder()->hasTable('jornada_pedidos'),
+                'pedidos' => DB::getSchemaBuilder()->hasTable('pedidos'),
+                'users' => DB::getSchemaBuilder()->hasTable('users')
+            ],
+            'routes_registered' => [
+                'admin.jornadas.status' => route_exists('admin.jornadas.status'),
+                'admin.pedidos.disponibles' => route_exists('admin.pedidos.disponibles'),
+                'admin.repartidores.disponibles' => route_exists('admin.repartidores.disponibles')
+            ],
+            'database_connection' => DB::connection()->getPdo() ? 'OK' : 'FAILED',
+            'timestamp' => now()->toISOString()
+        ];
+
+        return response()->json([
+            'success' => true,
+            'system_info' => $info
+        ]);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'error' => $e->getMessage()
+        ], 500);
+    }
+}
+
+/**
+ * Método temporal para testing - crear datos de ejemplo
+ */
+public function createSampleData(Request $request)
+{
+    // Solo para administradores y solo en desarrollo
+    if (!auth()->user()->can('Administrador')) {
+        return response()->json(['error' => 'No autorizado'], 403);
+    }
+
+    if (app()->environment('production')) {
+        return response()->json(['error' => 'No disponible en producción'], 403);
+    }
+
+    try {
+        // Crear jornada de ejemplo
+        $jornadaId = DB::table('jornadas_entrega')->insertGetId([
+            'nombre' => 'Jornada de Prueba - ' . now()->format('H:i'),
+            'fecha' => now()->toDateString(),
+            'hora_inicio' => now()->format('H:i'),
+            'tipo' => 'mañana',
+            'estado' => 'planificada',
+            'created_by' => auth()->id(),
+            'created_at' => now(),
+            'updated_at' => now()
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Jornada de prueba creada',
+            'jornada_id' => $jornadaId
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Error creando datos de ejemplo', [
+            'error' => $e->getMessage()
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'error' => 'Error creando datos de ejemplo: ' . $e->getMessage()
+        ], 500);
+    }
+}
+
+/**
+ * Verificar si una ruta existe
+ */
+private function route_exists($name)
+{
+    try {
+        route($name);
+        return true;
+    } catch (\Exception $e) {
+        return false;
+    }
+}
+
+/**
+ * Método de debugging para auto-asignación
+ */
+public function debugAutoAssign(Request $request)
+{
+    if (!auth()->user()->can('Administrador')) {
+        return response()->json(['error' => 'No autorizado'], 403);
+    }
+
+    try {
+        $fecha = $request->input('fecha', now()->toDateString());
+        
+        $debug = [
+            'fecha_consultada' => $fecha,
+            'tablas_existen' => [
+                'jornadas_entrega' => DB::getSchemaBuilder()->hasTable('jornadas_entrega'),
+                'users' => DB::getSchemaBuilder()->hasTable('users'),
+                'model_has_permissions' => DB::getSchemaBuilder()->hasTable('model_has_permissions'),
+                'permissions' => DB::getSchemaBuilder()->hasTable('permissions')
+            ]
+        ];
+
+        // Verificar jornadas pendientes
+        if ($debug['tablas_existen']['jornadas_entrega']) {
+            $jornadasPendientes = DB::table('jornadas_entrega')
+                ->where('fecha', $fecha)
+                ->where('estado', 'planificada')
+                ->whereNull('driver_id')
+                ->get();
+                
+            $debug['jornadas_pendientes'] = [
+                'total' => $jornadasPendientes->count(),
+                'jornadas' => $jornadasPendientes->toArray()
+            ];
+            
+            // Todas las jornadas de la fecha
+            $todasJornadas = DB::table('jornadas_entrega')
+                ->where('fecha', $fecha)
+                ->get();
+                
+            $debug['todas_jornadas'] = [
+                'total' => $todasJornadas->count(),
+                'por_estado' => $todasJornadas->groupBy('estado')->map(function($group) {
+                    return $group->count();
+                })->toArray()
+            ];
+        } else {
+            $debug['jornadas_pendientes'] = ['error' => 'Tabla jornadas_entrega no existe'];
+            $debug['todas_jornadas'] = ['error' => 'Tabla jornadas_entrega no existe'];
+        }
+
+        // Verificar repartidores disponibles
+        if ($debug['tablas_existen']['users'] && $debug['tablas_existen']['permissions']) {
+            $repartidores = DB::table('users')
+                ->join('model_has_permissions', 'users.id', '=', 'model_has_permissions.model_id')
+                ->join('permissions', 'model_has_permissions.permission_id', '=', 'permissions.id')
+                ->where('permissions.name', 'Motorista')
+                ->select('users.id', 'users.name', 'users.email')
+                ->get();
+                
+            $debug['repartidores_sistema'] = [
+                'total' => $repartidores->count(),
+                'lista' => $repartidores->toArray()
+            ];
+            
+            // Repartidores ocupados hoy
+            if ($debug['tablas_existen']['jornadas_entrega']) {
+                $repartidoresOcupados = DB::table('jornadas_entrega')
+                    ->where('fecha', $fecha)
+                    ->whereIn('estado', ['asignada', 'en_progreso'])
+                    ->whereNotNull('driver_id')
+                    ->pluck('driver_id')
+                    ->toArray();
+                    
+                $debug['repartidores_ocupados'] = $repartidoresOcupados;
+                
+                $repartidoresDisponibles = $repartidores->whereNotIn('id', $repartidoresOcupados);
+                $debug['repartidores_disponibles'] = [
+                    'total' => $repartidoresDisponibles->count(),
+                    'lista' => $repartidoresDisponibles->values()->toArray()
+                ];
+            }
+        } else {
+            $debug['repartidores_sistema'] = ['error' => 'Tablas de usuarios/permisos no configuradas'];
+        }
+
+        return response()->json([
+            'success' => true,
+            'debug_info' => $debug
+        ]);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ], 500);
+    }
+}
+
+/**
+ * Crear jornada de prueba para testing
+ */
+public function crearJornadaPrueba(Request $request)
+{
+    if (!auth()->user()->can('Administrador')) {
+        return response()->json(['error' => 'No autorizado'], 403);
+    }
+
+    try {
+        // Verificar que exista la tabla
+        if (!DB::getSchemaBuilder()->hasTable('jornadas_entrega')) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Tabla jornadas_entrega no existe. Ejecuta las migraciones primero.'
+            ]);
+        }
+
+        // Obtener pedidos despachados
+        $pedidosDespachados = DB::table('pedidos')
+            ->where('estado', 'despachado')
+            ->whereDate('fecha_pedido', now()->toDateString())
+            ->limit(2) // Solo 2 para prueba
+            ->pluck('id')
+            ->toArray();
+
+        if (empty($pedidosDespachados)) {
+            return response()->json([
+                'success' => false,
+                'error' => 'No hay pedidos despachados para crear jornada de prueba'
+            ]);
+        }
+
+        // Crear jornada de prueba
+        $jornadaId = DB::table('jornadas_entrega')->insertGetId([
+            'nombre' => 'Jornada de Prueba - ' . now()->format('H:i:s'),
+            'fecha' => now()->toDateString(),
+            'hora_inicio' => now()->addHour()->format('H:i'),
+            'hora_fin' => now()->addHours(3)->format('H:i'),
+            'tipo' => 'mañana',
+            'estado' => 'planificada', // Estado para que pueda ser auto-asignada
+            'created_by' => auth()->id(),
+            'created_at' => now(),
+            'updated_at' => now()
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Jornada de prueba creada',
+            'jornada_id' => $jornadaId,
+            'pedidos_incluidos' => $pedidosDespachados,
+            'estado' => 'planificada',
+            'fecha' => now()->toDateString()
+        ]);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'error' => 'Error creando jornada de prueba: ' . $e->getMessage()
+        ], 500);
+    }
+}
+
+/**
+ * Versión simplificada de auto-asignación para debugging
+ */
+public function autoAssignSimple(Request $request)
+{
+    if (!auth()->user()->can('Administrador')) {
+        return response()->json(['error' => 'No autorizado'], 403);
+    }
+
+    try {
+        $fecha = $request->input('fecha', now()->toDateString());
+
+        // Buscar jornadas pendientes
+        $jornadasPendientes = DB::table('jornadas_entrega')
+            ->where('fecha', $fecha)
+            ->where('estado', 'planificada')
+            ->whereNull('driver_id')
+            ->get();
+
+        if ($jornadasPendientes->isEmpty()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'No hay jornadas pendientes para asignar',
+                'assigned_count' => 0,
+                'debug' => 'Sin jornadas en estado planificada'
+            ]);
+        }
+
+        // Buscar repartidores disponibles (versión simple)
+        $repartidores = DB::table('users')
+            ->join('model_has_permissions', 'users.id', '=', 'model_has_permissions.model_id')
+            ->join('permissions', 'model_has_permissions.permission_id', '=', 'permissions.id')
+            ->where('permissions.name', 'Motorista')
+            ->pluck('users.id')
+            ->toArray();
+
+        if (empty($repartidores)) {
+            return response()->json([
+                'success' => true,
+                'message' => 'No hay repartidores disponibles',
+                'assigned_count' => 0,
+                'debug' => 'Sin repartidores con permiso Motorista'
+            ]);
+        }
+
+        $assignedCount = 0;
+        $repartidorIndex = 0;
+
+        foreach ($jornadasPendientes as $jornada) {
+            if ($repartidorIndex >= count($repartidores)) {
+                break; // No más repartidores disponibles
+            }
+
+            $driverId = $repartidores[$repartidorIndex];
+
+            // Asignar jornada
+            DB::table('jornadas_entrega')
+                ->where('id', $jornada->id)
+                ->update([
+                    'driver_id' => $driverId,
+                    'estado' => 'asignada',
+                    'fecha_asignacion' => now(),
+                    'updated_at' => now()
+                ]);
+
+            $assignedCount++;
+            $repartidorIndex++;
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => "Se asignaron {$assignedCount} jornadas automáticamente",
+            'assigned_count' => $assignedCount,
+            'jornadas_procesadas' => $jornadasPendientes->count(),
+            'repartidores_disponibles' => count($repartidores)
+        ]);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'error' => $e->getMessage()
+        ], 500);
+    }
+    
+}
+
+/**
+ * Crear jornada automática para un repartidor con sus pedidos asignados
+ */
+private function crearJornadaAutomatica($repartidor, $pedidos, $fecha)
+{
+    $horaInicio = now()->format('H:i');
+    $horaFin = now()->addHours(4)->format('H:i'); // 4 horas estimadas
+    
+    $jornadaId = DB::table('jornadas_entrega')->insertGetId([
+        'nombre' => "Jornada {$repartidor->name} - " . now()->format('H:i'),
+        'fecha' => $fecha,
+        'hora_inicio' => $horaInicio,
+        'hora_fin' => $horaFin,
+        'tipo' => $this->determinarTipoJornada(),
+        'estado' => 'asignada', // Directamente asignada
+        'driver_id' => $repartidor->id,
+        'fecha_asignacion' => now(),
+        'created_by' => auth()->id(),
+        'created_at' => now(),
+        'updated_at' => now()
+    ]);
+
+    // Generar ruta optimizada usando VROOM
+    $this->generarRutaOptimizada($jornadaId, $repartidor->id, $pedidos);
+
+    return $jornadaId;
+}
+
+/**
+ * Actualizar estado de pedidos distribuidos
+ */
+private function actualizarEstadoPedidos($pedidosIds)
+{
+    $updateData = ['estado' => 'en_ruta'];
+    
+    // Solo agregar campos si existen en la tabla
+    if (DB::getSchemaBuilder()->hasColumn('pedidos', 'updated_at')) {
+        $updateData['updated_at'] = now();
+    }
+
+    DB::table('pedidos')
+        ->whereIn('id', $pedidosIds)
+        ->update($updateData);
+}
+
+/**
+ * Generar ruta optimizada para una jornada
+ */
+private function generarRutaOptimizada($jornadaId, $repartidorId, $pedidos)
+{
+    try {
+        // Preparar datos para VROOM
+        $jobs = array_map(function($pedido) {
+            return [
+                "id" => $pedido->id,
+                "location" => [(float) $pedido->longitud, (float) $pedido->latitud],
+                "delivery" => [1]
+            ];
+        }, $pedidos);
+
+        $vehicles = [[
+            "id" => 1,
+            "start" => [-87.1875, 14.0667], // Punto de partida base
+            "capacity" => [count($jobs)]
+        ]];
+
+        $data = [
+            "vehicles" => $vehicles,
+            "jobs" => $jobs,
+            "options" => ["g" => true]
+        ];
+
+        // Llamar a VROOM
+        $vroomUrl = 'https://lacampañafoodservice.com/vroom/';
+        $response = Http::timeout(30)->post($vroomUrl, $data);
+
+        if ($response->successful()) {
+            $result = $response->json();
+            
+            // Guardar ruta en la jornada
+            DB::table('jornadas_entrega')
+                ->where('id', $jornadaId)
+                ->update([
+                    'route_geometry' => $result['routes'][0]['geometry'] ?? null,
+                    'route_data' => json_encode($result),
+                    'updated_at' => now()
+                ]);
+                
+            Log::info('Ruta optimizada generada', [
+                'jornada_id' => $jornadaId,
+                'repartidor_id' => $repartidorId,
+                'pedidos_count' => count($jobs)
+            ]);
+        }
+    } catch (\Exception $e) {
+        Log::error('Error generando ruta optimizada', [
+            'jornada_id' => $jornadaId,
+            'error' => $e->getMessage()
+        ]);
+    }
+}
+
+/**
+ * Ver estado actual de la distribución
+ */
+public function verDistribucionActual(Request $request)
+{
+    try {
+        $fecha = $request->input('fecha', now()->toDateString());
+        
+        $jornadas = DB::table('jornadas_entrega as j')
+            ->join('users as u', 'j.driver_id', '=', 'u.id')
+            ->select([
+                'j.id as jornada_id',
+                'j.nombre as jornada_nombre',
+                'j.estado',
+                'u.id as repartidor_id',
+                'u.name as repartidor_nombre',
+                DB::raw('(SELECT COUNT(*) FROM pedidos WHERE jornada_id = j.id) as pedidos_asignados'),
+                DB::raw('(SELECT COUNT(*) FROM pedidos WHERE jornada_id = j.id AND estado = "entregado") as pedidos_entregados'),
+                DB::raw('(SELECT COUNT(*) FROM pedidos WHERE jornada_id = j.id AND estado = "devuelto") as pedidos_devueltos')
+            ])
+            ->where('j.fecha', $fecha)
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'fecha' => $fecha,
+            'jornadas' => $jornadas,
+            'resumen' => [
+                'total_jornadas' => $jornadas->count(),
+                'total_pedidos_asignados' => $jornadas->sum('pedidos_asignados'),
+                'total_entregados' => $jornadas->sum('pedidos_entregados'),
+                'total_devueltos' => $jornadas->sum('pedidos_devueltos')
+            ]
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Error en verDistribucionActual', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+        
+        return response()->json([
+            'success' => false,
+            'error' => $e->getMessage()
+        ], 500);
+    }
+}
+
+/**
+ * Reiniciar distribución (solo para testing)
+ */
+public function reiniciarDistribucion(Request $request)
+{
+    if (!auth()->user()->can('Administrador')) {
+        return response()->json(['error' => 'No autorizado'], 403);
+    }
+
+    try {
+        $fecha = $request->input('fecha', now()->toDateString());
+
+        // Eliminar jornadas del día
+        $jornadasEliminadas = DB::table('jornadas_entrega')
+            ->where('fecha', $fecha)
+            ->delete();
+
+        // Resetear pedidos a estado "despachado"
+        $updateData = ['estado' => 'despachado'];
+        
+        if (DB::getSchemaBuilder()->hasColumn('pedidos', 'jornada_id')) {
+            $updateData['jornada_id'] = null;
+        }
+        if (DB::getSchemaBuilder()->hasColumn('pedidos', 'vehiculo_asignado')) {
+            $updateData['vehiculo_asignado'] = null;
+        }
+        if (DB::getSchemaBuilder()->hasColumn('pedidos', 'updated_at')) {
+            $updateData['updated_at'] = now();
+        }
+
+        $pedidosReseteados = DB::table('pedidos')
+            ->whereDate('fecha_pedido', $fecha)
+            ->whereIn('estado', ['en_ruta', 'asignado_jornada'])
+            ->update($updateData);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Distribución reiniciada correctamente',
+            'jornadas_eliminadas' => $jornadasEliminadas,
+            'pedidos_reseteados' => $pedidosReseteados
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Error reiniciando distribución', [
+            'error' => $e->getMessage()
+        ]);
+        
+        return response()->json([
+            'success' => false,
+            'error' => $e->getMessage()
+        ], 500);
+    }
+}
+/**
+ * Distribuir pedidos usando VROOM para optimización de rutas
+ */
+public function distribuirPedidosAutomaticamente(Request $request)
+{
+    try {
+        $fecha = $request->input('fecha', now()->toDateString());
+        
+        // 1. Obtener pedidos despachados con coordenadas válidas
+        $pedidosDespachados = DB::table('pedidos')
+            ->join('clientes', 'pedidos.cliente_id', '=', 'clientes.id')
+            ->select(
+                'pedidos.id',
+                'pedidos.latitud',
+                'pedidos.longitud',
+                'pedidos.total',
+                'clientes.nombre as cliente_nombre',
+                'clientes.telefono as cliente_telefono'
+            )
+            ->where('pedidos.estado', 'despachado')
+            ->whereDate('pedidos.fecha_pedido', $fecha)
+            ->whereNotNull('pedidos.latitud')
+            ->whereNotNull('pedidos.longitud')
+            ->where('pedidos.latitud', '!=', 0)
+            ->where('pedidos.longitud', '!=', 0)
+            ->get();
+
+        if ($pedidosDespachados->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No hay pedidos despachados con coordenadas válidas para distribuir'
+            ]);
+        }
+
+        // 2. Obtener repartidores disponibles
+        $repartidores = DB::table('users')
+            ->join('model_has_permissions', 'users.id', '=', 'model_has_permissions.model_id')
+            ->join('permissions', 'model_has_permissions.permission_id', '=', 'permissions.id')
+            ->where('permissions.name', 'Motorista')
+            ->select('users.id', 'users.name', 'users.email')
+            ->get();
+
+        if ($repartidores->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No hay repartidores disponibles'
+            ]);
+        }
+
+        // 3. Preparar datos para VROOM
+        $jobs = [];
+        foreach ($pedidosDespachados as $pedido) {
+            $jobs[] = [
+                "id" => $pedido->id,
+                "location" => [(float) $pedido->longitud, (float) $pedido->latitud],
+                "delivery" => [1],
+                "cliente" => $pedido->cliente_nombre,
+                "telefono" => $pedido->cliente_telefono
+            ];
+        }
+
+        $vehicles = [];
+        foreach ($repartidores as $index => $repartidor) {
+            $vehicles[] = [
+                "id" => $index + 1,
+                "driver_id" => $repartidor->id,
+                "driver_name" => $repartidor->name,
+                "start" => [-87.1875, 14.0667], // Punto base
+                "capacity" => [count($jobs)] // Capacidad suficiente para todos
+            ];
+        }
+
+        $vroomData = [
+            "vehicles" => $vehicles,
+            "jobs" => $jobs,
+            "options" => ["g" => true]
+        ];
+
+        // 4. Llamar a VROOM
+        $vroomUrl = 'https://lacampañafoodservice.com/vroom/';
+        $response = Http::timeout(30)->post($vroomUrl, $vroomData);
+
+        if ($response->failed()) {
+            Log::error('Error en VROOM API', [
+                'status' => $response->status(),
+                'body' => $response->body()
+            ]);
+            return response()->json([
+                'success' => false,
+                'error' => 'Error al calcular rutas optimizadas'
+            ], 500);
+        }
+
+        $vroomResult = $response->json();
+
+        if (!isset($vroomResult['routes']) || empty($vroomResult['routes'])) {
+            return response()->json([
+                'success' => false,
+                'error' => 'No se pudieron generar rutas optimizadas'
+            ], 500);
+        }
+
+        // 5. Crear jornadas con las rutas optimizadas de VROOM
+        $distribucion = [];
+        $totalPedidosAsignados = 0;
+
+        foreach ($vroomResult['routes'] as $index => $route) {
+            if (empty($route['steps'])) {
+                continue; // Skip rutas sin pasos
+            }
+
+            $vehicle = $vehicles[$index];
+            $repartidor = $repartidores->firstWhere('id', $vehicle['driver_id']);
+            
+            if (!$repartidor) {
+                continue;
+            }
+
+            // Extraer solo los pedidos (jobs) de los pasos
+            $pedidosEnRuta = [];
+            foreach ($route['steps'] as $step) {
+                if ($step['type'] === 'job') {
+                    $pedidosEnRuta[] = $step['id'];
+                }
+            }
+
+            if (empty($pedidosEnRuta)) {
+                continue; // Skip si no hay pedidos asignados
+            }
+
+            // Crear jornada
+            $jornadaId = DB::table('jornadas_entrega')->insertGetId([
+                'nombre' => "Ruta Optimizada {$repartidor->name} - " . now()->format('H:i'),
+                'fecha' => $fecha,
+                'hora_inicio' => now()->format('H:i'),
+                'tipo' => $this->determinarTipoJornada(),
+                'estado' => 'asignada',
+                'driver_id' => $repartidor->id,
+                'created_by' => auth()->id(),
+                'created_at' => now(),
+                'updated_at' => now(),
+                'route_geometry' => $route['geometry'] ?? null,
+                'route_data' => json_encode($route)
+            ]);
+
+            // Asignar pedidos a la jornada y repartidor
+            if (DB::getSchemaBuilder()->hasColumn('pedidos', 'jornada_id')) {
+                DB::table('pedidos')
+                    ->whereIn('id', $pedidosEnRuta)
+                    ->update(['jornada_id' => $jornadaId]);
+            }
+
+            if (DB::getSchemaBuilder()->hasColumn('pedidos', 'vehiculo_asignado')) {
+                DB::table('pedidos')
+                    ->whereIn('id', $pedidosEnRuta)
+                    ->update(['vehiculo_asignado' => $repartidor->id]);
+            }
+
+            $distribucion[] = [
+                'repartidor_id' => $repartidor->id,
+                'repartidor_name' => $repartidor->name,
+                'pedidos_asignados' => count($pedidosEnRuta),
+                'pedidos_ids' => $pedidosEnRuta,
+                'jornada_id' => $jornadaId,
+                'route_distance' => $route['distance'] ?? 0,
+                'route_duration' => $route['duration'] ?? 0
+            ];
+
+            $totalPedidosAsignados += count($pedidosEnRuta);
+        }
+
+        if (empty($distribucion)) {
+            return response()->json([
+                'success' => false,
+                'error' => 'No se pudo crear ninguna ruta optimizada'
+            ]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => "Se distribuyeron {$totalPedidosAsignados} pedidos entre " . count($distribucion) . " repartidores usando rutas optimizadas",
+            'distribucion' => $distribucion,
+            'vroom_info' => [
+                'total_distance' => array_sum(array_column($distribucion, 'route_distance')),
+                'optimization_used' => true,
+                'routes_generated' => count($vroomResult['routes'])
+            ]
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Error en distribución automática con VROOM', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+        
+        return response()->json([
+            'success' => false,
+            'error' => 'Error en la distribución: ' . $e->getMessage()
+        ], 500);
+    }
+}
+
+/**
+ * Determinar tipo de jornada según la hora
+ */
+private function determinarTipoJornada()
+{
+    $hora = now()->hour;
+    
+    if ($hora < 12) return 'mañana';
+    if ($hora < 18) return 'tarde';
+    return 'noche';
+}
+
+/**
+ * Método de respaldo sin VROOM (distribución simple)
+ */
+public function distribuirSinVroom(Request $request)
+{
+    try {
+        $fecha = $request->input('fecha', now()->toDateString());
+        
+        $pedidosDespachados = DB::table('pedidos')
+            ->where('estado', 'despachado')
+            ->whereDate('fecha_pedido', $fecha)
+            ->get();
+
+        $repartidores = DB::table('users')
+            ->join('model_has_permissions', 'users.id', '=', 'model_has_permissions.model_id')
+            ->join('permissions', 'model_has_permissions.permission_id', '=', 'permissions.id')
+            ->where('permissions.name', 'Motorista')
+            ->get();
+
+        $totalPedidos = $pedidosDespachados->count();
+        $totalRepartidores = $repartidores->count();
+        
+        $distribucion = [];
+        $indicePedido = 0;
+
+        foreach ($repartidores as $index => $repartidor) {
+            // Calcular pedidos para este repartidor
+            $pedidosPorRepartidor = intval($totalPedidos / $totalRepartidores);
+            $pedidosExtra = $totalPedidos % $totalRepartidores;
+            $pedidosParaEste = $pedidosPorRepartidor + ($index < $pedidosExtra ? 1 : 0);
+
+            if ($pedidosParaEste === 0) {
+                continue;
+            }
+
+            $pedidosAsignados = $pedidosDespachados->slice($indicePedido, $pedidosParaEste);
+            $indicePedido += $pedidosParaEste;
+
+            if ($pedidosAsignados->isNotEmpty()) {
+                $jornadaId = DB::table('jornadas_entrega')->insertGetId([
+                    'nombre' => "Jornada {$repartidor->name} - " . now()->format('H:i'),
+                    'fecha' => $fecha,
+                    'hora_inicio' => now()->format('H:i'),
+                    'tipo' => $this->determinarTipoJornada(),
+                    'estado' => 'asignada',
+                    'driver_id' => $repartidor->id,
+                    'created_by' => auth()->id(),
+                    'created_at' => now(),
+                    'updated_at' => now()
+                ]);
+
+                if (DB::getSchemaBuilder()->hasColumn('pedidos', 'jornada_id')) {
+                    DB::table('pedidos')
+                        ->whereIn('id', $pedidosAsignados->pluck('id'))
+                        ->update(['jornada_id' => $jornadaId]);
+                }
+
+                if (DB::getSchemaBuilder()->hasColumn('pedidos', 'vehiculo_asignado')) {
+                    DB::table('pedidos')
+                        ->whereIn('id', $pedidosAsignados->pluck('id'))
+                        ->update(['vehiculo_asignado' => $repartidor->id]);
+                }
+
+                $distribucion[] = [
+                    'repartidor_name' => $repartidor->name,
+                    'pedidos_asignados' => $pedidosAsignados->count(),
+                    'pedidos_ids' => $pedidosAsignados->pluck('id')->toArray(),
+                    'jornada_id' => $jornadaId
+                ];
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => "Se distribuyeron {$totalPedidos} pedidos entre {$totalRepartidores} repartidores (distribución equitativa)",
+            'distribucion' => $distribucion
+        ]);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'error' => $e->getMessage()
+        ], 500);
+    }
+}
+
+public function getPedidosDelDia(Request $request)
+{
+    try {
+        $fecha = $request->input('fecha', now()->toDateString());
+        
+        $pedidos = DB::table('pedidos')
+            ->leftJoin('clientes', 'pedidos.cliente_id', '=', 'clientes.id')
+            ->leftJoin('jornadas_entrega', 'pedidos.jornada_id', '=', 'jornadas_entrega.id')
+            ->leftJoin('users', 'jornadas_entrega.driver_id', '=', 'users.id')
+            ->select([
+                'pedidos.id',
+                'pedidos.estado',
+                'pedidos.total',
+                'pedidos.jornada_id',
+                'pedidos.fecha_pedido',
+                'clientes.nombre as cliente_nombre',
+                'clientes.telefono as cliente_telefono',
+                'jornadas_entrega.nombre as jornada_nombre',
+                'users.name as repartidor_nombre'
+            ])
+            ->whereDate('pedidos.fecha_pedido', $fecha)
+            ->orderBy('pedidos.estado')
+            ->orderBy('pedidos.id')
+            ->get();
+
+        // Categorizar pedidos
+        $categorias = [
+            'despachados_sin_jornada' => $pedidos->where('estado', 'despachado')->whereNull('jornada_id'),
+            'despachados_en_jornada' => $pedidos->where('estado', 'despachado')->whereNotNull('jornada_id'),
+            'entregados' => $pedidos->where('estado', 'entregado'),
+            'devueltos' => $pedidos->where('estado', 'devuelto'),
+            'otros_estados' => $pedidos->whereNotIn('estado', ['despachado', 'entregado', 'devuelto'])
+        ];
+
+        return response()->json([
+            'success' => true,
+            'fecha' => $fecha,
+            'pedidos' => $pedidos,
+            'categorias' => [
+                'despachados_sin_jornada' => $categorias['despachados_sin_jornada']->values()->toArray(),
+                'despachados_en_jornada' => $categorias['despachados_en_jornada']->values()->toArray(),
+                'entregados' => $categorias['entregados']->values()->toArray(),
+                'devueltos' => $categorias['devueltos']->values()->toArray(),
+                'otros_estados' => $categorias['otros_estados']->values()->toArray()
+            ],
+            'resumen' => [
+                'total' => $pedidos->count(),
+                'despachados_sin_jornada' => $categorias['despachados_sin_jornada']->count(),
+                'despachados_en_jornada' => $categorias['despachados_en_jornada']->count(),
+                'entregados' => $categorias['entregados']->count(),
+                'devueltos' => $categorias['devueltos']->count(),
+                'otros_estados' => $categorias['otros_estados']->count()
+            ]
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Error obteniendo pedidos del día', [
+            'error' => $e->getMessage(),
+            'fecha' => $request->input('fecha')
+        ]);
+        
+        return response()->json([
+            'success' => false,
+            'error' => $e->getMessage()
+        ], 500);
+    }
+}
+public function vistaDistribucionPedidos()
+{
+    return view('admin.jornadas');
+}
 }
 
  

@@ -145,4 +145,88 @@ Route::get('/delivery-status/{driverId?}', [VroomController::class, 'getDelivery
 Route::get('/delivery-history/{deliveryId}', [VroomController::class, 'getDeliveryHistory'])->name('delivery.history');
 Route::post('/reset-delivery-status', [VroomController::class, 'resetDeliveryStatus'])->name('delivery.reset');
 
+Route::middleware(['auth'])->group(function () {
+
+    // === RUTAS EXISTENTES DEL SISTEMA DE JORNADAS ===
+
+    // Rutas principales de jornadas (que ya tienes)
+    Route::post('/admin/jornadas/create', [VroomController::class, 'createNewShift'])
+        ->name('admin.jornadas.create')
+        ->can('Administrador');
+
+    Route::post('/admin/jornadas/assign', [VroomController::class, 'assignShiftToDriver'])
+        ->name('admin.jornadas.assign')
+        ->can('Administrador');
+
+    Route::get('/admin/jornadas/status', [VroomController::class, 'getShiftStatus'])
+        ->name('admin.jornadas.status')
+        ->can('Administrador');
+
+    // === RUTAS FALTANTES QUE CAUSAN EL ERROR 403 ===
+
+    // Ruta para obtener pedidos disponibles
+    Route::get('/admin/pedidos/disponibles', [VroomController::class, 'getAvailableOrders'])
+        ->name('admin.pedidos.disponibles')
+        ->can('Administrador');
+
+    // Ruta para obtener repartidores disponibles  
+    Route::get('/admin/repartidores/disponibles', [VroomController::class, 'getAvailableDriversAPI'])
+        ->name('admin.repartidores.disponibles')
+        ->can('Administrador');
+
+    // === RUTAS ADICIONALES PARA EL SISTEMA COMPLETO ===
+
+    // Motoristas - jornada actual
+    Route::get('/motorista/jornadas/current', [VroomController::class, 'getCurrentShift'])
+        ->name('motorista.jornadas.current')
+        ->can('Motorista');
+
+    Route::post('/motorista/jornadas/start', [VroomController::class, 'startShift'])
+        ->name('motorista.jornadas.start')
+        ->can('Motorista');
+
+    Route::post('/motorista/jornadas/complete', [VroomController::class, 'completeShiftAndAssignNext'])
+        ->name('motorista.jornadas.complete')
+        ->can('Motorista');
+
+    // Auto-asignación de jornadas
+    Route::post('/sistema/auto-assign-next', [VroomController::class, 'autoAssignNextShifts'])
+        ->name('sistema.auto_assign')
+        ->can('Administrador');
+
+    // Dashboard de métricas
+    Route::get('/api/dashboard/metrics', [VroomController::class, 'getDashboardMetrics'])
+        ->name('api.dashboard.metrics')
+        ->can('Administrador');
+
+    // Tracking de ubicación
+    Route::post('/api/driver/update-location', [VroomController::class, 'updateDriverLocation'])
+        ->name('api.driver.update_location')
+        ->can('Motorista');
+
+    // === RUTA PARA LA VISTA DE GESTIÓN DE JORNADAS ===
+
+    Route::get('/admin/jornadas', [VroomController::class, 'shiftDashboard'])
+        ->name('admin.jornadas')
+        ->can('Administrador');
+
+    Route::get('/admin/debug-autoassign', [VroomController::class, 'debugAutoAssign'])
+        ->name('admin.debug_autoassign')
+        ->can('Administrador');
+
+    Route::get('/admin/pedidos-del-dia', [VroomController::class, 'getPedidosDelDia'])
+        ->name('admin.pedidos_del_dia')
+        ->can('Administrador');
+});
+Route::post('/admin/distribuir-pedidos-automaticamente', [VroomController::class, 'distribuirPedidosAutomaticamente'])
+    ->name('admin.distribuir_automatico')
+    ->can('Administrador');
+
+Route::get('/admin/ver-distribucion-actual', [VroomController::class, 'verDistribucionActual'])
+    ->name('admin.ver_distribucion')
+    ->can('Administrador');
+
+Route::post('/admin/reiniciar-distribucion', [VroomController::class, 'reiniciarDistribucion'])
+    ->name('admin.reiniciar_distribucion')
+    ->can('Administrador');
 require __DIR__ . '/auth.php';
