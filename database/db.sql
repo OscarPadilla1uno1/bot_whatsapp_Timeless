@@ -70,7 +70,7 @@ CREATE TABLE pagos (
     id INT AUTO_INCREMENT PRIMARY KEY,
     pedido_id INT NOT NULL, -- FK hacia pedidos
     metodo_pago ENUM('tarjeta', 'efectivo', 'transferencia') NOT NULL,
-    estado_pago ENUM('pendiente', 'confirmado', 'fallido') DEFAULT 'pendiente',
+    estado_pago ENUM('pendiente', 'confirmado', 'fallido', 'reembolsado') DEFAULT 'pendiente',
     fecha_pago DATETIME,
     referencia_transaccion VARCHAR(100),
     FOREIGN KEY (pedido_id) REFERENCES pedidos(id) ON DELETE CASCADE

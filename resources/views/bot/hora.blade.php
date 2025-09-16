@@ -274,20 +274,27 @@
         updateClock();
         
         // Función para probar APIs
-        function testApi(endpoint) {
-            const resultElem = document.getElementById('apiResult');
-            if (resultElem) {
-                resultElem.innerHTML = 'Probando API...';
-                
-                fetch(`/api/bot/${endpoint}`)
-                    .then(response => response.json())
-                    .then(data => {
-                        resultElem.innerHTML = JSON.stringify(data, null, 2);
-                    })
-                    .catch(error => {
-                        resultElem.innerHTML = `Error: ${error.message}`;
-                    });
-            }
+        // Laravel te genera las rutas con name()
+    const apiRoutes = {
+        configuracion: "{{ route('bot.configuracion') }}",
+        activo: "{{ route('bot.activo') }}"
+    };
+
+    function testApi(endpoint) {
+        const resultElem = document.getElementById('apiResult');
+        if (resultElem) {
+            resultElem.innerHTML = 'Probando API...';
+
+            // aquí usas el name de la ruta según el endpoint
+            fetch(apiRoutes[endpoint])
+                .then(response => response.json())
+                .then(data => {
+                    resultElem.innerHTML = JSON.stringify(data, null, 2);
+                })
+                .catch(error => {
+                    resultElem.innerHTML = `Error: ${error.message}`;
+                });
         }
+    }
     </script>
 </x-app-layout>

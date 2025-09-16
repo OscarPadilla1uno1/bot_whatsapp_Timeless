@@ -61,6 +61,10 @@ class VerificarPagosPendientes extends Command
                 if ($response->status()->isApproved()) {
                     $pago->estado_pago = 'confirmado';
                     Log::info("✅ Pago aprobado: Pedido ID {$pago->pedido_id}");
+                    $payments = $response->toArray()['payment'] ?? [];
+                    if (!empty($payments) && !empty($payments[0]['internalReference'])) {
+                        $pago->internal_reference = $payments[0]['internalReference'];
+                    }
                 } elseif ($estado === 'REJECTED' || $estado === 'FAILED') {
                     $pago->estado_pago = 'fallido';
                     Log::info("❌ Pago rechazado o fallido: Pedido ID {$pago->pedido_id}");
