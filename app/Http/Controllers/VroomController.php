@@ -274,10 +274,13 @@ class VroomController extends Controller
                 'pedidos.id',
                 'pedidos.latitud',
                 'pedidos.longitud',
-                'clientes.nombre as cliente_nombre'
+                'clientes.nombre as cliente_nombre',
+                'clientes.telefono as cliente_telefono'
+            
             )
             ->whereNotNull('pedidos.latitud')
             ->whereNotNull('pedidos.longitud')
+            ->whereDate('pedidos.fecha_pedido', now()->toDateString())
             ->get();
 
         return $pedidos->map(function ($pedido) {
@@ -285,7 +288,8 @@ class VroomController extends Controller
                 "id" => $pedido->id,
                 "location" => [(float) $pedido->longitud, (float) $pedido->latitud],
                 "delivery" => [1],
-                "cliente" => $pedido->cliente_nombre
+                "cliente" => $pedido->cliente_nombre,
+                "telefono" => $pedido->cliente_telefono
             ];
         })->toArray();
     }
@@ -531,7 +535,8 @@ class VroomController extends Controller
                 $job = collect($jobs)->firstWhere('id', $step['id']);
                 if ($job) {
                     $formatted['job_details'] = [
-                        'cliente' => $job['cliente'] ?? 'Desconocido'
+                        'cliente' => $job['cliente'] ?? 'Desconocido',
+                        'telefono' => $job['telefono'] ?? 'Desconocido'
                     ];
                 }
             }

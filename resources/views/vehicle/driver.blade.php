@@ -1,19 +1,20 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <title>Sistema de Entregas Avanzado - {{ $driver->name }}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    
+
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    
+
     <!-- Leaflet Routing Machine CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
-    
+
     <!-- Leaflet GPS CSS (usando CDN más confiable) -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet-gps@1.7.0/dist/leaflet-gps.min.css" />
-    
+
     <style>
         * {
             margin: 0;
@@ -90,9 +91,17 @@
         }
 
         @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.5; }
-            100% { opacity: 1; }
+            0% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+
+            100% {
+                opacity: 1;
+            }
         }
 
         .driver-info {
@@ -430,7 +439,7 @@
         /* Estilos para el control GPS */
         .leaflet-gps-control {
             background: #fff;
-            border: 2px solid rgba(0,0,0,0.2);
+            border: 2px solid rgba(0, 0, 0, 0.2);
             border-radius: 4px;
         }
 
@@ -448,7 +457,7 @@
             color: white;
             padding: 12px 20px;
             border-radius: 6px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
             z-index: 2000;
             font-weight: bold;
             max-width: 300px;
@@ -469,11 +478,232 @@
                 transform: translateX(100%);
                 opacity: 0;
             }
+
             to {
                 transform: translateX(0);
                 opacity: 1;
             }
         }
+
+        .phone-link {
+            color: #007bff;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .phone-link:hover {
+            text-decoration: underline;
+        }
+
+        .phone-number {
+            cursor: pointer;
+            color: #007bff;
+        }
+
+        .phone-number:hover {
+            background-color: #f8f9fa;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+
+        .phone-actions {
+            margin-top: 5px;
+        }
+
+        .btn-call,
+        .btn-copy {
+            margin-right: 10px;
+            padding: 5px 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: white;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        /* Estilos para teléfono clickeable - acorde con tu tema */
+        .phone-link {
+            color: #007bff;
+            text-decoration: none;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            padding: 4px 8px;
+            border-radius: 4px;
+            display: inline-block;
+        }
+
+        .phone-link:hover {
+            background-color: #e9ecef;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0, 123, 255, 0.2);
+        }
+
+        .phone-number {
+            cursor: pointer;
+            color: #007bff;
+            font-weight: bold;
+            padding: 4px 8px;
+            border-radius: 4px;
+            transition: all 0.3s ease;
+            display: inline-block;
+        }
+
+        .phone-number:hover {
+            background-color: #e9ecef;
+            transform: translateY(-1px);
+        }
+
+        .phone-actions {
+            margin-top: 8px;
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn-call,
+        .btn-copy {
+            flex: 1;
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            text-align: center;
+        }
+
+        .btn-call {
+            background-color: #28a745;
+            color: white;
+        }
+
+        .btn-call:hover {
+            background-color: #1e7e34;
+            transform: translateY(-1px);
+        }
+
+        .btn-copy {
+            background-color: #007bff;
+            color: white;
+        }
+
+        .btn-copy:hover {
+            background-color: #0056b3;
+            transform: translateY(-1px);
+        }
+
+        /* Variante con ícono de teléfono */
+        .delivery-client.with-phone {
+            position: relative;
+            padding-left: 20px;
+        }
+
+        .delivery-client.with-phone::before {
+            content: "📞";
+            position: absolute;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 12px;
+        }
+
+        /* Para notificación de copiado */
+        .copy-notification {
+            position: fixed;
+            top: 100px;
+            right: 20px;
+            background: #28a745;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            z-index: 2000;
+            animation: slideIn 0.3s ease;
+        }
+        /* Contenedor de contacto */
+.delivery-contact {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid #e9ecef;
+}
+
+.phone-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.phone-display {
+    font-size: 13px;
+    color: #666;
+    flex: 1;
+}
+
+.phone-display.no-phone {
+    font-style: italic;
+    color: #999;
+}
+
+.phone-actions {
+    display: flex;
+    gap: 4px;
+    margin: 0;
+}
+
+.btn-call, .btn-copy {
+    padding: 4px 8px;
+    border: none;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-decoration: none;
+    min-width: 32px;
+    text-align: center;
+}
+
+.btn-call {
+    background-color: #28a745;
+    color: white;
+}
+
+.btn-call:hover {
+    background-color: #1e7e34;
+    transform: translateY(-1px);
+}
+
+.btn-copy {
+    background-color: #007bff;
+    color: white;
+}
+
+.btn-copy:hover {
+    background-color: #0056b3;
+    transform: translateY(-1px);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .phone-container {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
+    }
+    
+    .phone-actions {
+        align-self: stretch;
+    }
+    
+    .btn-call, .btn-copy {
+        flex: 1;
+        padding: 6px 12px;
+    }
+}
     </style>
 </head>
 
@@ -488,7 +718,7 @@
             </h3>
             <span class="toggle-icon" id="toggle-icon">▼</span>
         </div>
-        
+
         <div class="panel-content" id="panel-content">
             <div class="driver-info">
                 <p><strong>Email:</strong> {{ $driver->email }}</p>
@@ -499,101 +729,119 @@
             </div>
 
             @if($route)
-                <div class="delivery-stats">
-                    <div class="stat-box">
-                        <div class="stat-number" id="completed-count">0</div>
-                        <div class="stat-label">Completadas</div>
+                    <div class="delivery-stats">
+                        <div class="stat-box">
+                            <div class="stat-number" id="completed-count">0</div>
+                            <div class="stat-label">Completadas</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-number" id="pending-count">{{ count($route['steps']) }}</div>
+                            <div class="stat-label">Pendientes</div>
+                        </div>
                     </div>
-                    <div class="stat-box">
-                        <div class="stat-number" id="pending-count">{{ count($route['steps']) }}</div>
-                        <div class="stat-label">Pendientes</div>
-                    </div>
-                </div>
 
-                <div class="route-controls">
-                    <button class="btn-primary" onclick="showOptimizedRoute()">
-                        📍 Mostrar Ruta
-                    </button>
-                    <button class="btn-success" id="follow-button" onclick="toggleRealTimeTracking()">
-                        🚀 Seguimiento
-                    </button>
-                    <button class="btn-success" id="navigation-button" onclick="toggleNavigation()">
-                        🧭 Navegación
-                    </button>
-                    <button class="btn-warning" onclick="recalculateRoute()">
-                        🔄 Recalcular
-                    </button>
-                    <button class="btn-danger" onclick="emergencyStop()">
-                        ⚠️ Emergencia
-                    </button>
-                </div>
-
-                <!-- Panel de navegación -->
-                <div id="navigation-panel" style="display: none; margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #007bff;">
-                    <h4 style="margin: 0 0 10px 0; color: #007bff;">🧭 Navegación Activa</h4>
-                    <div id="current-instruction" style="font-size: 16px; font-weight: bold; margin-bottom: 10px; color: #333;">
-                        Iniciando navegación...
-                    </div>
-                    <div id="distance-info" style="font-size: 14px; color: #666; margin-bottom: 10px;">
-                        Distancia: Calculando...
-                    </div>
-                    <div id="next-turn" style="font-size: 14px; color: #666; margin-bottom: 10px;">
-                        Próximo giro: Calculando...
-                    </div>
-                    <div style="display: flex; gap: 10px; margin-top: 10px;">
-                        <button onclick="toggleVoiceNavigation()" id="voice-button" style="padding: 5px 10px; border: none; border-radius: 4px; background: #28a745; color: white; cursor: pointer;">
-                            🔊 Voz ON
+                    <div class="route-controls">
+                        <button class="btn-primary" onclick="showOptimizedRoute()">
+                            📍 Mostrar Ruta
                         </button>
-                        <button onclick="centerOnLocation()" style="padding: 5px 10px; border: none; border-radius: 4px; background: #17a2b8; color: white; cursor: pointer;">
-                            📍 Centrar
+                        <button class="btn-success" id="navigation-button" onclick="toggleNavigation()">
+                            🧭 Navegación
+                        </button>
+                        <button class="btn-warning" onclick="recalculateRoute()">
+                            🔄 Recalcular
                         </button>
                     </div>
-                </div>
 
-                <div class="legend">
-                    <h4>Leyenda del Mapa</h4>
-                    <div class="legend-item">
-                        <div class="legend-color" style="background-color: #28a745;"></div>
-                        <span>Ruta completada</span>
+                    <!-- Panel de navegación -->
+                    <div id="navigation-panel"
+                        style="display: none; margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #007bff;">
+                        <h4 style="margin: 0 0 10px 0; color: #007bff;">🧭 Navegación Activa</h4>
+                        <div id="current-instruction"
+                            style="font-size: 16px; font-weight: bold; margin-bottom: 10px; color: #333;">
+                            Iniciando navegación...
+                        </div>
+                        <div id="distance-info" style="font-size: 14px; color: #666; margin-bottom: 10px;">
+                            Distancia: Calculando...
+                        </div>
+                        <div id="next-turn" style="font-size: 14px; color: #666; margin-bottom: 10px;">
+                            Próximo giro: Calculando...
+                        </div>
+                        <div style="display: flex; gap: 10px; margin-top: 10px;">
+                            <button onclick="toggleVoiceNavigation()" id="voice-button"
+                                style="padding: 5px 10px; border: none; border-radius: 4px; background: #28a745; color: white; cursor: pointer;">
+                                🔊 Voz ON
+                            </button>
+                            <button onclick="centerOnLocation()"
+                                style="padding: 5px 10px; border: none; border-radius: 4px; background: #17a2b8; color: white; cursor: pointer;">
+                                📍 Centrar
+                            </button>
+                        </div>
                     </div>
-                    <div class="legend-item">
-                        <div class="legend-color" style="background-color: #007bff;"></div>
-                        <span>Ruta de entregas</span>
-                    </div>
-                    <div class="legend-item">
-                        <div class="legend-color" style="background-color: #ffc107;"></div>
-                        <span>Próxima entrega</span>
-                    </div>
-                    <div class="legend-item">
-                        <div class="legend-color" style="background-color: #4285F4;"></div>
-                        <span>Tu ubicación</span>
-                    </div>
-                </div>
 
-                <div class="route-info">
-                    <h4>Lista de Entregas</h4>
-                    <div class="delivery-list" id="delivery-list">
-                        @if($route && isset($route['steps']) && is_array($route['steps']))
-                            @foreach($route['steps'] as $index => $step)
-                                @if(isset($step['type']) && $step['type'] === 'job' && isset($step['job_details']))
-                                    <div class="delivery-item" data-delivery-id="{{ $step['job'] }}" id="delivery-{{ $step['job'] }}">
-                                        <div class="delivery-header">
-                                            <div class="delivery-client">{{ $step['job_details']['cliente'] ?? 'Cliente desconocido' }}</div>
-                                            <div class="delivery-number">Parada {{ $index + 1 }}</div>
+                    <div class="legend">
+                        <h4>Leyenda del Mapa</h4>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background-color: #28a745;"></div>
+                            <span>Ruta completada</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background-color: #007bff;"></div>
+                            <span>Ruta de entregas</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background-color: #ffc107;"></div>
+                            <span>Próxima entrega</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background-color: #4285F4;"></div>
+                            <span>Tu ubicación</span>
+                        </div>
+                    </div>
+
+                    <div class="route-info">
+                        <h4>Lista de Entregas</h4>
+                        <div class="delivery-list" id="delivery-list">
+                            @if($route && isset($route['steps']) && is_array($route['steps']))
+                                @foreach($route['steps'] as $index => $step)
+                                    @if(isset($step['type']) && $step['type'] === 'job' && isset($step['job_details']))
+                                            <div class="delivery-item" data-delivery-id="{{ $step['job'] }}" id="delivery-{{ $step['job'] }}">
+                                                <div class="delivery-header">
+                                                    <div class="delivery-client">{{ $step['job_details']['cliente'] ?? 'Cliente desconocido' }}
+                                                    </div>
+                                                    <div class="delivery-number">Parada {{ $index + 1 }}</div>
+                                                </div>
+
+                                                <!-- Información de contacto separada -->
+                                                <div class="delivery-contact">
+                                                    @if($step['job_details']['telefono'] ?? false)
+                                                        <div class="phone-container">
+                                                            <span class="phone-display">{{ $step['job_details']['telefono'] }}</span>
+                                                            <div class="phone-actions">
+                                                                <a href="tel:{{ $step['job_details']['telefono'] }}" class="btn-call">📞</a>
+                                                                <button onclick="copyPhone('{{ $step['job_details']['telefono'] }}')"
+                                                                    class="btn-copy">📋</button>
+                                                            </div>
+                                                        </div>
+                                                    @else
+                                                        <span class="phone-display no-phone">Teléfono desconocido</span>
+                                                    @endif
+                                                </div>
+                                            </div>
+                                            <div class="delivery-actions">
+                                                <button class="delivery-btn btn-delivery"
+                                                    onclick="markDelivery('{{ $step['job'] }}', 'completed')">
+                                                    ✅ Entregado
+                                                </button>
+                                                <button class="delivery-btn btn-return"
+                                                    onclick="markDelivery('{{ $step['job'] }}', 'returned')">
+                                                    🔄 Devolución
+                                                </button>
+                                            </div>
+                                            <div class="delivery-status status-pending">Pendiente</div>
                                         </div>
-                                        <div class="delivery-actions">
-                                            <button class="delivery-btn btn-delivery" onclick="markDelivery('{{ $step['job'] }}', 'completed')">
-                                                ✅ Entregado
-                                            </button>
-                                            <button class="delivery-btn btn-return" onclick="markDelivery('{{ $step['job'] }}', 'returned')">
-                                                🔄 Devolución
-                                            </button>
-                                        </div>
-                                        <div class="delivery-status status-pending">Pendiente</div>
-                                    </div>
-                                @endif
-                            @endforeach
-                        @else
+                                    @endif
+                                @endforeach
+                            @else
                             <div class="delivery-item">
                                 <em>No hay entregas asignadas</em>
                             </div>
@@ -601,13 +849,13 @@
                     </div>
                 </div>
             @else
-                <div class="no-route-message">
-                    <p>No hay ruta asignada actualmente.</p>
-                </div>
-            @endif
+            <div class="no-route-message">
+                <p>No hay ruta asignada actualmente.</p>
+            </div>
+        @endif
 
-            <div id="error-message"></div>
-        </div>
+        <div id="error-message"></div>
+    </div>
     </div>
 
     <div id="loading">
@@ -667,7 +915,7 @@
 
             // Remover clases anteriores
             deliveryItem.classList.remove('completed', 'returned');
-            
+
             // Aplicar nueva clase y actualizar interfaz
             if (status === 'completed') {
                 deliveryItem.classList.add('completed');
@@ -711,9 +959,9 @@
             const notification = document.createElement('div');
             notification.className = `notification ${type}`;
             notification.textContent = message;
-            
+
             document.body.appendChild(notification);
-            
+
             setTimeout(() => {
                 if (document.body.contains(notification)) {
                     document.body.removeChild(notification);
@@ -787,13 +1035,13 @@
                     console.error('Error actualizando estado en servidor:', error);
                     console.error('Error response:', error.response);
                     console.error('Error data:', error.response?.data);
-                    
+
                     let errorMessage = 'Error al sincronizar con servidor';
-                    
+
                     if (error.response) {
                         console.error('Status:', error.response.status);
                         console.error('Response data:', error.response.data);
-                        
+
                         if (error.response.status === 500) {
                             errorMessage = 'Error interno del servidor (500). Revisa los logs de Laravel.';
                         } else if (error.response.status === 404) {
@@ -804,7 +1052,7 @@
                             errorMessage = error.response.data.error || error.response.data.message || errorMessage;
                         }
                     }
-                    
+
                     showNotification(errorMessage, 'error');
                 });
         }
@@ -815,7 +1063,7 @@
             currentMarkers.forEach(marker => {
                 if (marker.options && marker.options.deliveryId === deliveryId) {
                     let newIcon, newColor;
-                    
+
                     if (status === 'completed') {
                         newIcon = '✅';
                         newColor = '#28a745';
@@ -840,7 +1088,7 @@
             if (window.innerWidth <= 768) {
                 const content = document.getElementById('panel-content');
                 const icon = document.getElementById('toggle-icon');
-                
+
                 if (content.classList.contains('collapsed')) {
                     content.classList.remove('collapsed');
                     icon.classList.remove('collapsed');
@@ -862,7 +1110,7 @@
         function toggleRealTimeTracking() {
             isRealTimeActive = !isRealTimeActive;
             const button = document.getElementById('follow-button');
-            
+
             if (isRealTimeActive) {
                 button.textContent = '⏹️ Detener';
                 button.classList.remove('btn-success');
@@ -880,7 +1128,7 @@
             isNavigating = !isNavigating;
             const button = document.getElementById('navigation-button');
             const panel = document.getElementById('navigation-panel');
-            
+
             if (isNavigating) {
                 button.textContent = '⏹️ Detener Nav';
                 button.classList.remove('btn-success');
@@ -911,7 +1159,7 @@
         function toggleVoiceNavigation() {
             voiceEnabled = !voiceEnabled;
             const button = document.getElementById('voice-button');
-            
+
             if (voiceEnabled) {
                 button.textContent = '🔊 Voz ON';
                 button.style.backgroundColor = '#28a745';
@@ -930,7 +1178,7 @@
         }
 
         // Inicialización del sistema
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             // Inicializar estados de entrega
             if (driverRoute && driverRoute.steps) {
                 driverRoute.steps.forEach(step => {
@@ -968,7 +1216,7 @@
         function updateConnectionStatus(isConnected) {
             const indicator = document.getElementById('status-indicator');
             const status = document.getElementById('connection-status');
-            
+
             if (isConnected) {
                 indicator.className = 'status-indicator status-online';
                 status.textContent = 'Conectado';
@@ -993,66 +1241,66 @@
                     delivery_id: deliveryId,
                     reason: 'Reset desde interfaz de motorista'
                 })
-                .then(response => {
-                    if (response.data.success) {
-                        // Resetear estado visual
-                        delete deliveryStatuses[deliveryId];
-                        deliveryItem.classList.remove('completed', 'returned');
-                        
-                        // Habilitar botones
-                        const buttons = deliveryItem.querySelectorAll('.delivery-btn');
-                        buttons.forEach(btn => {
-                            btn.disabled = false;
-                            btn.style.opacity = '1';
-                            btn.style.cursor = 'pointer';
-                        });
+                    .then(response => {
+                        if (response.data.success) {
+                            // Resetear estado visual
+                            delete deliveryStatuses[deliveryId];
+                            deliveryItem.classList.remove('completed', 'returned');
 
-                        // Resetear estado visual
-                        updateDeliveryItemUI(deliveryItem, 'Pendiente', 'status-pending');
-                        updateDeliveryStats();
-                        showNotification(response.data.message || 'Entrega reseteada correctamente');
-                    } else {
-                        showNotification(response.data.error || 'Error al resetear entrega', 'error');
-                    }
-                })
-                .catch(error => {
-                    console.error('Error reseteando entrega:', error);
-                    let errorMessage = 'Error al resetear entrega';
-                    
-                    if (error.response && error.response.status === 403) {
-                        errorMessage = 'No tienes permisos para resetear entregas';
-                    } else if (error.response && error.response.data && error.response.data.error) {
-                        errorMessage = error.response.data.error;
-                    }
-                    
-                    showNotification(errorMessage, 'error');
-                });
+                            // Habilitar botones
+                            const buttons = deliveryItem.querySelectorAll('.delivery-btn');
+                            buttons.forEach(btn => {
+                                btn.disabled = false;
+                                btn.style.opacity = '1';
+                                btn.style.cursor = 'pointer';
+                            });
+
+                            // Resetear estado visual
+                            updateDeliveryItemUI(deliveryItem, 'Pendiente', 'status-pending');
+                            updateDeliveryStats();
+                            showNotification(response.data.message || 'Entrega reseteada correctamente');
+                        } else {
+                            showNotification(response.data.error || 'Error al resetear entrega', 'error');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error reseteando entrega:', error);
+                        let errorMessage = 'Error al resetear entrega';
+
+                        if (error.response && error.response.status === 403) {
+                            errorMessage = 'No tienes permisos para resetear entregas';
+                        } else if (error.response && error.response.data && error.response.data.error) {
+                            errorMessage = error.response.data.error;
+                        }
+
+                        showNotification(errorMessage, 'error');
+                    });
             }
         }
 
         // Función para obtener estado de entregas usando la ruta específica
         function loadDeliveryStatus(driverId = null) {
             const targetDriverId = driverId || {{ $driver->id ?? 'null' }};
-            
+
             axios.get(`/delivery-status/${targetDriverId}`)
                 .then(response => {
                     if (response.data.success) {
                         const data = response.data.data;
                         console.log('Estado de entregas cargado:', data);
-                        
+
                         // Actualizar estadísticas en la interfaz
                         if (data.estadisticas) {
                             document.getElementById('completed-count').textContent = data.estadisticas.entregados || 0;
                             document.getElementById('pending-count').textContent = data.estadisticas.pendientes || 0;
                         }
-                        
+
                         // Actualizar estado de cada entrega si existe en la interfaz
                         if (data.entregas) {
                             data.entregas.forEach(entrega => {
                                 const deliveryItem = document.getElementById(`delivery-${entrega.id}`);
                                 if (deliveryItem) {
                                     deliveryStatuses[entrega.id] = entrega.estado;
-                                    
+
                                     // Actualizar visualmente según el estado
                                     if (entrega.estado === 'entregado') {
                                         deliveryItem.classList.add('completed');
@@ -1064,7 +1312,7 @@
                                 }
                             });
                         }
-                        
+
                         showNotification('Estados de entrega actualizados');
                     }
                 })
@@ -1081,7 +1329,7 @@
                     if (response.data.success) {
                         const history = response.data.data.history;
                         console.log(`Historial de entrega ${deliveryId}:`, history);
-                        
+
                         // Mostrar historial en consola o modal (implementar según necesidad)
                         showNotification(`Historial cargado (${history.length} eventos)`);
                     }
@@ -1133,14 +1381,14 @@
         window.exportDeliveryData = exportDeliveryData;
 
         // Funciones del sistema de mapas y navegación (código original completo)
-        
+
         // Función para inicializar GPS de forma segura
         function initializeGPS() {
             try {
                 if (typeof L.Control.Gps !== 'undefined') {
                     gpsControl = new L.Control.Gps({
                         autoStart: false,
-                        transform: function(gpsData) {
+                        transform: function (gpsData) {
                             return gpsData;
                         }
                     });
@@ -1170,10 +1418,10 @@
             };
 
             watchId = navigator.geolocation.watchPosition(
-                function(position) {
+                function (position) {
                     updateCurrentLocation(position.coords.latitude, position.coords.longitude);
                 },
-                function(error) {
+                function (error) {
                     console.error('Error de geolocalización:', error);
                     showError('Error obteniendo ubicación: ' + error.message);
                 },
@@ -1200,10 +1448,10 @@
                         iconAnchor: [10, 10]
                     })
                 }).addTo(map);
-                
+
                 currentLocationMarker.bindPopup("Tu ubicación actual").openPopup();
             }
-            
+
             if (isNavigating) {
                 map.setView([lat, lng], 18);
             }
@@ -1229,7 +1477,7 @@
         // Función para mostrar ruta con polyline
         function showRouteWithPolyline() {
             console.log('Mostrando ruta con polyline directa');
-            
+
             try {
                 if (!driverRoute || !driverRoute.geometry) {
                     showError('No hay ruta disponible');
@@ -1266,12 +1514,12 @@
                 if (driverRoute.steps && Array.isArray(driverRoute.steps)) {
                     driverRoute.steps.forEach((step, index) => {
                         if (!step.location || !Array.isArray(step.location)) return;
-                        
+
                         const [lng, lat] = step.location;
-                        
+
                         let markerColor = '#007bff';
                         let markerIcon = '📍';
-                        
+
                         if (step.type === 'start') {
                             markerColor = '#28a745';
                             markerIcon = '🏠';
@@ -1302,7 +1550,7 @@
                                 iconAnchor: [15, 15]
                             })
                         });
-                        
+
                         marker.addTo(map);
                         currentMarkers.push(marker);
 
@@ -1324,14 +1572,14 @@
                             const currentStatus = deliveryStatuses[step.job];
                             const statusText = currentStatus === 'completed' ? 'Entregado' : currentStatus === 'returned' ? 'Devuelto' : 'Pendiente';
                             const statusColor = currentStatus === 'completed' ? '#28a745' : currentStatus === 'returned' ? '#dc3545' : '#ffc107';
-                            
+
                             popup += `<br><div style="margin-top: 8px; text-align: center;">
                                 <span style="padding: 4px 12px; background: ${statusColor}; color: white; border-radius: 12px; font-size: 11px; font-weight: bold;">${statusText}</span>
                             </div>`;
                         }
 
                         marker.bindPopup(popup);
-                        
+
                         console.log(`Marcador ${index + 1} agregado:`, step.type, 'en', [lat, lng]);
                     });
                 }
@@ -1340,12 +1588,12 @@
                 if (latlngs.length > 0) {
                     const allBounds = new L.LatLngBounds();
                     latlngs.forEach(coord => allBounds.extend(coord));
-                    
-                    map.fitBounds(allBounds, { 
+
+                    map.fitBounds(allBounds, {
                         padding: [50, 50],
                         maxZoom: 16
                     });
-                    
+
                     console.log('Mapa ajustado a bounds:', allBounds.toBBoxString());
                 }
 
@@ -1379,5 +1627,18 @@
             }
         }, 1000);
     </script>
+
+    <script>
+        function copyPhone(phoneNumber) {
+            if (phoneNumber) {
+                navigator.clipboard.writeText(phoneNumber).then(function () {
+                    alert('Número copiado: ' + phoneNumber);
+                }).catch(function (err) {
+                    console.error('Error al copiar: ', err);
+                });
+            }
+        }
+    </script>
 </body>
+
 </html>
