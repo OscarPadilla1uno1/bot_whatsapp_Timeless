@@ -47,7 +47,6 @@ CREATE TABLE pedidos (
     total DECIMAL(10,2) NOT NULL,
     FOREIGN KEY (cliente_id) REFERENCES clientes(id)
 );
-
 -- Tabla: detalle_pedido
 -- Relación muchos a muchos entre pedidos y platillos, con información adicional (cantidad, precio)
 -- Cada fila representa un platillo incluido en un pedido
@@ -76,3 +75,5 @@ CREATE TABLE pagos (
     referencia_transaccion VARCHAR(100),
     FOREIGN KEY (pedido_id) REFERENCES pedidos(id) ON DELETE CASCADE
 );
+
+

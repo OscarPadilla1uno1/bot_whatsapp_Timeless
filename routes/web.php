@@ -29,6 +29,12 @@ Route::get('/gps-data', [VroomController::class, 'getGpsData'])->name('gps.data'
 Route::post('/emergency', [VroomController::class, 'emergencyAlert'])->name('emergency.alert')->middleware('auth');
 Route::post('/get-optimized-route', [VroomController::class, 'getOptimizedRoute'])->name('get.optimized.route')->middleware('auth');
 
+// Nueva ruta para marcar entregas como completadas
+Route::post('/mark-delivery-completed', [VroomController::class, 'markDeliveryCompleted'])
+    ->name('mark.delivery.completed')
+    ->middleware('auth')
+    ->can('Motorista');
+
 Route::get('/admin/menu/MenuHoy', [AdminController::class, 'obtenerMenuHoy'])->name('admin.menu.hoy');
 
 Route::get('/', function () {
@@ -130,5 +136,13 @@ Route::get('/pago/exito', function (Illuminate\Http\Request $request) {
 Route::get('/pago/cancelado', function () {
     return view('pago.cancelado');
 })->name('pago.cancelado');
+
+// Rutas para entregas
+Route::post('/update-delivery-status', [VroomController::class, 'updateDeliveryStatus'])->name('delivery.update');
+Route::post('/mark-delivery-completed', [VroomController::class, 'markDeliveryCompleted'])->name('delivery.completed');
+Route::post('/mark-delivery-returned', [VroomController::class, 'markDeliveryReturned'])->name('delivery.returned');
+Route::get('/delivery-status/{driverId?}', [VroomController::class, 'getDeliveryStatus'])->name('delivery.status');
+Route::get('/delivery-history/{deliveryId}', [VroomController::class, 'getDeliveryHistory'])->name('delivery.history');
+Route::post('/reset-delivery-status', [VroomController::class, 'resetDeliveryStatus'])->name('delivery.reset');
 
 require __DIR__ . '/auth.php';

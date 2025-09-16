@@ -889,6 +889,415 @@ private function adjustVroomTime($baseTimeSeconds, $deliveryType, $trafficCondit
             : round($adjustedMinutes / 60, 1) . ' h'
     ];
 }
+
+    /**
+     * Actualizar estado de entrega
+     */
+    public function updateDeliveryStatus(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'delivery_id' => 'required|integer',
+                'status' => 'required|string|in:entregado,devuelto,pendiente',
+                'driver_id' => 'required|integer|exists:users,id',
+                'timestamp' => 'sometimes|string',
+                'notes' => 'sometimes|string|max:500',
+                'latitude' => 'sometimes|numeric|between:-90,90',
+                'longitude' => 'sometimes|numeric|between:-180,180'
+            ]);
+
+            // Verificar que el pedido existe
+            $pedido = DB::table('pedidos')->where('id', $validated['delivery_id'])->first();
+            
+            if (!$pedido) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Pedido no encontrado'
+                ], 404);
+            }
+
+            // Verificar permisos: solo el motorista asignado o admin pueden actualizar
+            $user = Auth::user();
+            if (!$user->can('Administrador') && $pedido->vehiculo_asignado != $validated['driver_id']) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'No tienes permisos para actualizar esta entrega'
+                ], 403);
+            }
+
+            // Mapear estados del frontend a la base de datos
+            $estadoMapping = [
+                'entregado' => 'entregado',
+                'devuelto' => 'devuelto',
+                'pendiente' => 'pendiente'
+            ];
+
+            $nuevoEstado = $estadoMapping[$validated['status']];
+
+            // Actualizar el pedido
+            $updateData = [
+                'estado' => $nuevoEstado,
+                'updated_at' => now()
+            ];
+
+            // Si se marca como entregado, agregar timestamp de entrega
+            if ($nuevoEstado === 'entregado') {
+                $updateData['fecha_entrega'] = $validated['timestamp'] ? 
+                    Carbon::parse($validated['timestamp']) : now();
+            }
+
+            $updated = DB::table('pedidos')
+                ->where('id', $validated['delivery_id'])
+                ->update($updateData);
+
+            if (!$updated) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Error al actualizar el pedido'
+                ], 500);
+            }
+
+            // Registrar en tabla de historial de entregas (opcional)
+            $this->logDeliveryHistory($validated['delivery_id'], $validated['driver_id'], $nuevoEstado, $validated);
+
+            // Obtener información actualizada del pedido
+            $pedidoActualizado = DB::table('pedidos')
+                ->join('clientes', 'pedidos.cliente_id', '=', 'clientes.id')
+                ->select(
+                    'pedidos.*',
+                    'clientes.nombre as cliente_nombre'
+                )
+                ->where('pedidos.id', $validated['delivery_id'])
+                ->first();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Estado de entrega actualizado correctamente',
+                'data' => [
+                    'delivery_id' => $validated['delivery_id'],
+                    'old_status' => $pedido->estado,
+                    'new_status' => $nuevoEstado,
+                    'driver_id' => $validated['driver_id'],
+                    'timestamp' => now()->toISOString(),
+                    'pedido' => $pedidoActualizado
+                ]
+            ]);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Datos inválidos',
+                'details' => $e->errors()
+            ], 422);
+
+        } catch (\Exception $e) {
+            Log::error('Error en updateDeliveryStatus', [
+                'error' => $e->getMessage(),
+                'user_id' => Auth::id(),
+                'delivery_id' => $request->input('delivery_id')
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'error' => 'Error interno del servidor'
+            ], 500);
+        }
+    }
+
+    /**
+     * Marcar entrega como completada (método simplificado)
+     */
+    // En el controlador VroomController
+public function markDeliveryCompleted(Request $request)
+{
+    // Método muy permisivo para testing
+    $deliveryId = $request->input('delivery_id');
+    $driverId = $request->input('driver_id');
+    
+    if (!$deliveryId || !$driverId) {
+        return response()->json([
+            'success' => false, 
+            'error' => 'delivery_id y driver_id son requeridos'
+        ], 400);
+    }
+    
+    // Actualizar sin validación estricta
+    try {
+        DB::table('pedidos')
+            ->where('id', $deliveryId)
+            ->update(['estado' => 'entregado']);
+            
+        return response()->json(['success' => true, 'message' => 'Entrega completada']);
+    } catch (\Exception $e) {
+        return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
+    }
+}
+
+    /**
+     * Marcar entrega como devuelta
+     */
+    public function markDeliveryReturned(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'delivery_id' => 'required|integer|exists:pedidos,id',
+                'driver_id' => 'required|integer|exists:users,id',
+                'reason' => 'sometimes|string|max:500',
+                'latitude' => 'sometimes|numeric|between:-90,90',
+                'longitude' => 'sometimes|numeric|between:-180,180'
+            ]);
+
+            $pedido = DB::table('pedidos')->where('id', $validated['delivery_id'])->first();
+            
+            if (!$pedido) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Pedido no encontrado'
+                ], 404);
+            }
+
+            if ($pedido->vehiculo_asignado != $validated['driver_id'] && !Auth::user()->can('Administrador')) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Este pedido no está asignado a este motorista'
+                ], 403);
+            }
+
+            // Actualizar estado a devuelto
+            $updated = DB::table('pedidos')
+                ->where('id', $validated['delivery_id'])
+                ->update([
+                    'estado' => 'devuelto',
+                    'fecha_devolucion' => now(),
+                    'motivo_devolucion' => $validated['reason'] ?? 'No especificado',
+                    'updated_at' => now()
+                ]);
+
+            if ($updated) {
+                // Registrar en historial
+                $this->logDeliveryHistory($validated['delivery_id'], $validated['driver_id'], 'devuelto', $validated);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Entrega marcada como devuelta correctamente',
+                    'delivery_id' => $validated['delivery_id'],
+                    'reason' => $validated['reason'] ?? 'No especificado',
+                    'timestamp' => now()->toISOString()
+                ]);
+            } else {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Error al actualizar el estado del pedido'
+                ], 500);
+            }
+
+        } catch (\Exception $e) {
+            Log::error('Error en markDeliveryReturned', [
+                'error' => $e->getMessage(),
+                'delivery_id' => $request->input('delivery_id'),
+                'driver_id' => $request->input('driver_id')
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'error' => 'Error interno del servidor'
+            ], 500);
+        }
+    }
+
+    /**
+     * Obtener estado de entregas para un motorista
+     */
+    public function getDeliveryStatus(Request $request, $driverId = null)
+    {
+        try {
+            $driverId = $driverId ?? auth()->id();
+            
+            // Verificar permisos
+            if (auth()->id() != $driverId && !auth()->user()->can('Administrador')) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'No tienes permisos para ver estas entregas'
+                ], 403);
+            }
+
+            $entregas = DB::table('pedidos')
+                ->join('clientes', 'pedidos.cliente_id', '=', 'clientes.id')
+                ->select(
+                    'pedidos.id',
+                    'pedidos.estado',
+                    'pedidos.fecha_pedido',
+                    'pedidos.fecha_entrega',
+                    'pedidos.latitud',
+                    'pedidos.longitud',
+                    'pedidos.total',
+                    'clientes.nombre as cliente_nombre',
+                    'clientes.telefono as cliente_telefono'
+                )
+                ->where('pedidos.vehiculo_asignado', $driverId)
+                ->orderBy('pedidos.fecha_pedido', 'desc')
+                ->get();
+
+            $estadisticas = [
+                'total' => $entregas->count(),
+                'pendientes' => $entregas->where('estado', 'pendiente')->count(),
+                'en_preparacion' => $entregas->where('estado', 'en preparación')->count(),
+                'entregados' => $entregas->where('estado', 'entregado')->count(),
+                'devueltos' => $entregas->where('estado', 'devuelto')->count()
+            ];
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'driver_id' => $driverId,
+                    'entregas' => $entregas,
+                    'estadisticas' => $estadisticas
+                ],
+                'timestamp' => now()->toISOString()
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error en getDeliveryStatus', [
+                'error' => $e->getMessage(),
+                'driver_id' => $driverId
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'error' => 'Error obteniendo estado de entregas'
+            ], 500);
+        }
+    }
+
+    /**
+     * Obtener historial de entregas
+     */
+    public function getDeliveryHistory(Request $request, $deliveryId)
+    {
+        try {
+            $history = DB::table('delivery_history')
+                ->join('users', 'delivery_history.driver_id', '=', 'users.id')
+                ->select(
+                    'delivery_history.*',
+                    'users.name as driver_name'
+                )
+                ->where('delivery_history.delivery_id', $deliveryId)
+                ->orderBy('delivery_history.created_at', 'desc')
+                ->get();
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'delivery_id' => $deliveryId,
+                    'history' => $history
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error en getDeliveryHistory', [
+                'error' => $e->getMessage(),
+                'delivery_id' => $deliveryId
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'error' => 'Error obteniendo historial de entrega'
+            ], 500);
+        }
+    }
+
+    /**
+     * Resetear estado de entrega (solo para administradores)
+     */
+    public function resetDeliveryStatus(Request $request)
+    {
+        try {
+            // Solo administradores pueden resetear
+            if (!auth()->user()->can('Administrador')) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Solo los administradores pueden resetear entregas'
+                ], 403);
+            }
+
+            $validated = $request->validate([
+                'delivery_id' => 'required|integer|exists:pedidos,id',
+                'reason' => 'required|string|max:500'
+            ]);
+
+            $updated = DB::table('pedidos')
+                ->where('id', $validated['delivery_id'])
+                ->update([
+                    'estado' => 'pendiente',
+                    'fecha_entrega' => null,
+                    'fecha_devolucion' => null,
+                    'motivo_devolucion' => null,
+                    'updated_at' => now()
+                ]);
+
+            if ($updated) {
+                // Registrar el reset en historial
+                $this->logDeliveryHistory(
+                    $validated['delivery_id'], 
+                    auth()->id(), 
+                    'reset', 
+                    ['reason' => $validated['reason']]
+                );
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Estado de entrega reseteado correctamente',
+                    'delivery_id' => $validated['delivery_id']
+                ]);
+            } else {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Error al resetear el estado del pedido'
+                ], 500);
+            }
+
+        } catch (\Exception $e) {
+            Log::error('Error en resetDeliveryStatus', [
+                'error' => $e->getMessage(),
+                'delivery_id' => $request->input('delivery_id')
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'error' => 'Error interno del servidor'
+            ], 500);
+        }
+    }
+
+    /**
+     * Registrar en historial de entregas
+     */
+    private function logDeliveryHistory($deliveryId, $driverId, $action, $data = [])
+    {
+        try {
+            DB::table('delivery_history')->insert([
+                'delivery_id' => $deliveryId,
+                'driver_id' => $driverId,
+                'action' => $action,
+                'latitude' => $data['latitude'] ?? null,
+                'longitude' => $data['longitude'] ?? null,
+                'notes' => $data['notes'] ?? $data['reason'] ?? null,
+                'metadata' => json_encode($data),
+                'created_at' => now(),
+                'updated_at' => now()
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error registrando historial de entrega', [
+                'error' => $e->getMessage(),
+                'delivery_id' => $deliveryId,
+                'driver_id' => $driverId,
+                'action' => $action
+            ]);
+        }
+    }
+
+
+
 }
 
  
