@@ -780,6 +780,124 @@
                 bottom: max(20px, env(safe-area-inset-bottom));
             }
         }
+
+        /* Ocultar el panel de indicaciones de Leaflet por defecto */
+.leaflet-routing-container {
+    display: none !important;
+}
+
+/* Mostrar el panel de indicaciones dentro del menú lateral */
+.routing-instructions {
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 8px;
+    padding: 12px;
+    margin-top: 8px;
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.routing-instructions h4 {
+    font-size: 14px;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 8px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.instruction-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 6px 0;
+    font-size: 12px;
+    color: #555;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.instruction-item:last-child {
+    border-bottom: none;
+}
+
+.instruction-icon {
+    width: 16px;
+    height: 16px;
+    background: #007bff;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 8px;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.instruction-text {
+    flex: 1;
+    line-height: 1.3;
+}
+
+.instruction-distance {
+    color: #007bff;
+    font-weight: 600;
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+/* Marcadores de navegación */
+.navigation-marker {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    border: 3px solid white;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    animation: bounceIn 0.6s ease;
+}
+
+.origin-marker {
+    background: linear-gradient(135deg, #4285F4, #1a73e8);
+}
+
+.destination-marker {
+    background: linear-gradient(135deg, #ff6b35, #e55a2b);
+    animation: destinationPulse 2s infinite;
+}
+
+@keyframes bounceIn {
+    0% {
+        transform: scale(0);
+        opacity: 0;
+    }
+    50% {
+        transform: scale(1.2);
+        opacity: 0.8;
+    }
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+@keyframes destinationPulse {
+    0% {
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        transform: scale(1);
+    }
+    50% {
+        box-shadow: 0 6px 20px rgba(255, 107, 53, 0.6);
+        transform: scale(1.05);
+    }
+    100% {
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        transform: scale(1);
+    }
+}
     </style>
 </head>
 
@@ -911,6 +1029,8 @@
     <script src="https://unpkg.com/@mapbox/polyline@1.1.1/src/polyline.js"></script>
     <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
 
+    
+
     <script>
         // Variables globales del sistema
         const driverRoute = @json($route ?? null);
@@ -947,7 +1067,7 @@
             // Ocultar loading después de inicializar
             setTimeout(() => {
                 hideLoading();
-                showNotification('Sistema de navegación listo', 'success');
+                //showNotification('Sistema de navegación listo', 'success');
             }, 3000);
         });
 
@@ -965,7 +1085,7 @@
         // Inicializar GPS
         function initializeGPS() {
             if (!navigator.geolocation) {
-                showNotification('GPS no disponible en este dispositivo', 'error');
+                //showNotification('GPS no disponible en este dispositivo', 'error');
                 return;
             }
 
@@ -1015,7 +1135,7 @@
                     break;
             }
             
-            showNotification(message, 'error');
+            //showNotification(message, 'error');
             document.getElementById('location-status').textContent = 'Error GPS';
             document.getElementById('status-indicator').style.backgroundColor = '#dc3545';
         }
@@ -1024,6 +1144,9 @@
         function updateCurrentLocation(lat, lng, accuracy, speed) {
             if (currentLocationMarker) {
                 currentLocationMarker.setLatLng([lat, lng]);
+                if (isNavigating) {
+            updateOriginMarker(lat, lng);
+        }
             } else {
                 currentLocationMarker = L.marker([lat, lng], {
                     icon: L.divIcon({
@@ -1063,7 +1186,7 @@
             // Validar estructura de la ruta
             if (!driverRoute.steps || !Array.isArray(driverRoute.steps)) {
                 console.error('❌ Estructura de ruta inválida - no hay steps');
-                showNotification('Estructura de ruta inválida', 'error');
+                //showNotification('Estructura de ruta inválida', 'error');
                 return;
             }
 
@@ -1099,9 +1222,9 @@
             console.log(`✅ Entregas válidas: ${validDeliveries}, ❌ Inválidas: ${invalidDeliveries}`);
 
             if (validDeliveries === 0) {
-                showNotification('No hay entregas con coordenadas válidas', 'warning');
+                //showNotification('No hay entregas con coordenadas válidas', 'warning');
             } else if (invalidDeliveries > 0) {
-                showNotification(`${invalidDeliveries} entregas sin coordenadas válidas`, 'warning');
+                //showNotification(`${invalidDeliveries} entregas sin coordenadas válidas`, 'warning');
             }
 
             updateStats();
@@ -1135,7 +1258,7 @@
                     break;
             }
             
-            showNotification(message, severity);
+            //showNotification(message, severity);
             document.getElementById('location-status').textContent = 'Error GPS';
             document.getElementById('status-indicator').style.backgroundColor = '#dc3545';
         }
@@ -1211,7 +1334,7 @@
             const currentPos = currentLocationMarker.getLatLng();
             useSimpleNavigation(currentPos, testCoords.lat, testCoords.lng, testDelivery);
             
-            showNotification('Navegación de prueba iniciada', 'info');
+            //showNotification('Navegación de prueba iniciada', 'info');
         }
 
         // Función mejorada de inicialización con más validaciones
@@ -1220,25 +1343,25 @@
             
             // Verificar soporte de geolocalización
             if (!navigator.geolocation) {
-                showNotification('GPS no soportado en este navegador', 'error');
+                //showNotification('GPS no soportado en este navegador', 'error');
                 return false;
             }
             
             // Verificar que Leaflet esté cargado
             if (typeof L === 'undefined') {
-                showNotification('Error: Leaflet no está cargado', 'error');
+                //showNotification('Error: Leaflet no está cargado', 'error');
                 return false;
             }
             
             // Verificar que el mapa esté inicializado
             if (!map) {
-                showNotification('Error: Mapa no inicializado', 'error');
+                //showNotification('Error: Mapa no inicializado', 'error');
                 return false;
             }
             
             // Verificar datos del driver
             if (!driverData || !driverData.id) {
-                showNotification('Error: Datos del motorista inválidos', 'error');
+                //showNotification('Error: Datos del motorista inválidos', 'error');
                 return false;
             }
             
@@ -1270,13 +1393,13 @@
                 
             } catch (error) {
                 console.error('❌ Error crítico en inicialización:', error);
-                showNotification('Error crítico en inicialización', 'error');
+                //showNotification('Error crítico en inicialización', 'error');
             }
             
             // Ocultar loading después de inicializar
             setTimeout(() => {
                 hideLoading();
-                showNotification('Sistema de navegación listo', 'success');
+                //showNotification('Sistema de navegación listo', 'success');
             }, 3000);
         });
 
@@ -1285,7 +1408,7 @@
             console.log('🗺️ Mostrando ruta optimizada...');
             
             if (!driverRoute || !driverRoute.steps) {
-                showNotification('No hay ruta para mostrar', 'warning');
+                //showNotification('No hay ruta para mostrar', 'warning');
                 return;
             }
 
@@ -1314,7 +1437,7 @@
             // Añadir marcadores de entregas
             addDeliveryMarkers();
 
-            showNotification('Ruta mostrada en el mapa', 'success');
+            //showNotification('Ruta mostrada en el mapa', 'success');
         }
 
         // Añadir marcadores de entregas
@@ -1411,21 +1534,21 @@
                 button.classList.remove('btn-success');
                 button.classList.add('btn-danger');
                 panel.classList.add('active');
-                showNotification('Navegación activada', 'success');
+                //showNotification('Navegación activada', 'success');
             } else {
                 stopNavigation();
                 button.textContent = '🧭 Navegación';
                 button.classList.remove('btn-danger');
                 button.classList.add('btn-success');
                 panel.classList.remove('active');
-                showNotification('Navegación desactivada', 'info');
+                //showNotification('Navegación desactivada', 'info');
             }
         }
 
         // Iniciar navegación
         function startNavigation() {
             if (!currentLocationMarker) {
-                showNotification('Esperando ubicación GPS...', 'warning');
+                //showNotification('Esperando ubicación GPS...', 'warning');
                 setTimeout(startNavigation, 2000);
                 return;
             }
@@ -1473,7 +1596,7 @@
             );
 
             if (pendingDeliveries.length === 0) {
-                showNotification('¡Todas las entregas completadas!', 'success');
+                //showNotification('¡Todas las entregas completadas!', 'success');
                 stopNavigation();
                 return;
             }
@@ -1488,7 +1611,7 @@
 
             // Validar ubicación actual
             if (!currentLocationMarker) {
-                showNotification('Esperando ubicación GPS...', 'warning');
+                //showNotification('Esperando ubicación GPS...', 'warning');
                 setTimeout(() => navigateToDelivery(deliveryId), 3000);
                 return;
             }
@@ -1496,13 +1619,13 @@
             // Buscar la entrega
             const delivery = driverRoute.steps.find(step => step.job == deliveryId);
             if (!delivery) {
-                showNotification('No se encontró la entrega', 'error');
+                //showNotification('No se encontró la entrega', 'error');
                 return;
             }
 
             // Validar coordenadas de la entrega
             if (!delivery.location || !Array.isArray(delivery.location) || delivery.location.length !== 2) {
-                showNotification('Coordenadas de entrega no válidas', 'error');
+                //showNotification('Coordenadas de entrega no válidas', 'error');
                 console.error('Coordenadas inválidas:', delivery.location);
                 return;
             }
@@ -1511,14 +1634,14 @@
             
             // Validar que las coordenadas sean números válidos
             if (isNaN(lat) || isNaN(lng) || lat === 0 || lng === 0) {
-                showNotification('Coordenadas de entrega incorrectas', 'error');
+                //showNotification('Coordenadas de entrega incorrectas', 'error');
                 console.error('Coordenadas no numéricas:', lat, lng);
                 return;
             }
 
             // Validar que las coordenadas estén en rangos válidos
             if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-                showNotification('Coordenadas fuera de rango', 'error');
+                //showNotification('Coordenadas fuera de rango', 'error');
                 console.error('Coordenadas fuera de rango:', lat, lng);
                 return;
             }
@@ -1527,7 +1650,7 @@
             
             // Validar ubicación actual
             if (isNaN(currentPos.lat) || isNaN(currentPos.lng)) {
-                showNotification('Ubicación GPS no válida', 'error');
+                //showNotification('Ubicación GPS no válida', 'error');
                 return;
             }
 
@@ -1541,6 +1664,7 @@
                 map.removeControl(routingControl);
                 routingControl = null;
             }
+            addNavigationMarkers(currentPos, { lat: lat, lng: lng }, delivery);
 
             try {
                 // Crear ruta usando Leaflet Routing Machine con manejo de errores
@@ -1562,6 +1686,7 @@
                     // Configurar servicio de routing
                     router: L.Routing.osrmv1({
                         serviceUrl: 'https://lacampañafoodservice.com/osrm/route/v1',
+                        language: 'es',
                         timeout: 30000
                     })
                 }).on('routesfound', function(e) {
@@ -1578,11 +1703,11 @@
                         map.fitBounds(route.bounds, { padding: [20, 20] });
                     }
                     
-                    showNotification(`Navegando a: ${delivery.job_details?.cliente || 'Cliente'}`, 'info');
+                    //showNotification(`Navegando a: ${delivery.job_details?.cliente || 'Cliente'}`, 'info');
                     
                 }).on('routingerror', function(e) {
                     console.error('Error de routing:', e);
-                    showNotification('Error calculando ruta. Usando navegación simple.', 'warning');
+                    //showNotification('Error calculando ruta. Usando navegación simple.', 'warning');
                     
                     // Fallback: usar navegación simple sin routing
                     useSimpleNavigation(currentPos, lat, lng, delivery);
@@ -1591,14 +1716,55 @@
 
             } catch (error) {
                 console.error('Error creando control de routing:', error);
-                showNotification('Error en navegación. Usando modo simple.', 'warning');
+                //showNotification('Error en navegación. Usando modo simple.', 'warning');
                 useSimpleNavigation(currentPos, lat, lng, delivery);
             }
         }
 
+        function addNavigationMarkers(origin, destination, delivery) {
+    // Marcador de origen (ubicación actual)
+    const originMarker = L.marker([origin.lat, origin.lng], {
+        icon: L.divIcon({
+            className: 'navigation-origin-marker',
+            html: `<div class="navigation-marker origin-marker">🚗</div>`,
+            iconSize: [40, 40],
+            iconAnchor: [20, 20]
+        })
+    }).addTo(map);
+
+    originMarker.bindPopup(`
+        <div style="text-align: center;">
+            <h4>Tu ubicación</h4>
+            <p>Punto de inicio</p>
+        </div>
+    `);
+
+    // Marcador de destino
+    const destinationMarker = L.marker([destination.lat, destination.lng], {
+        icon: L.divIcon({
+            className: 'navigation-destination-marker',
+            html: `<div class="navigation-marker destination-marker">🎯</div>`,
+            iconSize: [40, 40],
+            iconAnchor: [20, 20]
+        })
+    }).addTo(map);
+
+    destinationMarker.bindPopup(`
+        <div style="text-align: center;">
+            <h4>${delivery.job_details?.cliente || 'Cliente'}</h4>
+            <p>Destino de entrega</p>
+            ${delivery.job_details?.telefono ? `<p>📞 ${delivery.job_details.telefono}</p>` : ''}
+        </div>
+    `);
+
+    // Agregar a currentMarkers para limpiarlos después
+    currentMarkers.push(originMarker);
+    currentMarkers.push(destinationMarker);
+}
+
         // Navegación simple de fallback
         function useSimpleNavigation(currentPos, targetLat, targetLng, delivery) {
-            // Crear línea directa simple
+            addNavigationMarkers(currentPos, { lat: targetLat, lng: targetLng }, delivery);
             const directLine = L.polyline([
                 [currentPos.lat, currentPos.lng],
                 [targetLat, targetLng]
@@ -1623,8 +1789,10 @@
             document.getElementById('nav-distance').textContent = formatDistance(distance);
             document.getElementById('nav-eta').textContent = 'Navegación simplificada';
             document.getElementById('navigation-panel').classList.add('active');
+
+
             
-            showNotification(`Navegación simple a: ${delivery.job_details?.cliente || 'Cliente'}`, 'success');
+            //showNotification(`Navegación simple a: ${delivery.job_details?.cliente || 'Cliente'}`, 'success');
         }
 
         // Actualizar entrega actual
@@ -1700,7 +1868,7 @@
             updateMapMarker(deliveryId, status);
             
             const statusText = status === 'completed' ? 'entregado' : 'devuelto';
-            showNotification(`Entrega marcada como ${statusText}`, 'success');
+            //showNotification(`Entrega marcada como ${statusText}`, 'success');
             
             sendDeliveryUpdate(deliveryId, status);
 
@@ -1758,12 +1926,12 @@
                 if (data.success) {
                     console.log('✅ Estado actualizado en servidor');
                 } else {
-                    showNotification('Error sincronizando con servidor', 'warning');
+                    //showNotification('Error sincronizando con servidor', 'warning');
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                showNotification('Error de conexión con servidor', 'warning');
+                //showNotification('Error de conexión con servidor', 'warning');
             });
         }
 
@@ -1787,9 +1955,9 @@
         function centerOnLocation() {
             if (currentLocationMarker) {
                 map.setView(currentLocationMarker.getLatLng(), 18, { animate: true });
-                showNotification('Vista centrada en tu ubicación', 'success');
+                //showNotification('Vista centrada en tu ubicación', 'success');
             } else {
-                showNotification('Ubicación no disponible', 'warning');
+                //showNotification('Ubicación no disponible', 'warning');
                 initializeGPS();
             }
         }
@@ -1811,7 +1979,7 @@
                     handleLocationError,
                     { enableHighAccuracy: true, timeout: 5000, maximumAge: 1000 }
                 );
-                showNotification('Seguimiento GPS activado', 'success');
+                //showNotification('Seguimiento GPS activado', 'success');
             } else {
                 btn.classList.remove('active');
                 btn.title = 'Seguimiento GPS OFF';
@@ -1819,7 +1987,7 @@
                     navigator.geolocation.clearWatch(watchId);
                     watchId = null;
                 }
-                showNotification('Seguimiento GPS desactivado', 'info');
+                //showNotification('Seguimiento GPS desactivado', 'info');
             }
         }
 
@@ -1831,11 +1999,11 @@
             if (trafficView) {
                 btn.classList.add('active');
                 btn.title = 'Vista de tráfico ON';
-                showNotification('Vista de tráfico activada', 'info');
+                //showNotification('Vista de tráfico activada', 'info');
             } else {
                 btn.classList.remove('active');
                 btn.title = 'Vista de tráfico OFF';
-                showNotification('Vista de tráfico desactivada', 'info');
+                //showNotification('Vista de tráfico desactivada', 'info');
             }
         }
 
@@ -1847,18 +2015,18 @@
             if (autoZoom) {
                 btn.classList.add('active');
                 btn.title = 'Auto Zoom ON';
-                showNotification('Auto zoom activado', 'success');
+                //showNotification('Auto zoom activado', 'success');
             } else {
                 btn.classList.remove('active');
                 btn.title = 'Auto Zoom OFF';
-                showNotification('Auto zoom desactivado', 'info');
+                //showNotification('Auto zoom desactivado', 'info');
             }
         }
 
         // Alerta de emergencia
         function emergencyAlert() {
             if (confirm('¿Confirmas que quieres enviar una ALERTA DE EMERGENCIA?')) {
-                showNotification('🚨 ENVIANDO ALERTA DE EMERGENCIA...', 'error');
+                //showNotification('🚨 ENVIANDO ALERTA DE EMERGENCIA...', 'error');
                 
                 const location = currentLocationMarker ? currentLocationMarker.getLatLng() : null;
                 const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
@@ -1879,14 +2047,14 @@
                 }
                 
                 setTimeout(() => {
-                    showNotification('🚨 ALERTA DE EMERGENCIA ENVIADA', 'error');
+                    //showNotification('🚨 ALERTA DE EMERGENCIA ENVIADA', 'error');
                 }, 1000);
             }
         }
 
         // Cargar ruta (función auxiliar)
         function loadRoute() {
-            showNotification('Cargando ruta...', 'info');
+            //showNotification('Cargando ruta...', 'info');
             location.reload();
         }
 
@@ -2006,6 +2174,16 @@
                 updateNavigationPanel();
             }
         }
+        function updateOriginMarker(lat, lng) {
+    const originMarkers = currentMarkers.filter(marker => 
+        marker.options && marker.options.icon && 
+        marker.options.icon.options.className === 'navigation-origin-marker'
+    );
+    
+    if (originMarkers.length > 0) {
+        originMarkers[0].setLatLng([lat, lng]);
+    }
+}
 
         // Cleanup al salir
         window.addEventListener('beforeunload', function() {
