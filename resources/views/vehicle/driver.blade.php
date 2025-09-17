@@ -295,7 +295,25 @@
             border-left-color: #28a745;
             background: linear-gradient(135deg, #f8fff9 0%, #f0fff0 100%);
         }
+.panel-content.collapsed {
+    display: none !important;
+}
 
+    .toggle-icon.collapsed {
+    transform: rotate(180deg);
+    }
+
+    @media (max-width: 768px) {
+    .panel-header {
+        cursor: pointer;
+        user-select: none;
+    }
+    
+    .toggle-icon {
+        display: inline-block;
+        transition: transform 0.3s ease;
+    }
+}
         .delivery-item.returned {
             border-left-color: #dc3545;
             background: linear-gradient(135deg, #fff8f8 0%, #fff0f0 100%);
@@ -526,53 +544,6 @@
             opacity: 0.8;
         }
 
-        /* Responsive */
-        @media (max-width: 768px) {
-            .driver-panel {
-                left: 5px;
-                right: 5px;
-                max-width: none;
-                min-width: auto;
-            }
-
-            .panel-content.collapsed {
-                display: none;
-            }
-
-            .toggle-icon.collapsed {
-                transform: rotate(180deg);
-            }
-
-            .route-controls {
-                grid-template-columns: 1fr;
-            }
-
-            .delivery-stats {
-                grid-template-columns: 1fr 1fr;
-            }
-
-            .navigation-panel {
-                left: 10px;
-                right: 10px;
-                transform: none;
-                min-width: auto;
-            }
-
-            .nav-controls {
-                right: 5px;
-            }
-        }
-
-        @media (min-width: 769px) {
-            .panel-content {
-                display: block !important;
-            }
-
-            .toggle-icon {
-                display: none;
-            }
-        }
-
         /* Marcadores personalizados */
         .current-location-marker {
             width: 20px;
@@ -602,6 +573,212 @@
 
         .delivery-marker:hover {
             transform: scale(1.2);
+        }
+
+        /* ========================== */
+        /* MEJORAS DE RESPONSIVIDAD */
+        /* ========================== */
+
+        /* Dispositivos móviles pequeños (hasta 480px) */
+        @media (max-width: 480px) {
+            .driver-panel {
+                top: 5px;
+                left: 5px;
+                right: 5px;
+                max-width: none;
+                min-width: auto;
+                width: calc(100% - 10px);
+                border-radius: 12px;
+            }
+
+            .panel-header {
+                padding: 12px 15px;
+                border-radius: 12px 12px 0 0;
+            }
+
+            .panel-content {
+                padding: 15px;
+                max-height: 60vh;
+            }
+
+            .driver-info {
+                padding: 12px;
+            }
+
+            .driver-info p {
+                font-size: 13px;
+            }
+
+            .delivery-stats {
+                grid-template-columns: 1fr 1fr;
+                gap: 6px;
+            }
+
+            .stat-box {
+                padding: 10px 6px;
+            }
+
+            .stat-number {
+                font-size: 16px;
+            }
+
+            .route-controls {
+                grid-template-columns: 1fr;
+                gap: 6px;
+            }
+
+            .control-btn {
+                padding: 12px 10px;
+                font-size: 14px;
+            }
+
+            .delivery-item {
+                padding: 12px;
+            }
+
+            .delivery-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 6px;
+            }
+
+            .delivery-actions {
+                flex-direction: column;
+                gap: 6px;
+            }
+
+            .delivery-btn {
+                padding: 10px;
+                font-size: 13px;
+            }
+
+            .nav-controls {
+                top: 5px;
+                right: 5px;
+            }
+
+            .nav-btn {
+                width: 45px;
+                height: 45px;
+                font-size: 18px;
+            }
+
+            .navigation-panel {
+                left: 10px;
+                right: 10px;
+                bottom: 10px;
+                transform: none;
+                min-width: auto;
+                padding: 12px 18px;
+            }
+
+            .nav-instruction {
+                font-size: 16px;
+            }
+
+            .nav-distance {
+                font-size: 13px;
+            }
+
+            .nav-eta {
+                font-size: 11px;
+            }
+
+            .notification {
+                right: 10px;
+                left: 10px;
+                max-width: none;
+            }
+        }
+
+        /* Dispositivos móviles medianos (481px a 768px) */
+        @media (min-width: 481px) and (max-width: 768px) {
+            .driver-panel {
+                left: 10px;
+                right: 10px;
+                max-width: none;
+                min-width: auto;
+                width: calc(100% - 20px);
+            }
+
+            .panel-content.collapsed {
+                display: none;
+            }
+
+            .toggle-icon.collapsed {
+                transform: rotate(180deg);
+            }
+
+            .route-controls {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .delivery-stats {
+                grid-template-columns: 1fr 1fr 1fr;
+            }
+
+            .navigation-panel {
+                left: 20px;
+                right: 20px;
+                transform: none;
+                min-width: auto;
+            }
+
+            .nav-controls {
+                right: 10px;
+            }
+        }
+
+        /* Tablets (769px a 1024px) */
+        @media (min-width: 769px) and (max-width: 1024px) {
+            .driver-panel {
+                max-width: 350px;
+            }
+
+            .panel-content {
+                display: block !important;
+            }
+
+            .toggle-icon {
+                display: none;
+            }
+        }
+
+        /* Modo landscape en móviles */
+        @media (max-height: 500px) and (max-width: 900px) {
+            .driver-panel {
+                max-height: 80vh;
+            }
+
+            .panel-content {
+                max-height: 60vh;
+            }
+
+            .delivery-list {
+                max-height: 200px;
+            }
+        }
+
+        /* Mejoras de accesibilidad para dispositivos táctiles */
+        @media (hover: none) and (pointer: coarse) {
+            .control-btn, .delivery-btn, .nav-btn {
+                min-height: 44px; /* Tamaño mínimo recomendado para elementos táctiles */
+            }
+
+            .delivery-item:hover {
+                transform: none; /* Eliminar transformaciones hover en dispositivos táctiles */
+            }
+        }
+
+        /* Soporte para dispositivos con notch o áreas seguras */
+        @supports(padding: max(0px)) {
+            .driver-panel, .nav-controls {
+                top: max(10px, env(safe-area-inset-top));
+            }
+
+            .navigation-panel {
+                bottom: max(20px, env(safe-area-inset-bottom));
+            }
         }
     </style>
 </head>
@@ -708,18 +885,6 @@
         </div>
     </div>
 
-    <!-- Controles de navegación -->
-    <div class="nav-controls">
-        <button class="nav-btn" id="location-btn" onclick="toggleLocationTracking()" title="Seguimiento GPS">
-            📍
-        </button>
-        <button class="nav-btn" id="traffic-btn" onclick="toggleTrafficView()" title="Ver Tráfico">
-            🚦
-        </button>
-        <button class="nav-btn" id="zoom-btn" onclick="toggleZoomMode()" title="Auto Zoom">
-            🔍
-        </button>
-    </div>
 
     <!-- Panel de navegación estilo Waze -->
     <div class="navigation-panel" id="navigation-panel">
@@ -1726,29 +1891,60 @@
         }
 
         // Configurar event listeners
-        function setupEventListeners() {
-            // Panel colapsible en móviles
-            if (window.innerWidth <= 768) {
-                document.getElementById('panel-content').classList.add('collapsed');
-                document.getElementById('toggle-icon').textContent = '▲';
+    function setupEventListeners() {
+    // Panel colapsible en móviles - inicializar correctamente
+    if (window.innerWidth <= 768) {
+        const content = document.getElementById('panel-content');
+        const icon = document.getElementById('toggle-icon');
+        
+        if (content && icon) {
+            content.classList.add('collapsed');
+            icon.textContent = '▲';
+            icon.classList.add('collapsed');
+        }
+    }
+    
+    // Añadir event listener para redimensionamiento
+    window.addEventListener('resize', function() {
+        const content = document.getElementById('panel-content');
+        const icon = document.getElementById('toggle-icon');
+        
+        if (window.innerWidth > 768) {
+            // En desktop, siempre mostrar el panel
+            if (content) content.classList.remove('collapsed');
+            if (icon) {
+                icon.textContent = '▼';
+                icon.classList.remove('collapsed');
             }
         }
+    });
+    }
 
         // Toggle panel
-        function togglePanel() {
-            if (window.innerWidth <= 768) {
-                const content = document.getElementById('panel-content');
-                const icon = document.getElementById('toggle-icon');
+       function togglePanel() {
+    const content = document.getElementById('panel-content');
+    const icon = document.getElementById('toggle-icon');
 
-                if (content.classList.contains('collapsed')) {
-                    content.classList.remove('collapsed');
-                    icon.textContent = '▼';
-                } else {
-                    content.classList.add('collapsed');
-                    icon.textContent = '▲';
-                }
-            }
-        }
+    if (!content || !icon) {
+        console.error('Elementos del panel no encontrados');
+        return;
+    }
+
+    // Alternar clase collapsed
+    if (content.classList.contains('collapsed')) {
+        // Mostrar panel
+        content.classList.remove('collapsed');
+        icon.textContent = '▼';
+        icon.classList.remove('collapsed');
+        console.log('Panel expandido');
+    } else {
+        // Ocultar panel
+        content.classList.add('collapsed');
+        icon.textContent = '▲';
+        icon.classList.add('collapsed');
+        console.log('Panel colapsado');
+    }
+}
 
         // Funciones de utilidad
         function formatDistance(meters) {
