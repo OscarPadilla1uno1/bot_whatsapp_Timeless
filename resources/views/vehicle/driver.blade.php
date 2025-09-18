@@ -1022,17 +1022,8 @@
             </div>
 
             <div class="route-controls">
-                <button class="control-btn btn-primary" onclick="showOptimizedRoute()">
-                    📍 Mostrar Ruta
-                </button>
                 <button class="control-btn btn-success" id="navigation-button" onclick="toggleNavigation()">
                     🧭 Navegación
-                </button>
-                <button class="control-btn btn-warning" onclick="centerOnLocation()">
-                    🎯 Mi Posición
-                </button>
-                <button class="control-btn btn-danger" onclick="emergencyAlert()">
-                    🚨 Emergencia
                 </button>
             </div>
 
@@ -1738,7 +1729,7 @@
         console.log('Iniciando navegación a entrega:', deliveryId);
 
         if (!currentLocationMarker) {
-            showNotification('Esperando ubicación GPS...', 'warning');
+            //showNotification('Esperando ubicación GPS...', 'warning');
             setTimeout(() => navigateToDelivery(deliveryId), 3000);
             return;
         }
@@ -1811,7 +1802,7 @@
                     });
                 }
 
-                showNotification(`Navegando a: ${delivery.job_details?.cliente || 'Cliente'}`, 'info');
+                //showNotification(`Navegando a: ${delivery.job_details?.cliente || 'Cliente'}`, 'info');
 
             }).on('routesfound', function(e) {
                 console.log('Ruta encontrada:', e.routes[0]);
@@ -1836,7 +1827,7 @@
                     });
                 }
 
-                showNotification(`Navegando a: ${delivery.job_details?.cliente || 'Cliente'}`, 'info');
+                //showNotification(`Navegando a: ${delivery.job_details?.cliente || 'Cliente'}`, 'info');
             }).addTo(map);
 
         } catch (error) {
