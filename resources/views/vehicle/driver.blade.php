@@ -1845,6 +1845,42 @@
         }
     }
 
+    let lastRouteUpdate = 0;
+    const ROUTE_UPDATE_INTERVAL = 10000; // 10 segundos
+
+    function updateRouteOriginThrottled(lat, lng) {
+        const now = Date.now();
+
+        // Solo actualizar la ruta cada 10 segundos para no sobrecargar
+        if (now - lastRouteUpdate < ROUTE_UPDATE_INTERVAL) {
+            return;
+        }
+
+        if (!routingControl) return;
+
+        const waypoints = routingControl.getWaypoints();
+        if (waypoints && waypoints.length >= 2) {
+            const destination = waypoints[waypoints.length - 1];
+
+            // Calcular distancia desde la última actualización
+            const lastOrigin = waypoints[0].latLng;
+            const distance = calculateDistance(
+                lastOrigin.lat, lastOrigin.lng,
+                lat, lng
+            );
+
+            // Solo actualizar si se ha movido significativamente (más de 50 metros)
+            if (distance > 0.05) {
+                routingControl.setWaypoints([
+                    L.latLng(lat, lng),
+                    destination
+                ]);
+
+                lastRouteUpdate = now;
+            }
+        }
+    }
+
     function createDynamicRoutePolylines() {
         // Limpiar polylines anteriores
         if (completedRoutePolyline) {
@@ -1950,13 +1986,13 @@
             lng
         };
 
-        // Actualizar marcador de posición actual
+        // Actualizar marcador
         updateCurrentLocationMarker(lat, lng, heading);
 
-        // NUEVO: Actualizar waypoint de origen en tiempo real
-        updateRouteOrigin(lat, lng);
+        // Actualizar ruta (versión throttled para mejor rendimiento)
+        updateRouteOriginThrottled(lat, lng);
 
-        // Actualizar panel de navegación
+        // Actualizar panel
         updateRealTimeNavigationPanel();
 
         if (isNavigating && autoZoom) {
