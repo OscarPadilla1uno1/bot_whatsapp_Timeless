@@ -898,6 +898,38 @@
         transform: scale(1);
     }
 }
+.current-location-container {
+    transition: transform 0.3s ease;
+}
+
+.location-dot {
+    width: 16px;
+    height: 16px;
+    background: #4285F4;
+    border-radius: 50%;
+    border: 3px solid white;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.location-arrow {
+    color: #4285F4;
+    font-size: 12px;
+    position: absolute;
+    top: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    text-shadow: 0 0 3px white;
+}
+
+.nav-speed {
+    font-size: 12px;
+    color: #ff6b35;
+    font-weight: 600;
+}
     </style>
 </head>
 
@@ -981,9 +1013,6 @@
                                     <button class="delivery-btn btn-delivery" onclick="markDelivery('{{ $step['job'] }}', 'completed')">
                                         ✅ Entregado
                                     </button>
-                                    <button class="delivery-btn btn-return" onclick="markDelivery('{{ $step['job'] }}', 'returned')">
-                                        🔄 Devolución
-                                    </button>
                                 </div>
 
                                 <div class="delivery-status status-pending">Pendiente</div>
@@ -1054,6 +1083,15 @@
         let currentInstructions = [];
         let currentInstructionIndex = 0;
         let voiceEnabled = true;
+
+        // Variables para navegación en tiempo real
+        let navigationWatchId = null;
+        let currentSpeed = 0;
+        let lastKnownPosition = null;
+        let routeProgress = 0;
+        let currentStepIndex = 0;
+        let nextWaypointDistance = 0;
+        let estimatedArrival = null;
 
         // Inicialización del sistema
         document.addEventListener('DOMContentLoaded', function() {
@@ -1605,122 +1643,82 @@
             navigateToDelivery(nextDelivery.job);
         }
 
-        // Navegar a una entrega específica
         function navigateToDelivery(deliveryId) {
-            console.log('Iniciando navegación a entrega:', deliveryId);
+    console.log('Iniciando navegación a entrega:', deliveryId);
 
-            // Validar ubicación actual
-            if (!currentLocationMarker) {
-                //showNotification('Esperando ubicación GPS...', 'warning');
-                setTimeout(() => navigateToDelivery(deliveryId), 3000);
-                return;
-            }
+    if (!currentLocationMarker) {
+        showNotification('Esperando ubicación GPS...', 'warning');
+        setTimeout(() => navigateToDelivery(deliveryId), 3000);
+        return;
+    }
 
-            // Buscar la entrega
-            const delivery = driverRoute.steps.find(step => step.job == deliveryId);
-            if (!delivery) {
-                //showNotification('No se encontró la entrega', 'error');
-                return;
-            }
+    const delivery = driverRoute.steps.find(step => step.job == deliveryId);
+    if (!delivery || !delivery.location) {
+        showNotification('No se encontró la entrega', 'error');
+        return;
+    }
 
-            // Validar coordenadas de la entrega
-            if (!delivery.location || !Array.isArray(delivery.location) || delivery.location.length !== 2) {
-                //showNotification('Coordenadas de entrega no válidas', 'error');
-                console.error('Coordenadas inválidas:', delivery.location);
-                return;
-            }
+    const [lng, lat] = delivery.location;
+    const currentPos = currentLocationMarker.getLatLng();
+    
+    updateCurrentDelivery(deliveryId);
+    
+    if (routingControl) {
+        map.removeControl(routingControl);
+        routingControl = null;
+    }
+    
+    addNavigationMarkers(currentPos, { lat: lat, lng: lng }, delivery);
 
-            const [lng, lat] = delivery.location;
+    try {
+        routingControl = L.Routing.control({
+            waypoints: [
+                L.latLng(currentPos.lat, currentPos.lng),
+                L.latLng(lat, lng)
+            ],
+            routeWhileDragging: false,
+            addWaypoints: false,
+            createMarker: function() { return null; },
+            lineOptions: {
+                styles: [{
+                    color: '#ff6b35',
+                    weight: 6,
+                    opacity: 0.8
+                }]
+            },
+            router: L.Routing.osrmv1({
+                serviceUrl: 'https://lacampañafoodservice.com/osrm/route/v1',
+                language: 'es',
+                timeout: 30000
+            })
+        }).on('routesfound', function(e) {
+            console.log('Ruta encontrada:', e.routes[0]);
+            const route = e.routes[0];
+            currentRoute = route;
+            currentInstructions = route.instructions || [];
+            currentInstructionIndex = 0;
             
-            // Validar que las coordenadas sean números válidos
-            if (isNaN(lat) || isNaN(lng) || lat === 0 || lng === 0) {
-                //showNotification('Coordenadas de entrega incorrectas', 'error');
-                console.error('Coordenadas no numéricas:', lat, lng);
-                return;
-            }
-
-            // Validar que las coordenadas estén en rangos válidos
-            if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-                //showNotification('Coordenadas fuera de rango', 'error');
-                console.error('Coordenadas fuera de rango:', lat, lng);
-                return;
-            }
-
-            const currentPos = currentLocationMarker.getLatLng();
+            // NUEVO: Iniciar navegación en tiempo real
+            startRealTimeNavigation(delivery);
             
-            // Validar ubicación actual
-            if (isNaN(currentPos.lat) || isNaN(currentPos.lng)) {
-                //showNotification('Ubicación GPS no válida', 'error');
-                return;
+            updateNavigationPanel();
+            
+            if (autoZoom && route.bounds) {
+                map.fitBounds(route.bounds, { padding: [20, 20] });
             }
+            
+            showNotification(`Navegando a: ${delivery.job_details?.cliente || 'Cliente'}`, 'info');
+            
+        }).on('routingerror', function(e) {
+            console.error('Error de routing:', e);
+            useSimpleNavigation(currentPos, lat, lng, delivery);
+        }).addTo(map);
 
-            console.log('Navegando desde:', currentPos.lat, currentPos.lng, 'hasta:', lat, lng);
-
-            // Marcar como entrega actual
-            updateCurrentDelivery(deliveryId);
-
-            // Limpiar ruta anterior
-            if (routingControl) {
-                map.removeControl(routingControl);
-                routingControl = null;
-            }
-            addNavigationMarkers(currentPos, { lat: lat, lng: lng }, delivery);
-
-            try {
-                // Crear ruta usando Leaflet Routing Machine con manejo de errores
-                routingControl = L.Routing.control({
-                    waypoints: [
-                        L.latLng(currentPos.lat, currentPos.lng),
-                        L.latLng(lat, lng)
-                    ],
-                    routeWhileDragging: false,
-                    addWaypoints: false,
-                    createMarker: function() { return null; },
-                    lineOptions: {
-                        styles: [{
-                            color: '#ff6b35',
-                            weight: 6,
-                            opacity: 0.8
-                        }]
-                    },
-                    // Configurar servicio de routing
-                    router: L.Routing.osrmv1({
-                        serviceUrl: 'https://lacampañafoodservice.com/osrm/route/v1',
-                        language: 'es',
-                        timeout: 30000
-                    })
-                }).on('routesfound', function(e) {
-                    console.log('Ruta encontrada:', e.routes[0]);
-                    const route = e.routes[0];
-                    currentRoute = route;
-                    currentInstructions = route.instructions || [];
-                    currentInstructionIndex = 0;
-                    
-                    updateNavigationPanel();
-                    
-                    // Centrar mapa en la ruta
-                    if (autoZoom && route.bounds) {
-                        map.fitBounds(route.bounds, { padding: [20, 20] });
-                    }
-                    
-                    //showNotification(`Navegando a: ${delivery.job_details?.cliente || 'Cliente'}`, 'info');
-                    
-                }).on('routingerror', function(e) {
-                    console.error('Error de routing:', e);
-                    //showNotification('Error calculando ruta. Usando navegación simple.', 'warning');
-                    
-                    // Fallback: usar navegación simple sin routing
-                    useSimpleNavigation(currentPos, lat, lng, delivery);
-                    
-                }).addTo(map);
-
-            } catch (error) {
-                console.error('Error creando control de routing:', error);
-                //showNotification('Error en navegación. Usando modo simple.', 'warning');
-                useSimpleNavigation(currentPos, lat, lng, delivery);
-            }
-        }
-
+    } catch (error) {
+        console.error('Error creando control de routing:', error);
+        useSimpleNavigation(currentPos, lat, lng, delivery);
+    }
+}
         function addNavigationMarkers(origin, destination, delivery) {
     // Marcador de origen (ubicación actual)
     const originMarker = L.marker([origin.lat, origin.lng], {
@@ -1760,6 +1758,186 @@
     // Agregar a currentMarkers para limpiarlos después
     currentMarkers.push(originMarker);
     currentMarkers.push(destinationMarker);
+}
+
+// NUEVA FUNCIÓN: Iniciar navegación en tiempo real
+function startRealTimeNavigation(delivery) {
+    console.log('🚀 Iniciando navegación en tiempo real');
+    
+    const panel = document.getElementById('navigation-panel');
+    panel.classList.add('active');
+    
+    // Configurar seguimiento GPS de alta precisión
+    const options = {
+        enableHighAccuracy: true,
+        timeout: 5000,
+        maximumAge: 1000
+    };
+
+    // Iniciar seguimiento continuo
+    if (navigationWatchId) {
+        navigator.geolocation.clearWatch(navigationWatchId);
+    }
+
+    navigationWatchId = navigator.geolocation.watchPosition(
+        (position) => handleRealTimePosition(position, delivery),
+        handleLocationError,
+        options
+    );
+}
+
+// NUEVA FUNCIÓN: Manejar posición en tiempo real
+function handleRealTimePosition(position, delivery) {
+    const lat = position.coords.latitude;
+    const lng = position.coords.longitude;
+    const speed = position.coords.speed || 0;
+    const heading = position.coords.heading;
+    
+    currentSpeed = speed * 3.6; // Convertir a km/h
+    lastKnownPosition = { lat, lng };
+    
+    // Actualizar marcador de posición actual
+    updateCurrentLocationMarker(lat, lng, heading);
+    
+    // Actualizar progreso de navegación
+    updateNavigationProgress(lat, lng, delivery);
+    
+    // Actualizar panel de navegación
+    updateRealTimeNavigationPanel();
+    
+    // Auto-centrar si está navegando
+    if (isNavigating && autoZoom) {
+        map.setView([lat, lng], 18, { animate: true, duration: 0.5 });
+    }
+}
+
+// NUEVA FUNCIÓN: Actualizar marcador con dirección
+function updateCurrentLocationMarker(lat, lng, heading) {
+    if (currentLocationMarker) {
+        currentLocationMarker.setLatLng([lat, lng]);
+        
+        // Actualizar rotación del marcador según la dirección
+        if (heading !== null && heading !== undefined) {
+            const markerElement = currentLocationMarker.getElement();
+            if (markerElement) {
+                markerElement.style.transform += ` rotate(${heading}deg)`;
+            }
+        }
+    } else {
+        // Crear nuevo marcador con indicador de dirección
+        const markerHtml = `
+            <div class="current-location-marker" ${heading ? `style="transform: rotate(${heading}deg)"` : ''}>
+                <div class="location-dot"></div>
+                <div class="location-arrow">▲</div>
+            </div>
+        `;
+        
+        currentLocationMarker = L.marker([lat, lng], {
+            icon: L.divIcon({
+                className: 'current-location-container',
+                html: markerHtml,
+                iconSize: [30, 30],
+                iconAnchor: [15, 15]
+            })
+        }).addTo(map);
+    }
+}
+
+// NUEVA FUNCIÓN: Actualizar progreso de navegación
+function updateNavigationProgress(currentLat, currentLng, delivery) {
+    if (!currentRoute || !currentInstructions || !delivery.location) return;
+    
+    const [destLng, destLat] = delivery.location;
+    const distanceToDestination = calculateDistance(currentLat, currentLng, destLat, destLng);
+    
+    // Encontrar la instrucción más cercana
+    let closestInstructionIndex = 0;
+    let minDistance = Infinity;
+    
+    currentInstructions.forEach((instruction, index) => {
+        if (instruction.index && currentRoute.coordinates) {
+            const coordIndex = instruction.index[0];
+            const coord = currentRoute.coordinates[coordIndex];
+            if (coord) {
+                const distance = calculateDistance(currentLat, currentLng, coord.lat, coord.lng);
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    closestInstructionIndex = index;
+                }
+            }
+        }
+    });
+    
+    // Actualizar instrucción actual si ha cambiado
+    if (closestInstructionIndex !== currentInstructionIndex) {
+        currentInstructionIndex = closestInstructionIndex;
+        updateRealTimeNavigationPanel();
+        
+        // Reproducir instrucción de voz (opcional)
+        if (voiceEnabled) {
+            speakInstruction(currentInstructions[currentInstructionIndex]);
+        }
+    }
+    
+    nextWaypointDistance = distanceToDestination;
+    
+    // Calcular ETA
+    if (currentSpeed > 0) {
+        const timeInHours = distanceToDestination / (currentSpeed * 1000);
+        estimatedArrival = new Date(Date.now() + timeInHours * 3600000);
+    }
+}
+
+// NUEVA FUNCIÓN: Actualizar panel en tiempo real
+function updateRealTimeNavigationPanel() {
+    const instruction = currentInstructions[currentInstructionIndex];
+    if (!instruction) return;
+    
+    const instructionElement = document.getElementById('nav-instruction');
+    const distanceElement = document.getElementById('nav-distance');
+    const etaElement = document.getElementById('nav-eta');
+    
+    if (instructionElement) {
+        instructionElement.textContent = instruction.text || 'Continúa recto';
+    }
+    
+    if (distanceElement) {
+        distanceElement.textContent = formatDistance(nextWaypointDistance * 1000);
+    }
+    
+    if (etaElement) {
+        const eta = estimatedArrival ? estimatedArrival.toLocaleTimeString('es-ES', { 
+            hour: '2-digit', 
+            minute: '2-digit' 
+        }) : '--:--';
+        etaElement.innerHTML = `
+            Llegada: ${eta}<br>
+            <span class="nav-speed">Velocidad: ${Math.round(currentSpeed)} km/h</span>
+        `;
+    }
+}
+
+// NUEVA FUNCIÓN: Calcular distancia entre dos puntos (en km)
+function calculateDistance(lat1, lng1, lat2, lng2) {
+    const R = 6371; // Radio de la Tierra en km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLng/2) * Math.sin(dLng/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+}
+
+// NUEVA FUNCIÓN: Síntesis de voz (opcional)
+function speakInstruction(instruction) {
+    if ('speechSynthesis' in window && instruction && instruction.text) {
+        const utterance = new SpeechSynthesisUtterance(instruction.text);
+        utterance.lang = 'es-ES';
+        utterance.rate = 0.9;
+        utterance.volume = 0.8;
+        speechSynthesis.speak(utterance);
+    }
 }
 
         // Navegación simple de fallback
