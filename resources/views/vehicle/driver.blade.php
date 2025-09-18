@@ -1786,7 +1786,13 @@
                     serviceUrl: 'https://lacampañafoodservice.com/osrm/route/v1',
                     language: 'es',
                     timeout: 30000
-                })
+                }),
+                // NUEVO: Permitir que la ruta se actualice cuando cambian los waypoints
+                autoRoute: true,
+                // NUEVO: Configurar la frecuencia de actualización
+                routeWhileDragging: false,
+                // NUEVO: Añadir configuración para recalcular ruta
+                fitSelectedRoutes: false
             }).on('routesfound', function(e) {
                 console.log('Ruta encontrada:', e.routes[0]);
                 const route = e.routes[0];
@@ -1932,14 +1938,13 @@
         );
     }
 
-    // NUEVA FUNCIÓN: Manejar posición en tiempo real
     function handleRealTimePosition(position, delivery) {
         const lat = position.coords.latitude;
         const lng = position.coords.longitude;
         const speed = position.coords.speed || 0;
         const heading = position.coords.heading;
 
-        currentSpeed = speed * 3.6; // Convertir a km/h
+        currentSpeed = speed * 3.6;
         lastKnownPosition = {
             lat,
             lng
@@ -1948,13 +1953,12 @@
         // Actualizar marcador de posición actual
         updateCurrentLocationMarker(lat, lng, heading);
 
-        // Actualizar progreso de navegación
-        updateNavigationProgress(lat, lng, delivery);
+        // NUEVO: Actualizar waypoint de origen en tiempo real
+        updateRouteOrigin(lat, lng);
 
         // Actualizar panel de navegación
         updateRealTimeNavigationPanel();
 
-        // Auto-centrar si está navegando
         if (isNavigating && autoZoom) {
             map.setView([lat, lng], 18, {
                 animate: true,
@@ -1963,7 +1967,25 @@
         }
     }
 
-    // NUEVA FUNCIÓN: Actualizar marcador con dirección
+    function updateRouteOrigin(lat, lng) {
+        if (!routingControl) return;
+
+        const waypoints = routingControl.getWaypoints();
+        if (waypoints && waypoints.length >= 2) {
+            // Actualizar solo el primer waypoint (origen) manteniendo el destino
+            const destination = waypoints[waypoints.length - 1];
+
+            // Crear nuevos waypoints con la posición actualizada
+            const newWaypoints = [
+                L.latLng(lat, lng),
+                destination
+            ];
+
+            // Actualizar la ruta sin recrear todo el control
+            routingControl.setWaypoints(newWaypoints);
+        }
+    }
+
     function updateCurrentLocationMarker(lat, lng, heading) {
         if (currentLocationMarker) {
             currentLocationMarker.setLatLng([lat, lng]);
