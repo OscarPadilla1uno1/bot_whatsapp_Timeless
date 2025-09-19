@@ -185,8 +185,12 @@ class PlacetoPayController extends Controller
         }
     }
 
-    public function handleWebhook(Request $request)
+    public function handleWebhook(Request $request, $token)
     {
+        if ($token !== env('PLACETOPAY_WEBHOOK_TOKEN')) {
+            return response()->json(['error' => 'Unauthorized'], 401);
+        }
+
         try {
             $placetopay = new PlacetoPay([
                 'login' => env('PLACETOPAY_LOGIN'),
