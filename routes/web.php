@@ -8,6 +8,10 @@ use App\Http\Controllers\DashboardController;
 use Illuminate\Support\Facades\Auth;
 use App\Http\Middleware\CheckPermission;
 use App\Http\Controllers\HoraController;
+use App\Models\Pago;
+use Dnetix\Redirection\PlacetoPay;
+use App\Models\Pedido;
+use Illuminate\Http\Request;
 
 
 Route::get('/routes', [VroomController::class, 'index'])->name('routes');
@@ -124,13 +128,64 @@ Route::middleware('auth')->group(function () {
 
 });
 
-Route::get('/pago/exito', function (Illuminate\Http\Request $request) {
+Route::get('/pago/exito', function (Request $request) {
     $reference = $request->query('reference');
 
-    // Buscar el pago en base de datos
-    $pago = \App\Models\Pago::where('referencia_transaccion', $reference)->firstOrFail();
+    if (!$reference) {
+        abort(400, 'Referencia no proporcionada');
+    }
 
-    return view('pago.exito', compact('pago'));
+    // Buscar el pago en base de datos
+    $pago = Pago::where('referencia_transaccion', $reference)->firstOrFail();
+
+    try {
+        // Inicializar SDK PlacetoPay
+        $placetopay = new PlacetoPay([
+            'login'   => env('PLACETOPAY_LOGIN'),
+            'tranKey' => env('SecretKey'),
+            'baseUrl' => env('PLACETOPAY_BASE_URL'),
+        ]);
+
+        // Usar el request_id asociado al pago para validar con PlacetoPay
+        $response = $placetopay->query($pago->request_id);
+
+        if (!$response->isSuccessful()) {
+            Log::warning("Error verificando transacción {$pago->request_id}: {$response->status()->message()}");
+            return view('pago.error', ['mensaje' => 'No se pudo validar el estado de su pago']);
+        }
+
+        // Obtener estado real de PlacetoPay
+        $estadoReal = $response->status()->status();
+
+        // Actualizar estado en DB según lo que dice PlacetoPay
+        if ($response->isApproved()) {
+            $pago->estado_pago = 'confirmado';
+            $payments = $response->toArray()['payment'] ?? [];
+            if (!empty($payments) && !empty($payments[0]['internalReference'])) {
+                $pago->internal_reference = $payments[0]['internalReference'];
+            }
+
+            // ✅ Mover el pedido a "en preparacion"
+            $pedido = $pago->pedido;
+            if ($pedido && $pedido->estado !== 'en preparacion') {
+                $pedido->estado = 'en preparacion';
+                $pedido->save();
+            }
+
+        } elseif ($estadoReal === 'FAILED' || $response->isRejected()) {
+            $pago->estado_pago = 'fallido';
+        } else {
+            $pago->estado_pago = 'pendiente';
+        }
+
+        $pago->save();
+
+        // Renderizar la vista con el estado actualizado
+        return view('pago.exito', compact('pago'));
+    } catch (\Exception $e) {
+        Log::error("Error en return URL de PlacetoPay: " . $e->getMessage());
+        abort(400, 'Datos inválidos en la respuesta de PlacetoPay');
+    }
 })->name('pago.exito');
 
 Route::get('/pago/cancelado', function () {
