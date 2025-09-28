@@ -141,7 +141,7 @@ Route::get('/pago/exito', function (Request $request) {
     try {
         // Inicializar SDK PlacetoPay
         $placetopay = new PlacetoPay([
-            'login'   => env('PLACETOPAY_LOGIN'),
+            'login' => env('PLACETOPAY_LOGIN'),
             'tranKey' => env('SecretKey'),
             'baseUrl' => env('PLACETOPAY_BASE_URL'),
         ]);
@@ -172,13 +172,71 @@ Route::get('/pago/exito', function (Request $request) {
                 $pedido->save();
             }
 
+            $pago->save();
+
+            if (!$pago->notificado) {
+                $cliente = $pago->pedido ? $pago->pedido->cliente : null;
+                $telefono = $cliente ? $cliente->telefono : null;
+                $nombre = $cliente ? $cliente->nombre : 'Usuario';
+
+                if ($telefono) {
+                    $mensaje = "Hola {$nombre}, hemos recibido la actualización de tu pago con referencia {$pago->referencia_transaccion}. Estado: {$pago->estado_pago}.";
+
+                    $payload = [
+                        'numero' => $telefono,
+                        'mensaje' => $mensaje,
+                    ];
+
+                    $botResponse = Http::post("http://xn--lacampaafoodservice-13b.com:3008/v1/send-message", $payload);
+
+                    if ($botResponse->successful()) {
+                        $pago->notificado = true;
+                        $pago->save();
+                    } else {
+                        Log::warning("Error enviando notificación de pago {$pago->id}: " . $botResponse->body());
+                    }
+                } else {
+                    Log::warning("El pago {$pago->id} no tiene teléfono asociado para notificación.");
+                }
+            }
+
         } elseif ($estadoReal === 'FAILED' || $response->isRejected()) {
             $pago->estado_pago = 'fallido';
+            $pago->save();
+
+            if (!$pago->notificado) {
+                $cliente = $pago->pedido ? $pago->pedido->cliente : null;
+                $telefono = $cliente ? $cliente->telefono : null;
+                $nombre = $cliente ? $cliente->nombre : 'Usuario';
+
+                if ($telefono) {
+                    $mensaje = "Hola {$nombre}, hemos recibido la actualización de tu pago con referencia {$pago->referencia_transaccion}. Estado: {$pago->estado_pago}.";
+
+                    $payload = [
+                        'numero' => $telefono,
+                        'mensaje' => $mensaje,
+                    ];
+
+                    $botResponse = Http::post("http://xn--lacampaafoodservice-13b.com:3008/v1/send-message", $payload);
+
+                    if ($botResponse->successful()) {
+                        $pago->notificado = true;
+                        $pago->save();
+                    } else {
+                        Log::warning("Error enviando notificación de pago {$pago->id}: " . $botResponse->body());
+                    }
+                } else {
+                    Log::warning("El pago {$pago->id} no tiene teléfono asociado para notificación.");
+                }
+            }
+
+
         } else {
             $pago->estado_pago = 'pendiente';
+            $pago->save();
         }
 
-        $pago->save();
+
 
         // Renderizar la vista con el estado actualizado
         return view('pago.exito', compact('pago'));
