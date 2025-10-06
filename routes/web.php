@@ -217,6 +217,22 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/admin/pedidos-del-dia', [VroomController::class, 'getPedidosDelDia'])
         ->name('admin.pedidos_del_dia')
         ->can('Administrador');
+
+    Route::post('/admin/drivers/toggle-availability', [VroomController::class, 'toggleDriverAvailability'])
+        ->name('admin.drivers.toggle_availability')
+        ->can('Administrador');
+
+    Route::get('/admin/drivers/with-availability', [VroomController::class, 'getDriversWithAvailability'])
+        ->name('admin.drivers.with_availability')
+        ->can('Administrador');
+
+    // Ruta para verificar nueva jornada
+    Route::get('/motorista/check-new-shift', [VroomController::class, 'checkNewShift'])
+        ->name('motorista.check_new_shift')
+        ->can('Motorista');
+    Route::get('/admin/jornada/{jornadaId}/pedidos', [VroomController::class, 'getPedidosJornada'])
+        ->name('admin.jornada.pedidos')
+        ->can('Administrador');
 });
 Route::post('/admin/distribuir-pedidos-automaticamente', [VroomController::class, 'distribuirPedidosAutomaticamente'])
     ->name('admin.distribuir_automatico')

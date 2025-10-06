@@ -979,6 +979,55 @@
         color: #ff6b35;
         font-weight: 600;
     }
+
+    .new-shift-notification {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 2000;
+        background: white;
+        border-radius: 16px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        padding: 30px;
+        text-align: center;
+        min-width: 300px;
+        animation: slideIn 0.3s ease;
+    }
+
+    @keyframes slideIn {
+        from {
+            transform: translate(-50%, -50%) scale(0.8);
+            opacity: 0;
+        }
+
+        to {
+            transform: translate(-50%, -50%) scale(1);
+            opacity: 1;
+        }
+    }
+
+    .notification-content h3 {
+        color: #28a745;
+        margin-bottom: 15px;
+    }
+
+    .btn-reload {
+        background: linear-gradient(135deg, #28a745, #1e7e34);
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        margin-top: 15px;
+    }
+
+    .btn-reload:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 16px rgba(40, 167, 69, 0.3);
+    }
     </style>
 </head>
 
@@ -1015,15 +1064,34 @@
                     <div class="stat-number" id="pending-count">{{ count($route['steps']) }}</div>
                     <div class="stat-label">Pendientes</div>
                 </div>
-                <div class="stat-box">
-                    <div class="stat-number" id="current-delivery">-</div>
-                    <div class="stat-label">Actual</div>
-                </div>
             </div>
 
             <div class="route-controls">
                 <button class="control-btn btn-success" id="navigation-button" onclick="toggleNavigation()">
                     🧭 Navegación
+                </button>
+            </div>
+            <div class="new-shift-notification" id="new-shift-notification" style="display: none;">
+                <div class="notification-content">
+                    <button onclick="hideNewShiftNotification()"
+                        style="position: absolute; top: 10px; right: 10px; background: none; border: none; font-size: 20px; cursor: pointer; color: #999;">
+                        ✕
+                    </button>
+                    <h3>🎯 Nueva jornada asignada</h3>
+                    <p>Tienes una nueva jornada de entregas asignada</p>
+                    <button onclick="reloadShiftView()" class="btn-reload">
+                        🔄 Cargar nueva jornada
+                    </button>
+                </div>
+            </div>
+            <div class="route-controls">
+                <!-- Botones existentes... -->
+
+                <button class="control-btn btn-primary" onclick="checkForNewShift()">
+                    🔄 Verificar nuevas jornadas
+                </button>
+                <button class="control-btn btn-success" onclick="reloadShiftView()">
+                    ↻ Recargar vista
                 </button>
             </div>
 
@@ -1034,7 +1102,7 @@
                     <div class="delivery-header">
                         <div class="delivery-client">{{ $step['job_details']['cliente'] ?? 'Cliente desconocido' }}
                         </div>
-                        <div class="delivery-number">Parada {{ $index + 1 }}</div>
+                        <div class="delivery-number">Parada {{ $index }}</div>
                     </div>
 
                     <div class="delivery-info">
@@ -1056,6 +1124,7 @@
                             ✅ Entregado
                         </button>
                     </div>
+
 
                     <div class="delivery-status status-pending">Pendiente</div>
                 </div>
@@ -1120,6 +1189,23 @@
     let trafficView = false;
     let autoZoom = true;
 
+    let lastShiftCheckTime = 0;
+    let currentShiftId = @json($route['jornada_id'] ?? null);
+    let shiftCheckInterval = null;
+
+    function getNotifiedShifts() {
+        const notified = localStorage.getItem('notified_shifts');
+        return notified ? JSON.parse(notified) : [];
+    }
+
+    function markShiftAsNotified(shiftId) {
+        const notified = getNotifiedShifts();
+        if (!notified.includes(shiftId)) {
+            notified.push(shiftId);
+            localStorage.setItem('notified_shifts', JSON.stringify(notified));
+        }
+    }
+
     // Variables de navegación
     let currentRoute = null;
     let currentInstructions = [];
@@ -1155,7 +1241,7 @@
         // Ocultar loading después de inicializar
         setTimeout(() => {
             hideLoading();
-            //showNotification('Sistema de navegación listo', 'success');
+            ////showNotification('Sistema de navegación listo', 'success');
         }, 3000);
     });
 
@@ -1173,7 +1259,7 @@
     // Inicializar GPS
     function initializeGPS() {
         if (!navigator.geolocation) {
-            //showNotification('GPS no disponible en este dispositivo', 'error');
+            ////showNotification('GPS no disponible en este dispositivo', 'error');
             return;
         }
 
@@ -1223,7 +1309,7 @@
                 break;
         }
 
-        //showNotification(message, 'error');
+        ////showNotification(message, 'error');
         document.getElementById('location-status').textContent = 'Error GPS';
         document.getElementById('status-indicator').style.backgroundColor = '#dc3545';
     }
@@ -1276,7 +1362,7 @@
         // Validar estructura de la ruta
         if (!driverRoute.steps || !Array.isArray(driverRoute.steps)) {
             console.error('❌ Estructura de ruta inválida - no hay steps');
-            //showNotification('Estructura de ruta inválida', 'error');
+            ////showNotification('Estructura de ruta inválida', 'error');
             return;
         }
 
@@ -1312,9 +1398,9 @@
         console.log(`✅ Entregas válidas: ${validDeliveries}, ❌ Inválidas: ${invalidDeliveries}`);
 
         if (validDeliveries === 0) {
-            //showNotification('No hay entregas con coordenadas válidas', 'warning');
+            ////showNotification('No hay entregas con coordenadas válidas', 'warning');
         } else if (invalidDeliveries > 0) {
-            //showNotification(`${invalidDeliveries} entregas sin coordenadas válidas`, 'warning');
+            ////showNotification(`${invalidDeliveries} entregas sin coordenadas válidas`, 'warning');
         }
 
         updateStats();
@@ -1348,7 +1434,7 @@
                 break;
         }
 
-        //showNotification(message, severity);
+        ////showNotification(message, severity);
         document.getElementById('location-status').textContent = 'Error GPS';
         document.getElementById('status-indicator').style.backgroundColor = '#dc3545';
     }
@@ -1426,7 +1512,7 @@
         const currentPos = currentLocationMarker.getLatLng();
         useSimpleNavigation(currentPos, testCoords.lat, testCoords.lng, testDelivery);
 
-        //showNotification('Navegación de prueba iniciada', 'info');
+        ////showNotification('Navegación de prueba iniciada', 'info');
     }
 
     // Función mejorada de inicialización con más validaciones
@@ -1435,25 +1521,25 @@
 
         // Verificar soporte de geolocalización
         if (!navigator.geolocation) {
-            //showNotification('GPS no soportado en este navegador', 'error');
+            ////showNotification('GPS no soportado en este navegador', 'error');
             return false;
         }
 
         // Verificar que Leaflet esté cargado
         if (typeof L === 'undefined') {
-            //showNotification('Error: Leaflet no está cargado', 'error');
+            ////showNotification('Error: Leaflet no está cargado', 'error');
             return false;
         }
 
         // Verificar que el mapa esté inicializado
         if (!map) {
-            //showNotification('Error: Mapa no inicializado', 'error');
+            ////showNotification('Error: Mapa no inicializado', 'error');
             return false;
         }
 
         // Verificar datos del driver
         if (!driverData || !driverData.id) {
-            //showNotification('Error: Datos del motorista inválidos', 'error');
+            ////showNotification('Error: Datos del motorista inválidos', 'error');
             return false;
         }
 
@@ -1485,13 +1571,13 @@
 
         } catch (error) {
             console.error('❌ Error crítico en inicialización:', error);
-            //showNotification('Error crítico en inicialización', 'error');
+            ////showNotification('Error crítico en inicialización', 'error');
         }
 
         // Ocultar loading después de inicializar
         setTimeout(() => {
             hideLoading();
-            //showNotification('Sistema de navegación listo', 'success');
+            ////showNotification('Sistema de navegación listo', 'success');
         }, 3000);
     });
 
@@ -1500,7 +1586,7 @@
         console.log('🗺️ Mostrando ruta optimizada...');
 
         if (!driverRoute || !driverRoute.steps) {
-            //showNotification('No hay ruta para mostrar', 'warning');
+            ////showNotification('No hay ruta para mostrar', 'warning');
             return;
         }
 
@@ -1529,7 +1615,7 @@
         // Añadir marcadores de entregas
         addDeliveryMarkers();
 
-        //showNotification('Ruta mostrada en el mapa', 'success');
+        ////showNotification('Ruta mostrada en el mapa', 'success');
     }
 
     // Añadir marcadores de entregas
@@ -1628,21 +1714,21 @@
             button.classList.remove('btn-success');
             button.classList.add('btn-danger');
             panel.classList.add('active');
-            //showNotification('Navegación activada', 'success');
+            ////showNotification('Navegación activada', 'success');
         } else {
             stopNavigation();
             button.textContent = '🧭 Navegación';
             button.classList.remove('btn-danger');
             button.classList.add('btn-success');
             panel.classList.remove('active');
-            //showNotification('Navegación desactivada', 'info');
+            ////showNotification('Navegación desactivada', 'info');
         }
     }
 
     // Iniciar navegación
     function startNavigation() {
         if (!currentLocationMarker) {
-            //showNotification('Esperando ubicación GPS...', 'warning');
+            ////showNotification('Esperando ubicación GPS...', 'warning');
             setTimeout(startNavigation, 2000);
             return;
         }
@@ -1716,7 +1802,7 @@
         );
 
         if (pendingDeliveries.length === 0) {
-            //showNotification('¡Todas las entregas completadas!', 'success');
+            ////showNotification('¡Todas las entregas completadas!', 'success');
             stopNavigation();
             return;
         }
@@ -1729,14 +1815,14 @@
         console.log('Iniciando navegación a entrega:', deliveryId);
 
         if (!currentLocationMarker) {
-            //showNotification('Esperando ubicación GPS...', 'warning');
+            ////showNotification('Esperando ubicación GPS...', 'warning');
             setTimeout(() => navigateToDelivery(deliveryId), 3000);
             return;
         }
 
         const delivery = driverRoute.steps.find(step => step.job == deliveryId);
         if (!delivery || !delivery.location) {
-            showNotification('No se encontró la entrega', 'error');
+            //showNotification('No se encontró la entrega', 'error');
             return;
         }
 
@@ -1802,7 +1888,7 @@
                     });
                 }
 
-                //showNotification(`Navegando a: ${delivery.job_details?.cliente || 'Cliente'}`, 'info');
+                ////showNotification(`Navegando a: ${delivery.job_details?.cliente || 'Cliente'}`, 'info');
 
             }).on('routesfound', function(e) {
                 console.log('Ruta encontrada:', e.routes[0]);
@@ -1827,7 +1913,7 @@
                     });
                 }
 
-                //showNotification(`Navegando a: ${delivery.job_details?.cliente || 'Cliente'}`, 'info');
+                ////showNotification(`Navegando a: ${delivery.job_details?.cliente || 'Cliente'}`, 'info');
             }).addTo(map);
 
         } catch (error) {
@@ -2247,7 +2333,7 @@
 
 
 
-        //showNotification(`Navegación simple a: ${delivery.job_details?.cliente || 'Cliente'}`, 'success');
+        ////showNotification(`Navegación simple a: ${delivery.job_details?.cliente || 'Cliente'}`, 'success');
     }
 
     // Actualizar entrega actual
@@ -2326,7 +2412,7 @@
         updateMapMarker(deliveryId, status);
 
         const statusText = status === 'completed' ? 'entregado' : 'devuelto';
-        //showNotification(`Entrega marcada como ${statusText}`, 'success');
+        ////showNotification(`Entrega marcada como ${statusText}`, 'success');
 
         sendDeliveryUpdate(deliveryId, status);
 
@@ -2384,12 +2470,12 @@
                 if (data.success) {
                     console.log('✅ Estado actualizado en servidor');
                 } else {
-                    //showNotification('Error sincronizando con servidor', 'warning');
+                    ////showNotification('Error sincronizando con servidor', 'warning');
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                //showNotification('Error de conexión con servidor', 'warning');
+                ////showNotification('Error de conexión con servidor', 'warning');
             });
     }
 
@@ -2415,9 +2501,9 @@
             map.setView(currentLocationMarker.getLatLng(), 18, {
                 animate: true
             });
-            //showNotification('Vista centrada en tu ubicación', 'success');
+            ////showNotification('Vista centrada en tu ubicación', 'success');
         } else {
-            //showNotification('Ubicación no disponible', 'warning');
+            ////showNotification('Ubicación no disponible', 'warning');
             initializeGPS();
         }
     }
@@ -2442,7 +2528,7 @@
                     maximumAge: 1000
                 }
             );
-            //showNotification('Seguimiento GPS activado', 'success');
+            ////showNotification('Seguimiento GPS activado', 'success');
         } else {
             btn.classList.remove('active');
             btn.title = 'Seguimiento GPS OFF';
@@ -2450,7 +2536,7 @@
                 navigator.geolocation.clearWatch(watchId);
                 watchId = null;
             }
-            //showNotification('Seguimiento GPS desactivado', 'info');
+            ////showNotification('Seguimiento GPS desactivado', 'info');
         }
     }
 
@@ -2462,11 +2548,11 @@
         if (trafficView) {
             btn.classList.add('active');
             btn.title = 'Vista de tráfico ON';
-            //showNotification('Vista de tráfico activada', 'info');
+            ////showNotification('Vista de tráfico activada', 'info');
         } else {
             btn.classList.remove('active');
             btn.title = 'Vista de tráfico OFF';
-            //showNotification('Vista de tráfico desactivada', 'info');
+            ////showNotification('Vista de tráfico desactivada', 'info');
         }
     }
 
@@ -2478,18 +2564,18 @@
         if (autoZoom) {
             btn.classList.add('active');
             btn.title = 'Auto Zoom ON';
-            //showNotification('Auto zoom activado', 'success');
+            ////showNotification('Auto zoom activado', 'success');
         } else {
             btn.classList.remove('active');
             btn.title = 'Auto Zoom OFF';
-            //showNotification('Auto zoom desactivado', 'info');
+            ////showNotification('Auto zoom desactivado', 'info');
         }
     }
 
     // Alerta de emergencia
     function emergencyAlert() {
         if (confirm('¿Confirmas que quieres enviar una ALERTA DE EMERGENCIA?')) {
-            //showNotification('🚨 ENVIANDO ALERTA DE EMERGENCIA...', 'error');
+            ////showNotification('🚨 ENVIANDO ALERTA DE EMERGENCIA...', 'error');
 
             const location = currentLocationMarker ? currentLocationMarker.getLatLng() : null;
             const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
@@ -2510,14 +2596,14 @@
             }
 
             setTimeout(() => {
-                //showNotification('🚨 ALERTA DE EMERGENCIA ENVIADA', 'error');
+                ////showNotification('🚨 ALERTA DE EMERGENCIA ENVIADA', 'error');
             }, 1000);
         }
     }
 
     // Cargar ruta (función auxiliar)
     function loadRoute() {
-        //showNotification('Cargando ruta...', 'info');
+        ////showNotification('Cargando ruta...', 'info');
         location.reload();
     }
 
@@ -2658,6 +2744,353 @@
 
     console.log('🎯 Sistema de navegación estilo Waze listo');
     </script>
+    <script>
+    // Mostrar notificación de nueva jornada
+    function showNewShiftNotification(data) {
+        const notification = document.getElementById('new-shift-notification');
+        if (!notification) {
+            console.error('Elemento new-shift-notification no encontrado');
+            return;
+        }
+
+        const content = notification.querySelector('.notification-content');
+        if (content) {
+            content.innerHTML = `
+            <button onclick="hideNewShiftNotification()" 
+                    style="position: absolute; top: 10px; right: 10px; background: none; border: none; font-size: 20px; cursor: pointer; color: #999;">
+                ✕
+            </button>
+            <h3>Nueva jornada asignada</h3>
+            <p>Jornada: ${data.jornada.nombre || 'Sin nombre'}</p>
+            <p>Pedidos: ${data.pedidos_count}</p>
+            <button onclick="reloadShiftView()" class="btn-reload">
+                Cargar nueva jornada
+            </button>
+        `;
+        }
+
+        notification.style.display = 'block';
+        console.log('Notificación mostrada');
+    }
+
+
+    function hideNewShiftNotification() {
+        const notification = document.getElementById('new-shift-notification');
+        if (notification) {
+            notification.style.display = 'none';
+            console.log('Notificación ocultada');
+        }
+    }
+    // Recargar vista de jornada
+    function reloadShiftView() {
+
+        const confirmReload = confirm(
+            '¿Deseas recargar la vista para cargar la jornada más reciente?\n\n' +
+            'Esto actualizará la página y cargará los pedidos más recientes asignados.\n\n' +
+            'Nota: Si estás navegando, se detendrá la navegación actual.'
+        );
+
+        if (!confirmReload) {
+            console.log('Usuario canceló recarga de vista');
+            return;
+        }
+        console.log('Recargando vista...');
+        hideNewShiftNotification();
+
+        //showNotification('Recargando jornada...', 'info');
+
+        setTimeout(() => {
+            window.location.reload();
+        }, 500);
+    }
+
+    // Verificar automáticamente cada 2 minutos
+    setInterval(checkForNewShift, 120000);
+
+    // Verificar al cargar la página
+    document.addEventListener('DOMContentLoaded', function() {
+    console.log('Inicializando sistema de jornadas...');
+    console.log('ID de jornada actual:', currentShiftId);
+    
+    if (currentShiftId) {
+        console.log('Marcando jornada actual como vista:', currentShiftId);
+        markShiftAsNotified(currentShiftId);
+    }
+    
+    const notification = document.getElementById('new-shift-notification');
+    console.log('Elemento notificación encontrado:', !!notification);
+    
+    // Verificación silenciosa inicial después de 5 segundos
+    setTimeout(() => {
+        console.log('Primera verificación silenciosa...');
+        checkForNewShiftSilent();
+    }, 5000);
+    
+    // Configurar verificación automática SILENCIOSA cada 2 minutos
+    if (shiftCheckInterval) {
+        clearInterval(shiftCheckInterval);
+    }
+    shiftCheckInterval = setInterval(() => {
+        console.log('Verificación automática silenciosa...');
+        checkForNewShiftSilent(); // Usar la función silenciosa
+    }, 120000);
+    
+    console.log('Sistema de jornadas inicializado');
+});
+
+    window.addEventListener('beforeunload', function() {
+        if (shiftCheckInterval) {
+            clearInterval(shiftCheckInterval);
+        }
+    });
+    </script>
+
+    <!-- Agregar antes de cerrar el body -->
+<div id="confirm-modal" class="confirm-modal" style="display: none;">
+    <div class="confirm-modal-content">
+        <h3 id="confirm-modal-title">Confirmar acción</h3>
+        <p id="confirm-modal-message">¿Estás seguro?</p>
+        <div class="confirm-modal-buttons">
+            <button onclick="confirmModalResponse(false)" class="btn-cancel">
+                Cancelar
+            </button>
+            <button onclick="confirmModalResponse(true)" class="btn-confirm">
+                Confirmar
+            </button>
+        </div>
+    </div>
+</div>
+
+<style>
+.confirm-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 3000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.confirm-modal-content {
+    background: white;
+    border-radius: 16px;
+    padding: 30px;
+    max-width: 400px;
+    width: 90%;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    animation: slideInModal 0.3s ease;
+}
+
+@keyframes slideInModal {
+    from {
+        transform: scale(0.9) translateY(-20px);
+        opacity: 0;
+    }
+    to {
+        transform: scale(1) translateY(0);
+        opacity: 1;
+    }
+}
+
+.confirm-modal-content h3 {
+    margin: 0 0 15px 0;
+    color: #333;
+    font-size: 20px;
+}
+
+.confirm-modal-content p {
+    margin: 0 0 25px 0;
+    color: #666;
+    line-height: 1.5;
+}
+
+.confirm-modal-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
+.btn-cancel, .btn-confirm {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.btn-cancel {
+    background: #e9ecef;
+    color: #495057;
+}
+
+.btn-cancel:hover {
+    background: #dee2e6;
+}
+
+.btn-confirm {
+    background: linear-gradient(135deg, #007bff, #0056b3);
+    color: white;
+}
+
+.btn-confirm:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+}
+</style>
+
+<script>
+// Sistema de confirmación personalizado
+let confirmModalCallback = null;
+
+function showConfirmModal(title, message, callback) {
+    const modal = document.getElementById('confirm-modal');
+    const titleEl = document.getElementById('confirm-modal-title');
+    const messageEl = document.getElementById('confirm-modal-message');
+    
+    titleEl.textContent = title;
+    messageEl.textContent = message;
+    confirmModalCallback = callback;
+    
+    modal.style.display = 'flex';
+}
+
+function confirmModalResponse(confirmed) {
+    const modal = document.getElementById('confirm-modal');
+    modal.style.display = 'none';
+    
+    if (confirmModalCallback) {
+        confirmModalCallback(confirmed);
+        confirmModalCallback = null;
+    }
+}
+
+// Modificar funciones para usar el modal personalizado
+async function checkForNewShift() {
+    showConfirmModal(
+        'Verificar nuevas jornadas',
+        '¿Deseas verificar si hay nuevas jornadas asignadas? Esto consultará el servidor para buscar jornadas pendientes.',
+        async function(confirmed) {
+            if (!confirmed) {
+                console.log('Usuario canceló verificación');
+                return;
+            }
+            
+            console.log('Verificando nuevas jornadas...', { currentShiftId });
+            //showNotification('Verificando nuevas jornadas...', 'info');
+            
+            try {
+                const url = new URL('/motorista/check-new-shift', window.location.origin);
+                if (currentShiftId) {
+                    url.searchParams.append('current_shift_id', currentShiftId);
+                }
+                
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content
+                    }
+                });
+                
+                const data = await response.json();
+                console.log('Respuesta check-new-shift:', data);
+                
+                if (data.success && data.has_new_shift) {
+                    const newShiftId = data.jornada.id;
+                    const notifiedShifts = getNotifiedShifts();
+                    
+                    if (!notifiedShifts.includes(newShiftId)) {
+                        console.log('Nueva jornada encontrada:', data.jornada);
+                        showNewShiftNotification(data);
+                        markShiftAsNotified(newShiftId);
+                        //showNotification(`Nueva jornada con ${data.pedidos_count} pedidos`, 'success');
+                    } else {
+                        console.log('Jornada ya notificada');
+                        //showNotification('Ya has sido notificado de esta jornada', 'info');
+                    }
+                } else {
+                    console.log('No hay nuevas jornadas');
+                    //showNotification('No hay nuevas jornadas asignadas', 'info');
+                }
+                
+            } catch (error) {
+                console.error('Error verificando nueva jornada:', error);
+                //showNotification('Error verificando nuevas jornadas', 'error');
+            }
+        }
+    );
+}
+async function checkForNewShiftSilent() {
+    console.log('Verificación automática silenciosa...', { currentShiftId });
+    
+    try {
+        const url = new URL('/motorista/check-new-shift', window.location.origin);
+        if (currentShiftId) {
+            url.searchParams.append('current_shift_id', currentShiftId);
+        }
+        
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content
+            }
+        });
+        
+        const data = await response.json();
+        console.log('Respuesta check-new-shift (silencioso):', data);
+        
+        if (data.success && data.has_new_shift) {
+            const newShiftId = data.jornada.id;
+            const notifiedShifts = getNotifiedShifts();
+            
+            if (!notifiedShifts.includes(newShiftId)) {
+                console.log('Nueva jornada encontrada (verificación automática):', data.jornada);
+                showNewShiftNotification(data);
+                markShiftAsNotified(newShiftId);
+                // NO mostrar notificación toast en verificación silenciosa
+            }
+        }
+        
+    } catch (error) {
+        console.error('Error en verificación silenciosa:', error);
+    }
+}
+
+
+function reloadShiftView() {
+    showConfirmModal(
+        'Recargar vista',
+        '¿Deseas recargar la vista para cargar la jornada más reciente? Esto actualizará la página y cargará los pedidos más recientes. Si estás navegando, se detendrá la navegación actual.',
+        function(confirmed) {
+            if (!confirmed) {
+                console.log('Usuario canceló recarga');
+                return;
+            }
+            
+            console.log('Recargando vista...');
+            hideNewShiftNotification();
+            //showNotification('Recargando jornada...', 'info');
+            
+            setTimeout(() => {
+                window.location.reload();
+            }, 500);
+        }
+    );
+}
+</script>
 </body>
 
 </html>
