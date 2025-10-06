@@ -6,6 +6,7 @@ use App\Models\Pago;
 use Dnetix\Redirection\PlacetoPay;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Http;
 
 class VerificarPagosPendientes extends Command
 {
@@ -65,14 +66,75 @@ class VerificarPagosPendientes extends Command
                     if (!empty($payments) && !empty($payments[0]['internalReference'])) {
                         $pago->internal_reference = $payments[0]['internalReference'];
                     }
+
+                    $pago->save();
+
+                    if (!$pago->notificado && $pago->pedido && $pago->pedido->cliente) {
+                        $cliente = $pago->pedido->cliente;
+                        $telefono = $cliente->telefono;
+                        $nombre = $cliente->nombre;
+
+                        if ($telefono) {
+                            $mensaje = "Buenas {$nombre}, durante el día no pudimos confirmar su pago. "
+                                . "Después de consultarlo, el estado de su pago con referencia {$pago->referencia_transaccion} es: {$pago->estado_pago}.";
+
+                            try {
+                                $botResponse = Http::post("http://xn--lacampaafoodservice-13b.com:3008/v1/send-message", [
+                                    'numero' => $telefono,
+                                    'mensaje' => $mensaje,
+                                ]);
+
+                                if ($botResponse->successful()) {
+                                    $pago->notificado = true;
+                                    $pago->save();
+                                    Log::info("📲 Notificación enviada al cliente {$cliente->id} ({$telefono})");
+                                } else {
+                                    Log::warning("⚠️ Error notificando al cliente {$cliente->id}: " . $botResponse->body());
+                                }
+                            } catch (\Exception $ex) {
+                                Log::error("🚨 Excepción al enviar notificación de pago {$pago->id}: " . $ex->getMessage());
+                            }
+                        }
+                    }
                 } elseif ($estado === 'REJECTED' || $estado === 'FAILED') {
                     $pago->estado_pago = 'fallido';
                     Log::info("❌ Pago rechazado o fallido: Pedido ID {$pago->pedido_id}");
+                    $pago->save();
+                    if (!$pago->notificado && $pago->pedido && $pago->pedido->cliente) {
+                        $cliente = $pago->pedido->cliente;
+                        $telefono = $cliente->telefono;
+                        $nombre = $cliente->nombre;
+
+                        if ($telefono) {
+                            $mensaje = "Buenas {$nombre}, durante el día no pudimos confirmar su pago. "
+                                . "Después de consultarlo, el estado de su pago con referencia {$pago->referencia_transaccion} es: {$pago->estado_pago}.";
+
+                            try {
+                                $botResponse = Http::post("http://xn--lacampaafoodservice-13b.com:3008/v1/send-message", [
+                                    'numero' => $telefono,
+                                    'mensaje' => $mensaje,
+                                ]);
+
+                                if ($botResponse->successful()) {
+                                    $pago->notificado = true;
+                                    $pago->save();
+                                    Log::info("📲 Notificación enviada al cliente {$cliente->id} ({$telefono})");
+                                } else {
+                                    Log::warning("⚠️ Error notificando al cliente {$cliente->id}: " . $botResponse->body());
+                                }
+                            } catch (\Exception $ex) {
+                                Log::error("🚨 Excepción al enviar notificación de pago {$pago->id}: " . $ex->getMessage());
+                            }
+                        }
+                    }
                 } else {
                     Log::info("⏳ Pago aún pendiente: Pedido ID {$pago->pedido_id}");
                 }
 
-                $pago->save();
+
+
+
+
             } catch (\Exception $e) {
                 Log::error("🚨 Excepción al procesar pago {$pago->pedido_id}: " . $e->getMessage());
             }

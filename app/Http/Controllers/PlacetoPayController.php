@@ -185,8 +185,9 @@ class PlacetoPayController extends Controller
         }
     }
 
-    public function handleWebhook(Request $request)
+    public function handleWebhookDev(Request $request)
     {
+
         try {
             $placetopay = new PlacetoPay([
                 'login' => env('PLACETOPAY_LOGIN'),
@@ -255,24 +256,142 @@ class PlacetoPayController extends Controller
 
             $pago->save();
 
-            $cliente = $pedido->cliente;
+            if (!$pago->notificado) {
+                $cliente = $pedido->cliente;
 
-            $telefono = $cliente ? $cliente->telefono : null;
-            $nombre = $cliente ? $cliente->nombre : 'Usuario';
+                $telefono = $cliente ? $cliente->telefono : null;
+                $nombre = $cliente ? $cliente->nombre : 'Usuario';
 
-            $payload = [
-                'requestId' => $pago->request_id,
-                'reference' => $pago->referencia_transaccion,
-                'number' => $telefono,
-                'status' => $pago->estado_pago === 'confirmado' ? 'approved' : 'rejected',
-                'name' => $nombre,
-                'pedido_id' => $pedido->id,
-            ];
+                $payload = [
+                    'requestId' => $pago->request_id,
+                    'reference' => $pago->referencia_transaccion,
+                    'number' => $telefono,
+                    'status' => $pago->estado_pago === 'confirmado' ? 'approved' : 'rejected',
+                    'name' => $nombre,
+                    'pedido_id' => $pedido->id,
+                ];
 
-            $botResponse = Http::post(env('BUILDERBOT_WEBHOOK_URL', 'http://localhost:3008/v1/process-payment'), $payload);
+                $botResponse = Http::post(env('BUILDERBOT_WEBHOOK_URL', 'http://localhost:3008/v1/process-payment'), $payload);
 
-            if (!$botResponse->successful()) {
-                Log::warning("Error notificando al bot: " . $botResponse->body());
+                if ($botResponse->successful()) {
+                    // ✅ Marcar como notificado
+                    $pago->notificado = true;
+                    $pago->save();
+                } else {
+                    Log::warning("Error notificando al bot: " . $botResponse->body());
+                }
+            } else {
+                Log::info("Pago {$pago->id} ya fue notificado, se omite notificación.");
+            }
+
+            return response()->json(['success' => true]);
+        } catch (Exception $e) {
+            Log::error('Error en webhook PlacetoPay: ' . $e->getMessage());
+            return response()->json(['error' => 'Webhook error'], 500);
+        }
+    }
+
+
+    public function handleWebhook(Request $request, $token)
+    {
+        if ($token !== env('PLACETOPAY_WEBHOOK_TOKEN')) {
+            return response()->json(['error' => 'Unauthorized'], 401);
+        }
+
+        try {
+            $placetopay = new PlacetoPay([
+                'login' => env('PLACETOPAY_LOGIN'),
+                'tranKey' => env('SecretKey'),
+                'baseUrl' => env('PLACETOPAY_BASE_URL'),
+            ]);
+
+            $data = $request->all();
+
+            $notification = $placetopay->readNotification($data);
+
+            $requestId = $data['requestId'] ?? null;
+            $reference = $data['reference'] ?? null;
+
+            if (!$requestId || !$reference) {
+                return response()->json(['error' => 'Datos incompletos'], 400);
+            }
+
+            $response2 = $placetopay->query($requestId);
+
+            if (!$response2->isSuccessful()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se pudo verificar el estado con PlacetoPay: ' . $response2->status()->message()
+                ], 400);
+            }
+
+            $estadoWebhook = $notification->status()->status();
+            $estadoReal = $response2->status()->status();
+
+            if ($estadoWebhook !== $estadoReal) {
+                Log::warning("Estado del webhook ($estadoWebhook) no coincide con el estado real ($estadoReal)");
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Estado de pago no coincide con PlacetoPay'
+                ], 400);
+            }
+
+            $pago = Pago::where('request_id', $requestId)
+                ->where('referencia_transaccion', $reference)
+                ->first();
+
+            if (!$pago) {
+                return response()->json(['error' => 'Pago no encontrado'], 404);
+            }
+
+            $pedido = $pago->pedido;
+
+            if (!$pedido) {
+                return response()->json(['error' => 'Pedido no encontrado'], 404);
+            }
+
+            $estado = $notification->status()->status();
+
+            if ($notification->isApproved()) {
+                $pago->estado_pago = 'confirmado';
+                $payments = $response2->toArray()['payment'] ?? [];
+                if (!empty($payments) && !empty($payments[0]['internalReference'])) {
+                    $pago->internal_reference = $payments[0]['internalReference'];
+                }
+            } elseif ($notification->isRejected() || $estado === 'FAILED') {
+                $pago->estado_pago = 'fallido';
+            } else {
+                $pago->estado_pago = 'pendiente';
+            }
+
+            $pago->save();
+
+            if (!$pago->notificado) {
+                $cliente = $pedido->cliente;
+
+                $telefono = $cliente ? $cliente->telefono : null;
+                $nombre = $cliente ? $cliente->nombre : 'Usuario';
+
+                $payload = [
+                    'requestId' => $pago->request_id,
+                    'reference' => $pago->referencia_transaccion,
+                    'number' => $telefono,
+                    'status' => $pago->estado_pago === 'confirmado' ? 'approved' : 'rejected',
+                    'name' => $nombre,
+                    'pedido_id' => $pedido->id,
+                ];
+
+                $botResponse = Http::post(env('BUILDERBOT_WEBHOOK_URL', 'http://localhost:3008/v1/process-payment'), $payload);
+
+                if ($botResponse->successful()) {
+                    // ✅ Marcar como notificado
+                    $pago->notificado = true;
+                    $pago->save();
+                } else {
+                    Log::warning("Error notificando al bot: " . $botResponse->body());
+                }
+            } else {
+                Log::info("Pago {$pago->id} ya fue notificado, se omite notificación.");
             }
 
             return response()->json(['success' => true]);
