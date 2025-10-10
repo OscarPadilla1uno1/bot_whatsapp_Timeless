@@ -1056,15 +1056,19 @@
 
             @if($route && isset($route['steps']))
             <div class="delivery-stats">
-                <div class="stat-box">
-                    <div class="stat-number" id="completed-count">0</div>
-                    <div class="stat-label">Entregadas</div>
-                </div>
-                <div class="stat-box">
-                    <div class="stat-number" id="pending-count">{{ count($route['steps']) }}</div>
-                    <div class="stat-label">Pendientes</div>
-                </div>
-            </div>
+    <div class="stat-box">
+        <div class="stat-number" id="completed-count">0</div>
+        <div class="stat-label">Entregadas</div>
+    </div>
+    <div class="stat-box">
+        <div class="stat-number" id="pending-count">{{ count($route['steps'] ?? []) }}</div>
+        <div class="stat-label">Pendientes</div>
+    </div>
+    <div class="stat-box">
+        <div class="stat-number" id="current-delivery">-</div>
+        <div class="stat-label">Actual</div>
+    </div>
+</div>
 
             <div class="route-controls">
                 <button class="control-btn btn-success" id="navigation-button" onclick="toggleNavigation()">
@@ -1245,16 +1249,38 @@
         }, 3000);
     });
 
-    // Inicializar mapa
-    function initializeMap() {
+    // Inicializar mapa - CORREGIDO
+function initializeMap() {
+    // Verificar si el mapa ya está inicializado
+    if (map) {
+        console.log('🗺️ Mapa ya está inicializado');
+        return;
+    }
+    
+    // Verificar si el contenedor del mapa ya tiene una instancia de Leaflet
+    const mapContainer = document.getElementById('map');
+    if (mapContainer._leaflet_id) {
+        console.log('⚠️ Contenedor del mapa ya tiene una instancia Leaflet');
+        map = L.map('map', {
+            reuseTiles: true,
+            attributionControl: false
+        });
+        return;
+    }
+
+    try {
         map = L.map('map').setView([14.0821, -87.2065], 13);
 
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap contributors'
         }).addTo(map);
 
-        console.log('🗺️ Mapa inicializado');
+        console.log('🗺️ Mapa inicializado correctamente');
+    } catch (error) {
+        console.error('❌ Error inicializando mapa:', error);
+        //showNotification('Error al cargar el mapa', 'error');
     }
+}
 
     // Inicializar GPS
     function initializeGPS() {
@@ -1516,37 +1542,38 @@
     }
 
     // Función mejorada de inicialización con más validaciones
-    function initializeSystemWithValidation() {
-        console.log('🔧 Inicializando sistema con validaciones completas...');
+    // Función mejorada de inicialización con más validaciones
+function initializeSystemWithValidation() {
+    console.log('🔧 Inicializando sistema con validaciones completas...');
 
-        // Verificar soporte de geolocalización
-        if (!navigator.geolocation) {
-            ////showNotification('GPS no soportado en este navegador', 'error');
-            return false;
-        }
-
-        // Verificar que Leaflet esté cargado
-        if (typeof L === 'undefined') {
-            ////showNotification('Error: Leaflet no está cargado', 'error');
-            return false;
-        }
-
-        // Verificar que el mapa esté inicializado
-        if (!map) {
-            ////showNotification('Error: Mapa no inicializado', 'error');
-            return false;
-        }
-
-        // Verificar datos del driver
-        if (!driverData || !driverData.id) {
-            ////showNotification('Error: Datos del motorista inválidos', 'error');
-            return false;
-        }
-
-        console.log('✅ Todas las validaciones pasaron');
-        return true;
+    // Verificar soporte de geolocalización
+    if (!navigator.geolocation) {
+        //showNotification('GPS no soportado en este navegador', 'error');
+        return false;
     }
 
+    // Verificar que Leaflet esté cargado
+    if (typeof L === 'undefined') {
+        //showNotification('Error: Leaflet no está cargado', 'error');
+        return false;
+    }
+
+    // Verificar que el contenedor del mapa exista
+    const mapContainer = document.getElementById('map');
+    if (!mapContainer) {
+        //showNotification('Error: Contenedor del mapa no encontrado', 'error');
+        return false;
+    }
+
+    // Verificar datos del driver
+    if (!driverData || !driverData.id) {
+        //showNotification('Error: Datos del motorista inválidos', 'error');
+        return false;
+    }
+
+    console.log('✅ Todas las validaciones pasaron');
+    return true;
+}
     // Modificar la función de inicialización principal
     document.addEventListener('DOMContentLoaded', function() {
         console.log('🚀 Iniciando sistema de navegación avanzado...');
@@ -1878,7 +1905,7 @@
                 currentInstructionIndex = 0;
 
                 // NUEVO: Iniciar navegación en tiempo real
-                startRealTimeNavigation(delivery);
+                startRealTimeNavigation(delivery);a
 
                 updateNavigationPanel();
 
@@ -2337,39 +2364,46 @@
     }
 
     // Actualizar entrega actual
-    function updateCurrentDelivery(deliveryId) {
-        // Remover clase 'current' de todas las entregas
-        document.querySelectorAll('.delivery-item').forEach(item => {
-            item.classList.remove('current');
-            const status = item.querySelector('.delivery-status');
-            if (status && status.classList.contains('status-current')) {
-                status.className = 'delivery-status status-pending';
-                status.textContent = 'Pendiente';
-            }
-        });
+    // Actualizar entrega actual - CORREGIDO
+function updateCurrentDelivery(deliveryId) {
+    console.log('🔄 Actualizando entrega actual:', deliveryId);
+    
+    // Remover clase 'current' de todas las entregas
+    document.querySelectorAll('.delivery-item').forEach(item => {
+        item.classList.remove('current');
+        const status = item.querySelector('.delivery-status');
+        if (status && status.classList.contains('status-current')) {
+            status.className = 'delivery-status status-pending';
+            status.textContent = 'Pendiente';
+        }
+    });
 
-        // Añadir clase 'current' a la entrega actual
-        const currentItem = document.getElementById(`delivery-${deliveryId}`);
-        if (currentItem) {
-            currentItem.classList.add('current');
-            const status = currentItem.querySelector('.delivery-status');
-            if (status) {
-                status.className = 'delivery-status status-current';
-                status.textContent = 'En ruta';
-            }
-
-            // Hacer scroll para mostrar la entrega actual
-            currentItem.scrollIntoView({
-                behavior: 'smooth',
-                block: 'center'
-            });
+    // Añadir clase 'current' a la entrega actual
+    const currentItem = document.getElementById(`delivery-${deliveryId}`);
+    if (currentItem) {
+        currentItem.classList.add('current');
+        const status = currentItem.querySelector('.delivery-status');
+        if (status) {
+            status.className = 'delivery-status status-current';
+            status.textContent = 'En ruta';
         }
 
-        // Actualizar estadísticas
-        const index = driverRoute.steps.findIndex(step => step.job == deliveryId);
-        document.getElementById('current-delivery').textContent = index >= 0 ? index + 1 : '-';
+        // Hacer scroll para mostrar la entrega actual
+        currentItem.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center'
+        });
     }
 
+    // Actualizar estadísticas - SOLO SI EL ELEMENTO EXISTE
+    const currentDeliveryElement = document.getElementById('current-delivery');
+    if (currentDeliveryElement) {
+        const index = driverRoute.steps.findIndex(step => step.job == deliveryId);
+        currentDeliveryElement.textContent = index >= 0 ? index + 1 : '-';
+    } else {
+        console.warn('⚠️ Elemento current-delivery no encontrado');
+    }
+}
     // Actualizar panel de navegación
     function updateNavigationPanel() {
         if (!currentRoute || !currentInstructions) return;
