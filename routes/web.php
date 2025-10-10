@@ -126,6 +126,10 @@ Route::middleware('auth')->group(function () {
         ->name('admin.pedidos.descargarFactura')
         ->can('Administrador');
 
+
+    Route::post('/admin/drivers/toggle-availability', [AdminController::class, 'toggleDriverAvailability']);
+    Route::get('/admin/drivers/with-availability', [AdminController::class, 'getDriversWithAvailability']);
+
 });
 
 Route::get('/pago/exito', function (Request $request) {
