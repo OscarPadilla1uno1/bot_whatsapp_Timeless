@@ -514,6 +514,7 @@ class AdminController extends Controller
             'platillos' => 'required|array',
             'platillos.*.id' => 'required|integer',
             'platillos.*.cantidad' => 'required|integer',
+            'metodo_pago' => 'required|string|in:tarjeta,efectivo',
         ]);
 
         $nombre = $request->nombre;
@@ -522,6 +523,7 @@ class AdminController extends Controller
         $longitud = $request->longitud;
         $platillos = $request->platillos;
         $cantidadPlatillos = 0;
+        $metodo_pago = strtolower($request->metodo_pago);
 
         foreach ($platillos as $i) {
 
@@ -610,7 +612,7 @@ class AdminController extends Controller
         }
 
         try {
-            $result = DB::transaction(function () use ($nombre, $telefono, $latitud, $longitud, $platillos, $costo_envio, $hoy, &$subtotal) {
+            $result = DB::transaction(function () use ($nombre, $telefono, $latitud, $longitud, $platillos, $costo_envio, $hoy, &$subtotal, $metodo_pago) {
                 // Verificar si el cliente ya existe o crearlo
                 $cliente = Cliente::firstOrCreate(
                     ['telefono' => $telefono],
@@ -675,20 +677,37 @@ class AdminController extends Controller
                 $pedido->total = $subtotal + $costo_envio;
                 $pedido->save();
 
-                $pago = new Pago([
-                    'pedido_id' => $pedido->id,
-                    'metodo_pago' => 'tarjeta',
-                    'estado_pago' => 'pendiente',
-                    'fecha_pago' => null, // se actualizará al confirmar pago
-                    'referencia_transaccion' => null,
-                    'request_id' => null,
-                    'process_url' => null,
-                    'metodo_interno' => null,
-                    'canal' => 'whatsapp', // por ejemplo, si el canal es siempre WhatsApp
-                    'observaciones' => 'Pago creado automáticamente en ambiente de pruebas'
-                ]);
+                if ($metodo_pago === 'tarjeta') {
+                    $pago = new Pago([
+                        'pedido_id' => $pedido->id,
+                        'metodo_pago' => 'tarjeta',
+                        'estado_pago' => 'pendiente',
+                        'fecha_pago' => null,
+                        'referencia_transaccion' => null,
+                        'request_id' => null,
+                        'process_url' => null,
+                        'metodo_interno' => null,
+                        'canal' => 'whatsapp',
+                        'observaciones' => 'Pago con tarjeta pendiente de confirmación'
+                    ]);
+                } else {
+                    // 💵 Pago en efectivo → confirmado automáticamente
+                    $pago = new Pago([
+                        'pedido_id' => $pedido->id,
+                        'metodo_pago' => 'efectivo',
+                        'estado_pago' => 'confirmado',
+                        'fecha_pago' => now()->setTimezone('America/Tegucigalpa'),
+                        'referencia_transaccion' => null,
+                        'request_id' => null,
+                        'process_url' => null,
+                        'metodo_interno' => null,
+                        'canal' => 'whatsapp',
+                        'observaciones' => 'Pago confirmado en efectivo'
+                    ]);
+                }
 
                 $pago->save();
+
 
                 return [
                     'mensaje' => 'Pedido registrado exitosamente.',
