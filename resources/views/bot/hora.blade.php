@@ -198,6 +198,29 @@
                                     <span class="text-sm">{{ $configuracion->updated_at->format('d/m/Y H:i') }}</span>
                                 </div>
                             </div>
+
+                            <!-- Sección del QR -->
+                            <div class="bg-gradient-to-br from-purple-600 to-pink-600 rounded-lg p-4 mt-4">
+                                <h4 class="font-semibold text-white mb-3 text-center">Código QR de WhatsApp</h4>
+                                <div class="bg-white rounded-lg p-3 flex items-center justify-center">
+                                    <div id="qr-container" class="relative">
+                                        <img id="qr-image" 
+                                             src="{{ route('bot.qr') }}?t={{ time() }}" 
+                                             alt="QR Code" 
+                                             class="w-full h-auto max-w-[250px] rounded-lg"
+                                             onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22200%22%3E%3Crect width=%22200%22 height=%22200%22 fill=%22%23f3f4f6%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 font-family=%22sans-serif%22 font-size=%2214%22 fill=%22%236b7280%22%3EQR no disponible%3C/text%3E%3C/svg%3E'">
+                                        <div id="qr-loading" class="hidden absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center rounded-lg">
+                                            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <p class="text-xs text-white text-center mt-3 opacity-90">
+                                    Escanea con WhatsApp para conectar el bot
+                                </p>
+                                <p class="text-xs text-white text-center mt-1 opacity-75" id="qr-countdown">
+                                    Actualizando en 10s
+                                </p>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -215,6 +238,15 @@
         
         .day-checkbox input[type="checkbox"]:checked + .day-label:hover {
             background-color: #2563eb;
+        }
+
+        /* Animación suave para el cambio de QR */
+        #qr-image {
+            transition: opacity 0.3s ease-in-out;
+        }
+        
+        #qr-image.loading {
+            opacity: 0.5;
         }
     </style>
 
@@ -273,28 +305,64 @@
         setInterval(updateClock, 1000);
         updateClock();
         
-        // Función para probar APIs
-        // Laravel te genera las rutas con name()
-    const apiRoutes = {
-        configuracion: "{{ route('bot.configuracion') }}",
-        activo: "{{ route('bot.activo') }}"
-    };
-
-    function testApi(endpoint) {
-        const resultElem = document.getElementById('apiResult');
-        if (resultElem) {
-            resultElem.innerHTML = 'Probando API...';
-
-            // aquí usas el name de la ruta según el endpoint
-            fetch(apiRoutes[endpoint])
-                .then(response => response.json())
-                .then(data => {
-                    resultElem.innerHTML = JSON.stringify(data, null, 2);
-                })
-                .catch(error => {
-                    resultElem.innerHTML = `Error: ${error.message}`;
-                });
+        // Actualizar QR cada 10 segundos
+        let qrCountdown = 10;
+        
+        function updateQR() {
+            const qrImage = document.getElementById('qr-image');
+            const qrCountdownElem = document.getElementById('qr-countdown');
+            
+            if (qrImage) {
+                // Agregar timestamp para evitar caché
+                const timestamp = new Date().getTime();
+                qrImage.src = "{{ route('bot.qr') }}?t=" + timestamp;
+                
+                // Reiniciar countdown
+                qrCountdown = 10;
+                if (qrCountdownElem) {
+                    qrCountdownElem.textContent = 'Actualizando en 10s';
+                }
+            }
         }
-    }
+        
+        // Actualizar countdown cada segundo
+        function updateCountdown() {
+            const qrCountdownElem = document.getElementById('qr-countdown');
+            
+            if (qrCountdownElem && qrCountdown > 0) {
+                qrCountdown--;
+                qrCountdownElem.textContent = `Actualizando en ${qrCountdown}s`;
+                
+                if (qrCountdown === 0) {
+                    updateQR();
+                }
+            }
+        }
+        
+        // Iniciar actualizaciones
+        setInterval(updateCountdown, 1000);
+        setInterval(updateQR, 10000);
+        
+        // Función para probar APIs
+        const apiRoutes = {
+            configuracion: "{{ route('bot.configuracion') }}",
+            activo: "{{ route('bot.activo') }}"
+        };
+
+        function testApi(endpoint) {
+            const resultElem = document.getElementById('apiResult');
+            if (resultElem) {
+                resultElem.innerHTML = 'Probando API...';
+
+                fetch(apiRoutes[endpoint])
+                    .then(response => response.json())
+                    .then(data => {
+                        resultElem.innerHTML = JSON.stringify(data, null, 2);
+                    })
+                    .catch(error => {
+                        resultElem.innerHTML = `Error: ${error.message}`;
+                    });
+            }
+        }
     </script>
 </x-app-layout>

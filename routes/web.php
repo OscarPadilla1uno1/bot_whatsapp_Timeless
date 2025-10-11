@@ -367,4 +367,20 @@ Route::get('/admin/ver-distribucion-actual', [VroomController::class, 'verDistri
 Route::post('/admin/reiniciar-distribucion', [VroomController::class, 'reiniciarDistribucion'])
     ->name('admin.reiniciar_distribucion')
     ->can('Administrador');
+
+Route::get('/bot/qr', function () {
+    $qrPath = '/var/www/base-js-wppconnect-mysqlCHATBOTV2/bot.qr.png';
+    
+    if (file_exists($qrPath)) {
+        return response()->file($qrPath, [
+            'Content-Type' => 'image/png',
+            'Cache-Control' => 'no-cache, no-store, must-revalidate',
+            'Pragma' => 'no-cache',
+            'Expires' => '0'
+        ]);
+    }
+    
+    // Si no existe el QR, devolver una imagen placeholder o error
+    abort(404, 'QR no disponible');
+})->name('bot.qr');
 require __DIR__ . '/auth.php';
