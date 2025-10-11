@@ -8,6 +8,7 @@ use App\Http\Controllers\DashboardController;
 use Illuminate\Support\Facades\Auth;
 use App\Http\Middleware\CheckPermission;
 use App\Http\Controllers\HoraController;
+use App\Http\Controllers\EntregaController;
 use App\Models\Pago;
 use Dnetix\Redirection\PlacetoPay;
 use App\Models\Pedido;
@@ -130,6 +131,10 @@ Route::middleware('auth')->group(function () {
     Route::post('/admin/drivers/toggle-availability', [AdminController::class, 'toggleDriverAvailability']);
     Route::get('/admin/drivers/with-availability', [AdminController::class, 'getDriversWithAvailability']);
 
+    // routes/api.php o routes/web.php
+Route::post('/api/entregas/actualizar-estado', [EntregaController::class, 'actualizarEstado']);
+// O la ruta alternativa
+Route::post('/update-delivery-status', [EntregaController::class, 'updateDeliveryStatus'])->name('delivery.update');
 });
 
 Route::get('/pago/exito', function (Request $request) {

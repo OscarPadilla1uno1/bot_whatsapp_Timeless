@@ -1028,6 +1028,7 @@
         transform: translateY(-2px);
         box-shadow: 0 4px 16px rgba(40, 167, 69, 0.3);
     }
+    
     </style>
 </head>
 
@@ -1056,19 +1057,19 @@
 
             @if($route && isset($route['steps']))
             <div class="delivery-stats">
-    <div class="stat-box">
-        <div class="stat-number" id="completed-count">0</div>
-        <div class="stat-label">Entregadas</div>
-    </div>
-    <div class="stat-box">
-        <div class="stat-number" id="pending-count">{{ count($route['steps'] ?? []) }}</div>
-        <div class="stat-label">Pendientes</div>
-    </div>
-    <div class="stat-box">
-        <div class="stat-number" id="current-delivery">-</div>
-        <div class="stat-label">Actual</div>
-    </div>
-</div>
+                <div class="stat-box">
+                    <div class="stat-number" id="completed-count">0</div>
+                    <div class="stat-label">Entregadas</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-number" id="pending-count">{{ count($route['steps'] ?? []) }}</div>
+                    <div class="stat-label">Pendientes</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-number" id="current-delivery">-</div>
+                    <div class="stat-label">Actual</div>
+                </div>
+            </div>
 
             <div class="route-controls">
                 <button class="control-btn btn-success" id="navigation-button" onclick="toggleNavigation()">
@@ -1099,50 +1100,65 @@
                 </button>
             </div>
 
-            <div class="delivery-list" id="delivery-list">
-                @foreach($route['steps'] as $index => $step)
-                @if(isset($step['type']) && $step['type'] === 'job' && isset($step['job_details']))
-                <div class="delivery-item" data-delivery-id="{{ $step['job'] }}" id="delivery-{{ $step['job'] }}">
-                    <div class="delivery-header">
-                        <div class="delivery-client">{{ $step['job_details']['cliente'] ?? 'Cliente desconocido' }}
-                        </div>
-                        <div class="delivery-number">Parada {{ $index }}</div>
-                    </div>
-
-                    <div class="delivery-info">
-                        📍 Dirección de entrega
-                    </div>
-
-                    @if($step['job_details']['telefono'] ?? false)
-                    <a href="tel:{{ $step['job_details']['telefono'] }}" class="phone-link">
-                        📞 {{ $step['job_details']['telefono'] }}
-                    </a>
-                    @endif
-
-                    <div class="delivery-actions" id="actions-{{ $step['job'] }}">
-                        <button class="delivery-btn btn-navigate" onclick="navigateToDelivery({{ $step['job'] }})">
-                            🧭 Navegar
-                        </button>
-                        <button class="delivery-btn btn-delivery"
-                            onclick="markDelivery('{{ $step['job'] }}', 'completed')">
-                            ✅ Entregado
-                        </button>
-                    </div>
-
-
-                    <div class="delivery-status status-pending">Pendiente</div>
-                </div>
+<div class="delivery-list" id="delivery-list">
+    @foreach($route['steps'] as $index => $step)
+    @if(isset($step['type']) && $step['type'] === 'job' && isset($step['job_details']))
+    <div class="delivery-item" data-delivery-id="{{ $step['job'] }}" id="delivery-{{ $step['job'] }}">
+        <div class="delivery-header">
+            <div class="delivery-client">
+                {{ $step['job_details']['cliente'] ?? 'Cliente desconocido' }}
+                <!-- Mostrar badge de efectivo si aplica -->
+                @if(($step['job_details']['metodo_pago'] ?? null) === 'efectivo')   
+                <span class="payment-badge efectivo" title="Pago en efectivo">
+                    - EFECTIVO <strong>L.{{ $step['job_details']['total'] ?? 0,2 }}</strong>
+                </span>
+                @elseif(($step['job_details']['metodo_pago'] ?? null) === 'en_linea')
+                <span class="payment-badge en-linea" title="Pago en línea">
+                    - EN LÍNEA
+                </span>
                 @endif
-                @endforeach
+                
+                <!-- Mostrar estado del pago si está pendiente -->
+                @if(($step['job_details']['estado_pago'] ?? null) === 'pendiente')
+                <span class="payment-status pendiente" title="Pago pendiente">
+                    - PENDIENTE
+                </span>
+                @endif
             </div>
-            @else
-            <div style="text-align: center; padding: 40px 20px; color: #666;">
-                <div style="font-size: 48px; margin-bottom: 16px;">📦</div>
-                <p>No hay ruta asignada actualmente.</p>
-                <button class="control-btn btn-primary" onclick="loadRoute()" style="margin-top: 16px;">
-                    📍 Cargar Ruta
-                </button>
+            <div class="delivery-number">Parada {{ $index }}</div>
+        </div>
+
+        <div class="delivery-info">
+            📍 Dirección de entrega
+            <!-- Mostrar información adicional de pago -->
+            @if(($step['job_details']['metodo_pago'] ?? null) === 'efectivo')
+            <div class="payment-warning">
+                <small>💡 <strong>Recuerda:</strong> Cobrar el importe en efectivo</small>
             </div>
+            @endif
+        </div>
+
+        @if($step['job_details']['telefono'] ?? false)
+        <a href="tel:{{ $step['job_details']['telefono'] }}" class="phone-link">
+            📞 {{ $step['job_details']['telefono'] }}
+        </a>
+        @endif
+
+        <div class="delivery-actions" id="actions-{{ $step['job'] }}">
+            <button class="delivery-btn btn-navigate" onclick="navigateToDelivery({{ $step['job'] }})">
+                🧭 Navegar
+            </button>
+            <button class="delivery-btn btn-delivery"
+                onclick="markDelivery('{{ $step['job'] }}', 'completed')">
+                ✅ Entregado
+            </button>
+        </div>
+
+        <div class="delivery-status status-pending">Pendiente</div>
+    </div>
+    @endif
+    @endforeach
+</div>
             @endif
         </div>
     </div>
@@ -1250,37 +1266,37 @@
     });
 
     // Inicializar mapa - CORREGIDO
-function initializeMap() {
-    // Verificar si el mapa ya está inicializado
-    if (map) {
-        console.log('🗺️ Mapa ya está inicializado');
-        return;
-    }
-    
-    // Verificar si el contenedor del mapa ya tiene una instancia de Leaflet
-    const mapContainer = document.getElementById('map');
-    if (mapContainer._leaflet_id) {
-        console.log('⚠️ Contenedor del mapa ya tiene una instancia Leaflet');
-        map = L.map('map', {
-            reuseTiles: true,
-            attributionControl: false
-        });
-        return;
-    }
+    function initializeMap() {
+        // Verificar si el mapa ya está inicializado
+        if (map) {
+            console.log('🗺️ Mapa ya está inicializado');
+            return;
+        }
 
-    try {
-        map = L.map('map').setView([14.0821, -87.2065], 13);
+        // Verificar si el contenedor del mapa ya tiene una instancia de Leaflet
+        const mapContainer = document.getElementById('map');
+        if (mapContainer._leaflet_id) {
+            console.log('⚠️ Contenedor del mapa ya tiene una instancia Leaflet');
+            map = L.map('map', {
+                reuseTiles: true,
+                attributionControl: false
+            });
+            return;
+        }
 
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors'
-        }).addTo(map);
+        try {
+            map = L.map('map').setView([14.0821, -87.2065], 13);
 
-        console.log('🗺️ Mapa inicializado correctamente');
-    } catch (error) {
-        console.error('❌ Error inicializando mapa:', error);
-        //showNotification('Error al cargar el mapa', 'error');
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+
+            console.log('🗺️ Mapa inicializado correctamente');
+        } catch (error) {
+            console.error('❌ Error inicializando mapa:', error);
+            //showNotification('Error al cargar el mapa', 'error');
+        }
     }
-}
 
     // Inicializar GPS
     function initializeGPS() {
@@ -1543,37 +1559,37 @@ function initializeMap() {
 
     // Función mejorada de inicialización con más validaciones
     // Función mejorada de inicialización con más validaciones
-function initializeSystemWithValidation() {
-    console.log('🔧 Inicializando sistema con validaciones completas...');
+    function initializeSystemWithValidation() {
+        console.log('🔧 Inicializando sistema con validaciones completas...');
 
-    // Verificar soporte de geolocalización
-    if (!navigator.geolocation) {
-        //showNotification('GPS no soportado en este navegador', 'error');
-        return false;
+        // Verificar soporte de geolocalización
+        if (!navigator.geolocation) {
+            //showNotification('GPS no soportado en este navegador', 'error');
+            return false;
+        }
+
+        // Verificar que Leaflet esté cargado
+        if (typeof L === 'undefined') {
+            //showNotification('Error: Leaflet no está cargado', 'error');
+            return false;
+        }
+
+        // Verificar que el contenedor del mapa exista
+        const mapContainer = document.getElementById('map');
+        if (!mapContainer) {
+            //showNotification('Error: Contenedor del mapa no encontrado', 'error');
+            return false;
+        }
+
+        // Verificar datos del driver
+        if (!driverData || !driverData.id) {
+            //showNotification('Error: Datos del motorista inválidos', 'error');
+            return false;
+        }
+
+        console.log('✅ Todas las validaciones pasaron');
+        return true;
     }
-
-    // Verificar que Leaflet esté cargado
-    if (typeof L === 'undefined') {
-        //showNotification('Error: Leaflet no está cargado', 'error');
-        return false;
-    }
-
-    // Verificar que el contenedor del mapa exista
-    const mapContainer = document.getElementById('map');
-    if (!mapContainer) {
-        //showNotification('Error: Contenedor del mapa no encontrado', 'error');
-        return false;
-    }
-
-    // Verificar datos del driver
-    if (!driverData || !driverData.id) {
-        //showNotification('Error: Datos del motorista inválidos', 'error');
-        return false;
-    }
-
-    console.log('✅ Todas las validaciones pasaron');
-    return true;
-}
     // Modificar la función de inicialización principal
     document.addEventListener('DOMContentLoaded', function() {
         console.log('🚀 Iniciando sistema de navegación avanzado...');
@@ -1905,7 +1921,7 @@ function initializeSystemWithValidation() {
                 currentInstructionIndex = 0;
 
                 // NUEVO: Iniciar navegación en tiempo real
-                startRealTimeNavigation(delivery);a
+                startRealTimeNavigation(delivery);
 
                 updateNavigationPanel();
 
@@ -2365,45 +2381,45 @@ function initializeSystemWithValidation() {
 
     // Actualizar entrega actual
     // Actualizar entrega actual - CORREGIDO
-function updateCurrentDelivery(deliveryId) {
-    console.log('🔄 Actualizando entrega actual:', deliveryId);
-    
-    // Remover clase 'current' de todas las entregas
-    document.querySelectorAll('.delivery-item').forEach(item => {
-        item.classList.remove('current');
-        const status = item.querySelector('.delivery-status');
-        if (status && status.classList.contains('status-current')) {
-            status.className = 'delivery-status status-pending';
-            status.textContent = 'Pendiente';
-        }
-    });
+    function updateCurrentDelivery(deliveryId) {
+        console.log('🔄 Actualizando entrega actual:', deliveryId);
 
-    // Añadir clase 'current' a la entrega actual
-    const currentItem = document.getElementById(`delivery-${deliveryId}`);
-    if (currentItem) {
-        currentItem.classList.add('current');
-        const status = currentItem.querySelector('.delivery-status');
-        if (status) {
-            status.className = 'delivery-status status-current';
-            status.textContent = 'En ruta';
-        }
-
-        // Hacer scroll para mostrar la entrega actual
-        currentItem.scrollIntoView({
-            behavior: 'smooth',
-            block: 'center'
+        // Remover clase 'current' de todas las entregas
+        document.querySelectorAll('.delivery-item').forEach(item => {
+            item.classList.remove('current');
+            const status = item.querySelector('.delivery-status');
+            if (status && status.classList.contains('status-current')) {
+                status.className = 'delivery-status status-pending';
+                status.textContent = 'Pendiente';
+            }
         });
-    }
 
-    // Actualizar estadísticas - SOLO SI EL ELEMENTO EXISTE
-    const currentDeliveryElement = document.getElementById('current-delivery');
-    if (currentDeliveryElement) {
-        const index = driverRoute.steps.findIndex(step => step.job == deliveryId);
-        currentDeliveryElement.textContent = index >= 0 ? index + 1 : '-';
-    } else {
-        console.warn('⚠️ Elemento current-delivery no encontrado');
+        // Añadir clase 'current' a la entrega actual
+        const currentItem = document.getElementById(`delivery-${deliveryId}`);
+        if (currentItem) {
+            currentItem.classList.add('current');
+            const status = currentItem.querySelector('.delivery-status');
+            if (status) {
+                status.className = 'delivery-status status-current';
+                status.textContent = 'En ruta';
+            }
+
+            // Hacer scroll para mostrar la entrega actual
+            currentItem.scrollIntoView({
+                behavior: 'smooth',
+                block: 'center'
+            });
+        }
+
+        // Actualizar estadísticas - SOLO SI EL ELEMENTO EXISTE
+        const currentDeliveryElement = document.getElementById('current-delivery');
+        if (currentDeliveryElement) {
+            const index = driverRoute.steps.findIndex(step => step.job == deliveryId);
+            currentDeliveryElement.textContent = index >= 0 ? index + 1 : '-';
+        } else {
+            console.warn('⚠️ Elemento current-delivery no encontrado');
+        }
     }
-}
     // Actualizar panel de navegación
     function updateNavigationPanel() {
         if (!currentRoute || !currentInstructions) return;
@@ -2416,49 +2432,320 @@ function updateCurrentDelivery(deliveryId) {
         document.getElementById('nav-eta').textContent = `Llegada: ${formatTime(currentRoute.summary.totalTime)}`;
     }
 
-    // Marcar entrega
-    function markDelivery(deliveryId, status) {
+    // Marcar entrega - MEJORADO para actualizar base de datos
+    async function markDelivery(deliveryId, status) {
+        console.log(`📝 Marcando entrega ${deliveryId} como ${status}`);
+
         const deliveryItem = document.getElementById(`delivery-${deliveryId}`);
-        if (!deliveryItem) return;
-
-        deliveryStatuses[deliveryId] = status;
-
-        // Actualizar interfaz
-        deliveryItem.classList.remove('completed', 'returned', 'current');
-        if (status === 'completed') {
-            deliveryItem.classList.add('completed');
-            updateDeliveryItemUI(deliveryItem, 'Entregado', 'status-completed');
-        } else if (status === 'returned') {
-            deliveryItem.classList.add('returned');
-            updateDeliveryItemUI(deliveryItem, 'Devuelto', 'status-returned');
+        if (!deliveryItem) {
+            console.error('❌ Elemento de entrega no encontrado:', deliveryId);
+            showNotification('Error: Entrega no encontrada', 'error');
+            return;
         }
 
-        // Deshabilitar botones
-        const buttons = deliveryItem.querySelectorAll('.delivery-btn');
-        buttons.forEach(btn => {
-            if (btn.textContent.includes('Entregado') || btn.textContent.includes('Devolución')) {
-                btn.disabled = true;
-                btn.style.opacity = '0.5';
+        try {
+            // Mostrar confirmación
+            const confirmMessage = status === 'completed' ?
+                '¿Marcar esta entrega como ENTREGADA?' :
+                '¿Marcar esta entrega como DEVUELTA?';
+
+            if (!confirm(confirmMessage)) {
+                return;
             }
-        });
 
-        updateStats();
-        updateMapMarker(deliveryId, status);
+            // Actualizar estado local inmediatamente para mejor UX
+            deliveryStatuses[deliveryId] = status;
 
-        const statusText = status === 'completed' ? 'entregado' : 'devuelto';
-        ////showNotification(`Entrega marcada como ${statusText}`, 'success');
+            // Actualizar interfaz
+            updateDeliveryUI(deliveryItem, status);
 
-        sendDeliveryUpdate(deliveryId, status);
+            // Actualizar estadísticas
+            updateStats();
 
-        // Si estamos navegando, buscar siguiente entrega
-        if (isNavigating) {
-            setTimeout(() => {
-                findNextDelivery();
-            }, 2000);
+            // Enviar actualización al servidor (esta función ahora es más tolerante a fallos)
+            const success = await sendDeliveryUpdate(deliveryId, status);
+
+            if (success) {
+                const statusText = status === 'completed' ? 'entregado' : 'devuelto';
+
+                // Solo mostrar éxito si se sincronizó inmediatamente con el servidor
+                const pendingUpdates = JSON.parse(localStorage.getItem('pending_delivery_updates') || '[]');
+                const isPending = pendingUpdates.some(update => update.deliveryId === deliveryId);
+
+                if (!isPending) {
+                    //showNotification(`✅ Entrega marcada como ${statusText}`, 'success');
+                }
+
+                // Actualizar marcador en el mapa
+                updateMapMarker(deliveryId, status);
+
+                // Si estamos navegando, buscar siguiente entrega
+                if (isNavigating) {
+                    setTimeout(() => {
+                        findNextDelivery();
+                    }, 2000);
+                }
+            }
+
+        } catch (error) {
+            console.error('❌ Error marcando entrega:', error);
+            showNotification('Error al procesar la entrega', 'error');
         }
     }
 
-    // Actualizar UI del item de entrega
+    // Función auxiliar para actualizar la UI
+    function updateDeliveryUI(deliveryItem, status) {
+        deliveryItem.classList.remove('completed', 'returned', 'current');
+
+        if (status === 'completed') {
+            deliveryItem.classList.add('completed');
+        } else if (status === 'returned') {
+            deliveryItem.classList.add('returned');
+        }
+
+        const statusElement = deliveryItem.querySelector('.delivery-status');
+        if (statusElement) {
+            if (status === 'completed') {
+                statusElement.className = 'delivery-status status-completed';
+                statusElement.textContent = 'Entregado';
+            } else {
+                statusElement.className = 'delivery-status status-returned';
+                statusElement.textContent = 'Devuelto';
+            }
+        }
+
+        // Deshabilitar botones de acción
+        const buttons = deliveryItem.querySelectorAll('.delivery-btn');
+        buttons.forEach(btn => {
+            btn.disabled = true;
+            btn.style.opacity = '0.5';
+            btn.style.cursor = 'not-allowed';
+        });
+    }
+    // Función auxiliar para enviar una sola actualización
+    async function sendSingleUpdate(update) {
+        const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+        if (!token) return false;
+
+        try {
+            const requestData = {
+                delivery_id: deliveryId,
+                status: status === 'completed' ? 'entregado' : 'devuelto',
+                driver_id: driverData.id,
+                latitude: currentLocationMarker ? currentLocationMarker.getLatLng().lat : null,
+                longitude: currentLocationMarker ? currentLocationMarker.getLatLng().lng : null,
+                timestamp: new Date().toISOString()
+            };
+            const response = await fetch('/update-delivery-status', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': token
+                },
+                body: JSON.stringify(requestData)
+            });
+
+            return response.ok;
+        } catch (error) {
+            return false;
+        }
+    }
+
+    // Llamar esta función periódicamente
+    setInterval(retryPendingUpdates, 30000); // Cada 30 segundos
+    // Función alternativa si la ruta anterior no funciona
+    // Función corregida para enviar actualizaciones de entrega
+    async function sendDeliveryUpdate(deliveryId, status) {
+        console.log(`🔄 Iniciando actualización para entrega ${deliveryId} con estado ${status}`);
+
+        const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+        if (!token) {
+            console.error('❌ ERROR: Token CSRF no encontrado');
+            return false;
+        }
+
+        try {
+            // Obtener ubicación actual
+            let latitude = null;
+            let longitude = null;
+
+            if (currentLocationMarker) {
+                const latLng = currentLocationMarker.getLatLng();
+                latitude = latLng.lat;
+                longitude = latLng.lng;
+                console.log('📍 Ubicación GPS:', latitude, longitude);
+            }
+
+            // DEFINIR LOS ENDPOINTS A PROBAR
+            const endpoints = [{
+                    url: '/update-delivery-status',
+                    method: 'POST',
+                    data: {
+                        delivery_id: parseInt(deliveryId),
+                        status: status === 'completed' ? 'entregado' : 'devuelto',
+                        driver_id: driverData.id,
+                        latitude: latitude,
+                        longitude: longitude,
+                        timestamp: new Date().toISOString()
+                    }
+                },
+                {
+                    url: '/motorista/update-delivery-status',
+                    method: 'POST',
+                    data: {
+                        pedido_id: parseInt(deliveryId),
+                        estado: status === 'completed' ? 'entregado' : 'devuelto',
+                        driver_id: driverData.id,
+                        driver_name: driverData.name,
+                        latitud: latitude,
+                        longitud: longitude,
+                        timestamp: new Date().toISOString()
+                    }
+                },
+                {
+                    url: '/api/deliveries/update',
+                    method: 'POST',
+                    data: {
+                        delivery_id: parseInt(deliveryId),
+                        status: status === 'completed' ? 'delivered' : 'returned',
+                        driver_id: driverData.id,
+                        location: {
+                            lat: latitude,
+                            lng: longitude
+                        },
+                        timestamp: new Date().toISOString()
+                    }
+                }
+            ];
+
+            console.log('📤 Datos a enviar:', endpoints[0].data);
+
+            let success = false;
+            let lastError = null;
+
+            for (const endpoint of endpoints) {
+                console.log(`🔗 Probando: ${endpoint.method} ${endpoint.url}`);
+
+                try {
+                    const response = await fetch(endpoint.url, {
+                        method: endpoint.method,
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': token,
+                            'Accept': 'application/json'
+                        },
+                        body: JSON.stringify(endpoint.data)
+                    });
+
+                    console.log(`📨 Respuesta de ${endpoint.url}:`, {
+                        status: response.status,
+                        statusText: response.statusText,
+                        ok: response.ok
+                    });
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        console.log(`✅ Éxito en ${endpoint.url}:`, data);
+
+                        if (data.success || data.status === 'success') {
+                            success = true;
+                            console.log(`🎉 Endpoint funcionando: ${endpoint.url}`);
+                            break;
+                        } else {
+                            console.log(`⚠️ Endpoint respondió pero con error:`, data);
+                            lastError = data.error || data.message || 'Error del servidor';
+                        }
+                    } else {
+                        console.log(`❌ Endpoint ${endpoint.url} falló con status: ${response.status}`);
+                        lastError = `HTTP ${response.status}: ${response.statusText}`;
+
+                        // Si es error 404, continuar con el siguiente endpoint
+                        if (response.status === 404) {
+                            continue;
+                        }
+                    }
+                } catch (error) {
+                    console.log(`❌ Error de conexión en ${endpoint.url}:`, error.message);
+                    lastError = error.message;
+                }
+            }
+
+            if (!success) {
+                console.error('❌ Todos los endpoints fallaron');
+                throw new Error(lastError || 'No se pudo conectar con ningún endpoint');
+            }
+
+            return true;
+
+        } catch (error) {
+            console.error('❌ Error crítico en sendDeliveryUpdate:', error);
+
+            // Guardar localmente como respaldo
+            const pendingUpdates = JSON.parse(localStorage.getItem('pending_delivery_updates') || '[]');
+            pendingUpdates.push({
+                deliveryId,
+                status,
+                timestamp: new Date().toISOString(),
+                driver: driverData.id,
+                location: currentLocationMarker ? currentLocationMarker.getLatLng() : null
+            });
+            localStorage.setItem('pending_delivery_updates', JSON.stringify(pendingUpdates));
+
+            // Mostrar notificación de respaldo
+            showNotification('✅ Entrega marcada localmente (se sincronizará después)', 'success');
+
+            return true; // Permitir que continúe la actualización local
+        }
+    }
+
+    // Función mejorada para reintentar actualizaciones pendientes
+    async function retryPendingUpdates() {
+        const pendingUpdates = JSON.parse(localStorage.getItem('pending_delivery_updates') || '[]');
+
+        if (pendingUpdates.length === 0) return;
+
+        console.log(`🔄 Reintentando ${pendingUpdates.length} actualizaciones pendientes...`);
+
+        const successfulUpdates = [];
+
+        for (const update of pendingUpdates) {
+            try {
+                // Usar la función principal de envío
+                const success = await sendDeliveryUpdate(update.deliveryId, update.status);
+                if (success) {
+                    successfulUpdates.push(update);
+                    console.log(`✅ Actualización pendiente sincronizada: ${update.deliveryId}`);
+                }
+            } catch (error) {
+                console.error('Error reintentando actualización:', error);
+            }
+        }
+
+        // Remover las actualizaciones exitosas
+        const remainingUpdates = pendingUpdates.filter(update =>
+            !successfulUpdates.some(success =>
+                success.deliveryId === update.deliveryId &&
+                success.timestamp === update.timestamp
+            )
+        );
+
+        localStorage.setItem('pending_delivery_updates', JSON.stringify(remainingUpdates));
+
+        if (successfulUpdates.length > 0) {
+            console.log(`✅ ${successfulUpdates.length} actualizaciones sincronizadas`);
+            // No mostrar notificación para no molestar al usuario
+        }
+    }
+
+    // Configurar reintentos automáticos cada 30 segundos
+    setInterval(retryPendingUpdates, 30000);
+
+    // También reintentar cuando la conexión se recupere
+    window.addEventListener('online', function() {
+        console.log('🌐 Conexión restaurada - reintentando actualizaciones pendientes');
+        retryPendingUpdates();
+    });
+
     function updateDeliveryItemUI(deliveryItem, statusText, statusClass) {
         const statusElement = deliveryItem.querySelector('.delivery-status');
         if (statusElement) {
@@ -2475,42 +2762,6 @@ function updateCurrentDelivery(deliveryId) {
             clearPreviousRoute();
             addDeliveryMarkers();
         }
-    }
-
-    // Enviar actualización al servidor
-    function sendDeliveryUpdate(deliveryId, status) {
-        const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-        if (!token) return;
-
-        const serverStatus = status === 'completed' ? 'entregado' : 'devuelto';
-
-        fetch('/update-delivery-status', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': token
-                },
-                body: JSON.stringify({
-                    delivery_id: deliveryId,
-                    status: serverStatus,
-                    driver_id: driverData.id,
-                    latitude: currentLocationMarker ? currentLocationMarker.getLatLng().lat : null,
-                    longitude: currentLocationMarker ? currentLocationMarker.getLatLng().lng : null,
-                    timestamp: new Date().toISOString()
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    console.log('✅ Estado actualizado en servidor');
-                } else {
-                    ////showNotification('Error sincronizando con servidor', 'warning');
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                ////showNotification('Error de conexión con servidor', 'warning');
-            });
     }
 
     // Actualizar estadísticas
@@ -2843,34 +3094,42 @@ function updateCurrentDelivery(deliveryId) {
 
     // Verificar al cargar la página
     document.addEventListener('DOMContentLoaded', function() {
-    console.log('Inicializando sistema de jornadas...');
-    console.log('ID de jornada actual:', currentShiftId);
-    
-    if (currentShiftId) {
-        console.log('Marcando jornada actual como vista:', currentShiftId);
-        markShiftAsNotified(currentShiftId);
-    }
-    
-    const notification = document.getElementById('new-shift-notification');
-    console.log('Elemento notificación encontrado:', !!notification);
-    
-    // Verificación silenciosa inicial después de 5 segundos
-    setTimeout(() => {
-        console.log('Primera verificación silenciosa...');
-        checkForNewShiftSilent();
-    }, 5000);
-    
-    // Configurar verificación automática SILENCIOSA cada 2 minutos
-    if (shiftCheckInterval) {
-        clearInterval(shiftCheckInterval);
-    }
-    shiftCheckInterval = setInterval(() => {
-        console.log('Verificación automática silenciosa...');
-        checkForNewShiftSilent(); // Usar la función silenciosa
-    }, 120000);
-    
-    console.log('Sistema de jornadas inicializado');
-});
+        console.log('Inicializando sistema de jornadas...');
+        console.log('ID de jornada actual:', currentShiftId);
+
+        if (currentShiftId) {
+            console.log('Marcando jornada actual como vista:', currentShiftId);
+            markShiftAsNotified(currentShiftId);
+        }
+
+        const notification = document.getElementById('new-shift-notification');
+        console.log('Elemento notificación encontrado:', !!notification);
+
+        // Verificación silenciosa inicial después de 5 segundos
+        setTimeout(() => {
+            console.log('Primera verificación silenciosa...');
+            checkForNewShiftSilent();
+        }, 5000);
+
+        // Configurar verificación automática SILENCIOSA cada 2 minutos
+        if (shiftCheckInterval) {
+            clearInterval(shiftCheckInterval);
+        }
+        shiftCheckInterval = setInterval(() => {
+            console.log('Verificación automática silenciosa...');
+            checkForNewShiftSilent(); // Usar la función silenciosa
+        }, 120000);
+
+        console.log('Sistema de jornadas inicializado');
+
+        setTimeout(() => {
+            const pendingUpdates = JSON.parse(localStorage.getItem('pending_delivery_updates') || '[]');
+            if (pendingUpdates.length > 0) {
+                console.log(`📋 ${pendingUpdates.length} actualizaciones pendientes encontradas`);
+                retryPendingUpdates();
+            }
+        }, 10000);
+    });
 
     window.addEventListener('beforeunload', function() {
         if (shiftCheckInterval) {
@@ -2880,251 +3139,263 @@ function updateCurrentDelivery(deliveryId) {
     </script>
 
     <!-- Agregar antes de cerrar el body -->
-<div id="confirm-modal" class="confirm-modal" style="display: none;">
-    <div class="confirm-modal-content">
-        <h3 id="confirm-modal-title">Confirmar acción</h3>
-        <p id="confirm-modal-message">¿Estás seguro?</p>
-        <div class="confirm-modal-buttons">
-            <button onclick="confirmModalResponse(false)" class="btn-cancel">
-                Cancelar
-            </button>
-            <button onclick="confirmModalResponse(true)" class="btn-confirm">
-                Confirmar
-            </button>
+    <div id="confirm-modal" class="confirm-modal" style="display: none;">
+        <div class="confirm-modal-content">
+            <h3 id="confirm-modal-title">Confirmar acción</h3>
+            <p id="confirm-modal-message">¿Estás seguro?</p>
+            <div class="confirm-modal-buttons">
+                <button onclick="confirmModalResponse(false)" class="btn-cancel">
+                    Cancelar
+                </button>
+                <button onclick="confirmModalResponse(true)" class="btn-confirm">
+                    Confirmar
+                </button>
+            </div>
         </div>
     </div>
-</div>
 
-<style>
-.confirm-modal {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.6);
-    z-index: 3000;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    animation: fadeIn 0.2s ease;
-}
-
-@keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
-}
-
-.confirm-modal-content {
-    background: white;
-    border-radius: 16px;
-    padding: 30px;
-    max-width: 400px;
-    width: 90%;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-    animation: slideInModal 0.3s ease;
-}
-
-@keyframes slideInModal {
-    from {
-        transform: scale(0.9) translateY(-20px);
-        opacity: 0;
+    <style>
+    .confirm-modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.6);
+        z-index: 3000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        animation: fadeIn 0.2s ease;
     }
-    to {
-        transform: scale(1) translateY(0);
-        opacity: 1;
+
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+        }
+
+        to {
+            opacity: 1;
+        }
     }
-}
 
-.confirm-modal-content h3 {
-    margin: 0 0 15px 0;
-    color: #333;
-    font-size: 20px;
-}
-
-.confirm-modal-content p {
-    margin: 0 0 25px 0;
-    color: #666;
-    line-height: 1.5;
-}
-
-.confirm-modal-buttons {
-    display: flex;
-    gap: 10px;
-    justify-content: flex-end;
-}
-
-.btn-cancel, .btn-confirm {
-    padding: 10px 20px;
-    border: none;
-    border-radius: 8px;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.3s ease;
-}
-
-.btn-cancel {
-    background: #e9ecef;
-    color: #495057;
-}
-
-.btn-cancel:hover {
-    background: #dee2e6;
-}
-
-.btn-confirm {
-    background: linear-gradient(135deg, #007bff, #0056b3);
-    color: white;
-}
-
-.btn-confirm:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
-}
-</style>
-
-<script>
-// Sistema de confirmación personalizado
-let confirmModalCallback = null;
-
-function showConfirmModal(title, message, callback) {
-    const modal = document.getElementById('confirm-modal');
-    const titleEl = document.getElementById('confirm-modal-title');
-    const messageEl = document.getElementById('confirm-modal-message');
-    
-    titleEl.textContent = title;
-    messageEl.textContent = message;
-    confirmModalCallback = callback;
-    
-    modal.style.display = 'flex';
-}
-
-function confirmModalResponse(confirmed) {
-    const modal = document.getElementById('confirm-modal');
-    modal.style.display = 'none';
-    
-    if (confirmModalCallback) {
-        confirmModalCallback(confirmed);
-        confirmModalCallback = null;
+    .confirm-modal-content {
+        background: white;
+        border-radius: 16px;
+        padding: 30px;
+        max-width: 400px;
+        width: 90%;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        animation: slideInModal 0.3s ease;
     }
-}
 
-// Modificar funciones para usar el modal personalizado
-async function checkForNewShift() {
-    showConfirmModal(
-        'Verificar nuevas jornadas',
-        '¿Deseas verificar si hay nuevas jornadas asignadas? Esto consultará el servidor para buscar jornadas pendientes.',
-        async function(confirmed) {
-            if (!confirmed) {
-                console.log('Usuario canceló verificación');
-                return;
-            }
-            
-            console.log('Verificando nuevas jornadas...', { currentShiftId });
-            //showNotification('Verificando nuevas jornadas...', 'info');
-            
-            try {
-                const url = new URL('/motorista/check-new-shift', window.location.origin);
-                if (currentShiftId) {
-                    url.searchParams.append('current_shift_id', currentShiftId);
+    @keyframes slideInModal {
+        from {
+            transform: scale(0.9) translateY(-20px);
+            opacity: 0;
+        }
+
+        to {
+            transform: scale(1) translateY(0);
+            opacity: 1;
+        }
+    }
+
+    .confirm-modal-content h3 {
+        margin: 0 0 15px 0;
+        color: #333;
+        font-size: 20px;
+    }
+
+    .confirm-modal-content p {
+        margin: 0 0 25px 0;
+        color: #666;
+        line-height: 1.5;
+    }
+
+    .confirm-modal-buttons {
+        display: flex;
+        gap: 10px;
+        justify-content: flex-end;
+    }
+
+    .btn-cancel,
+    .btn-confirm {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .btn-cancel {
+        background: #e9ecef;
+        color: #495057;
+    }
+
+    .btn-cancel:hover {
+        background: #dee2e6;
+    }
+
+    .btn-confirm {
+        background: linear-gradient(135deg, #007bff, #0056b3);
+        color: white;
+    }
+
+    .btn-confirm:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+    }
+    </style>
+
+    <script>
+    // Sistema de confirmación personalizado
+    let confirmModalCallback = null;
+
+    function showConfirmModal(title, message, callback) {
+        const modal = document.getElementById('confirm-modal');
+        const titleEl = document.getElementById('confirm-modal-title');
+        const messageEl = document.getElementById('confirm-modal-message');
+
+        titleEl.textContent = title;
+        messageEl.textContent = message;
+        confirmModalCallback = callback;
+
+        modal.style.display = 'flex';
+    }
+
+    function confirmModalResponse(confirmed) {
+        const modal = document.getElementById('confirm-modal');
+        modal.style.display = 'none';
+
+        if (confirmModalCallback) {
+            confirmModalCallback(confirmed);
+            confirmModalCallback = null;
+        }
+    }
+
+    // Modificar funciones para usar el modal personalizado
+    async function checkForNewShift() {
+        showConfirmModal(
+            'Verificar nuevas jornadas',
+            '¿Deseas verificar si hay nuevas jornadas asignadas? Esto consultará el servidor para buscar jornadas pendientes.',
+            async function(confirmed) {
+                if (!confirmed) {
+                    console.log('Usuario canceló verificación');
+                    return;
                 }
-                
-                const response = await fetch(url, {
-                    method: 'GET',
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content
-                    }
+
+                console.log('Verificando nuevas jornadas...', {
+                    currentShiftId
                 });
-                
-                const data = await response.json();
-                console.log('Respuesta check-new-shift:', data);
-                
-                if (data.success && data.has_new_shift) {
-                    const newShiftId = data.jornada.id;
-                    const notifiedShifts = getNotifiedShifts();
-                    
-                    if (!notifiedShifts.includes(newShiftId)) {
-                        console.log('Nueva jornada encontrada:', data.jornada);
-                        showNewShiftNotification(data);
-                        markShiftAsNotified(newShiftId);
-                        //showNotification(`Nueva jornada con ${data.pedidos_count} pedidos`, 'success');
-                    } else {
-                        console.log('Jornada ya notificada');
-                        //showNotification('Ya has sido notificado de esta jornada', 'info');
+                //showNotification('Verificando nuevas jornadas...', 'info');
+
+                try {
+                    const url = new URL('/motorista/check-new-shift', window.location.origin);
+                    if (currentShiftId) {
+                        url.searchParams.append('current_shift_id', currentShiftId);
                     }
-                } else {
-                    console.log('No hay nuevas jornadas');
-                    //showNotification('No hay nuevas jornadas asignadas', 'info');
+
+                    const response = await fetch(url, {
+                        method: 'GET',
+                        headers: {
+                            'Accept': 'application/json',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')
+                                ?.content
+                        }
+                    });
+
+                    const data = await response.json();
+                    console.log('Respuesta check-new-shift:', data);
+
+                    if (data.success && data.has_new_shift) {
+                        const newShiftId = data.jornada.id;
+                        const notifiedShifts = getNotifiedShifts();
+
+                        if (!notifiedShifts.includes(newShiftId)) {
+                            console.log('Nueva jornada encontrada:', data.jornada);
+                            showNewShiftNotification(data);
+                            markShiftAsNotified(newShiftId);
+                            //showNotification(`Nueva jornada con ${data.pedidos_count} pedidos`, 'success');
+                        } else {
+                            console.log('Jornada ya notificada');
+                            //showNotification('Ya has sido notificado de esta jornada', 'info');
+                        }
+                    } else {
+                        console.log('No hay nuevas jornadas');
+                        //showNotification('No hay nuevas jornadas asignadas', 'info');
+                    }
+
+                } catch (error) {
+                    console.error('Error verificando nueva jornada:', error);
+                    //showNotification('Error verificando nuevas jornadas', 'error');
                 }
-                
-            } catch (error) {
-                console.error('Error verificando nueva jornada:', error);
-                //showNotification('Error verificando nuevas jornadas', 'error');
             }
-        }
-    );
-}
-async function checkForNewShiftSilent() {
-    console.log('Verificación automática silenciosa...', { currentShiftId });
-    
-    try {
-        const url = new URL('/motorista/check-new-shift', window.location.origin);
-        if (currentShiftId) {
-            url.searchParams.append('current_shift_id', currentShiftId);
-        }
-        
-        const response = await fetch(url, {
-            method: 'GET',
-            headers: {
-                'Accept': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content
-            }
-        });
-        
-        const data = await response.json();
-        console.log('Respuesta check-new-shift (silencioso):', data);
-        
-        if (data.success && data.has_new_shift) {
-            const newShiftId = data.jornada.id;
-            const notifiedShifts = getNotifiedShifts();
-            
-            if (!notifiedShifts.includes(newShiftId)) {
-                console.log('Nueva jornada encontrada (verificación automática):', data.jornada);
-                showNewShiftNotification(data);
-                markShiftAsNotified(newShiftId);
-                // NO mostrar notificación toast en verificación silenciosa
-            }
-        }
-        
-    } catch (error) {
-        console.error('Error en verificación silenciosa:', error);
+        );
     }
-}
+    async function checkForNewShiftSilent() {
+        console.log('Verificación automática silenciosa...', {
+            currentShiftId
+        });
 
-
-function reloadShiftView() {
-    showConfirmModal(
-        'Recargar vista',
-        '¿Deseas recargar la vista para cargar la jornada más reciente? Esto actualizará la página y cargará los pedidos más recientes. Si estás navegando, se detendrá la navegación actual.',
-        function(confirmed) {
-            if (!confirmed) {
-                console.log('Usuario canceló recarga');
-                return;
+        try {
+            const url = new URL('/motorista/check-new-shift', window.location.origin);
+            if (currentShiftId) {
+                url.searchParams.append('current_shift_id', currentShiftId);
             }
-            
-            console.log('Recargando vista...');
-            hideNewShiftNotification();
-            //showNotification('Recargando jornada...', 'info');
-            
-            setTimeout(() => {
-                window.location.reload();
-            }, 500);
+
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content
+                }
+            });
+
+            const data = await response.json();
+            console.log('Respuesta check-new-shift (silencioso):', data);
+
+            if (data.success && data.has_new_shift) {
+                const newShiftId = data.jornada.id;
+                const notifiedShifts = getNotifiedShifts();
+
+                if (!notifiedShifts.includes(newShiftId)) {
+                    console.log('Nueva jornada encontrada (verificación automática):', data.jornada);
+                    showNewShiftNotification(data);
+                    markShiftAsNotified(newShiftId);
+                    // NO mostrar notificación toast en verificación silenciosa
+                }
+            }
+
+        } catch (error) {
+            console.error('Error en verificación silenciosa:', error);
         }
-    );
-}
-</script>
+    }
+
+
+    function reloadShiftView() {
+        showConfirmModal(
+            'Recargar vista',
+            '¿Deseas recargar la vista para cargar la jornada más reciente? Esto actualizará la página y cargará los pedidos más recientes. Si estás navegando, se detendrá la navegación actual.',
+            function(confirmed) {
+                if (!confirmed) {
+                    console.log('Usuario canceló recarga');
+                    return;
+                }
+
+                console.log('Recargando vista...');
+                hideNewShiftNotification();
+                //showNotification('Recargando jornada...', 'info');
+
+                setTimeout(() => {
+                    window.location.reload();
+                }, 500);
+            }
+        );
+    }
+    </script>
 </body>
 
 </html>
