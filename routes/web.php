@@ -169,10 +169,10 @@ Route::get('/pago/exito', function (Request $request) {
                 $pago->internal_reference = $payments[0]['internalReference'];
             }
 
-            // ✅ Mover el pedido a "en preparacion"
+            // ✅ Mover el pedido a "en preparación"
             $pedido = $pago->pedido;
-            if ($pedido && $pedido->estado !== 'en preparacion') {
-                $pedido->estado = 'en preparacion';
+            if ($pedido && $pedido->estado !== 'en preparación') {
+                $pedido->estado = 'en preparación';
                 $pedido->save();
             }
 

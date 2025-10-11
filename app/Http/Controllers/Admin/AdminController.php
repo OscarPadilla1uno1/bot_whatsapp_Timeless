@@ -619,6 +619,8 @@ class AdminController extends Controller
                     ['nombre' => $nombre]
                 );
 
+                $estadoPedido = $metodo_pago === 'efectivo' ? 'en preparación' : 'pendiente';
+
                 // Crear el pedido
                 $pedido = new Pedido([
                     'cliente_id' => $cliente->id,
@@ -626,7 +628,7 @@ class AdminController extends Controller
                     'longitud' => $longitud,
                     'fecha_pedido' => $hoy,
                     'total' => 0.00, // Se actualizará al final
-                    'estado' => 'pendiente'
+                    'estado' => $estadoPedido
                 ]);
 
                 $pedido->save();

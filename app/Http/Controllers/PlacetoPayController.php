@@ -358,6 +358,8 @@ class PlacetoPayController extends Controller
                 if (!empty($payments) && !empty($payments[0]['internalReference'])) {
                     $pago->internal_reference = $payments[0]['internalReference'];
                 }
+                $pedido->estado = 'en preparación';
+                $pedido->save();
             } elseif ($notification->isRejected() || $estado === 'FAILED') {
                 $pago->estado_pago = 'fallido';
             } else {
