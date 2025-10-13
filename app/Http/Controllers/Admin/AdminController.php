@@ -514,7 +514,9 @@ class AdminController extends Controller
             'platillos' => 'required|array',
             'platillos.*.id' => 'required|integer',
             'platillos.*.cantidad' => 'required|integer',
-            'metodo_pago' => 'required|string|in:tarjeta,efectivo',
+            'metodo_pago' => 'required|string|in:tarjeta,efectivo,transferencia',
+            'domicilio' => 'required|boolean',
+            'notas' => 'nullable|string',
         ]);
 
         $nombre = $request->nombre;
@@ -524,6 +526,8 @@ class AdminController extends Controller
         $platillos = $request->platillos;
         $cantidadPlatillos = 0;
         $metodo_pago = strtolower($request->metodo_pago);
+        $domicilio = $request->boolean('domicilio');
+        $notas = $request->input('notas', null);
 
         foreach ($platillos as $i) {
 
@@ -580,22 +584,23 @@ class AdminController extends Controller
         $fechaCarbon = Carbon::parse($hoy);
         $aplicaEnvioGratis = EnvioGratisFecha::tieneEnvioGratisParaFecha($fechaCarbon);
 
-        if ($aplicaEnvioGratis && $cantidadPlatillos >= 3) {
+        if (!$domicilio) {
             $costo_envio = 0;
         } else {
-            // 2. Si está muy cerca, también es gratis
-            if ($distancia_km <= 0.7) {
+            if ($aplicaEnvioGratis && $cantidadPlatillos >= 3) {
                 $costo_envio = 0;
-            }
-            // 3. Rangos definidos
-            elseif ($distancia_km > 0.7 && $distancia_km <= 6.0) {
-                $costo_envio = 40;
-            } elseif ($distancia_km > 6.0 && $distancia_km <= 6.75) {
-                $costo_envio = 50;
-            } elseif ($distancia_km > 6.75 && $distancia_km <= 9.0) {
-                $costo_envio = 70;
-            } else { // mayor a 9.0
-                $costo_envio = 80;
+            } else {
+                if ($distancia_km <= 0.7) {
+                    $costo_envio = 0;
+                } elseif ($distancia_km > 0.7 && $distancia_km <= 6.0) {
+                    $costo_envio = 40;
+                } elseif ($distancia_km > 6.0 && $distancia_km <= 6.75) {
+                    $costo_envio = 50;
+                } elseif ($distancia_km > 6.75 && $distancia_km <= 9.0) {
+                    $costo_envio = 70;
+                } else {
+                    $costo_envio = 80;
+                }
             }
         }
 
@@ -612,23 +617,28 @@ class AdminController extends Controller
         }
 
         try {
-            $result = DB::transaction(function () use ($nombre, $telefono, $latitud, $longitud, $platillos, $costo_envio, $hoy, &$subtotal, $metodo_pago) {
+            $result = DB::transaction(function () use ($notas, $domicilio, $nombre, $telefono, $latitud, $longitud, $platillos, $costo_envio, $hoy, &$subtotal, $metodo_pago) {
                 // Verificar si el cliente ya existe o crearlo
                 $cliente = Cliente::firstOrCreate(
                     ['telefono' => $telefono],
                     ['nombre' => $nombre]
                 );
 
-                $estadoPedido = $metodo_pago === 'efectivo' ? 'en preparación' : 'pendiente';
+                $estadoPedido = in_array($metodo_pago, ['efectivo', 'transferencia'])
+                    ? 'en preparación'
+                    : 'pendiente';
 
+                    
                 // Crear el pedido
                 $pedido = new Pedido([
                     'cliente_id' => $cliente->id,
                     'latitud' => $latitud,
                     'longitud' => $longitud,
+                    'domicilio' => $domicilio,
                     'fecha_pedido' => $hoy,
                     'total' => 0.00, // Se actualizará al final
-                    'estado' => $estadoPedido
+                    'estado' => $estadoPedido,
+                    'notas' => $notas,
                 ]);
 
                 $pedido->save();
@@ -696,7 +706,7 @@ class AdminController extends Controller
                     // 💵 Pago en efectivo → confirmado automáticamente
                     $pago = new Pago([
                         'pedido_id' => $pedido->id,
-                        'metodo_pago' => 'efectivo',
+                        'metodo_pago' => $metodo_pago,
                         'estado_pago' => 'confirmado',
                         'fecha_pago' => now()->setTimezone('America/Tegucigalpa'),
                         'referencia_transaccion' => null,
@@ -704,7 +714,9 @@ class AdminController extends Controller
                         'process_url' => null,
                         'metodo_interno' => null,
                         'canal' => 'whatsapp',
-                        'observaciones' => 'Pago confirmado en efectivo'
+                        'observaciones' => $metodo_pago === 'efectivo'
+                            ? 'Pago confirmado en efectivo'
+                            : 'Pago confirmado por transferencia'
                     ]);
                 }
 

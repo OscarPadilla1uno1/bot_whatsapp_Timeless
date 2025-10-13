@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 class Pedido extends Model
 {
     protected $table = 'pedidos';
-    protected $fillable = ['cliente_id', 'latitud', 'longitud', 'estado', 'total', 'fecha_pedido'];
+    protected $fillable = ['cliente_id', 'latitud', 'longitud', 'domicilio', 'estado', 'total', 'fecha_pedido', 'notas'];
     
     public $timestamps = false;
 
