@@ -8,7 +8,7 @@ class EnvioGratisFecha extends Model
 {
     protected $table = 'envios_gratis_fechas';
 
-    protected $fillable = ['fecha', 'activo'];
+    protected $fillable = ['fecha', 'activo', 'cantidad_minima'];
 
     public static function tieneEnvioGratisParaFecha(Carbon $fecha)
     {
@@ -21,7 +21,8 @@ class EnvioGratisFecha extends Model
         if (!$yaExiste) {
             self::create([
                 'fecha' => $fecha->toDateString(),
-                'activo' => $fecha->isSaturday(), // si es sábado: true
+                'activo' => $fecha->isSaturday(),
+                'cantidad_minima' => 3,
             ]);
         }
     }
