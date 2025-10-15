@@ -539,7 +539,7 @@ class AdminController extends Controller
         }
 
 
-        $hoy = now()->setTimezone('America/Tegucigalpa')->format('Y-m-d'); // Ajusta tu zona horaria
+        $hoy = now()->setTimezone('America/Tegucigalpa')->format('Y-m-d H:i:s'); // Ajusta tu zona horaria
 
         Log::info("Fecha generada: " . $hoy);
         $subtotal = 0.00;
