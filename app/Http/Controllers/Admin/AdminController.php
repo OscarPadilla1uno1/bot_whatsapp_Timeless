@@ -59,14 +59,17 @@ class AdminController extends Controller
 
         return response()->json([
             'existe' => true,
-            'activo' => $registro->activo
+            'activo' => $registro->activo,
+            'cantidad_minima' => $registro->cantidad_minima,
         ]);
     }
 
     public function actualizarEnvioGratis(Request $request, $fecha)
     {
         $registro = EnvioGratisFecha::where('fecha', $fecha)->firstOrFail();
+
         $registro->activo = $request->boolean('activo');
+        $registro->cantidad_minima = $request->input('cantidad_minima', 3);
         $registro->save();
 
         return response()->json(['success' => true]);
@@ -587,7 +590,7 @@ class AdminController extends Controller
         if (!$domicilio) {
             $costo_envio = 0;
         } else {
-            if ($aplicaEnvioGratis && $cantidadPlatillos >= 3) {
+            if ($aplicaEnvioGratis && $cantidadPlatillos >= $aplicaEnvioGratis->cantidad_minima) {
                 $costo_envio = 0;
             } else {
                 if ($distancia_km <= 0.7) {
@@ -628,7 +631,7 @@ class AdminController extends Controller
                     ? 'en preparación'
                     : 'pendiente';
 
-                    
+
                 // Crear el pedido
                 $pedido = new Pedido([
                     'cliente_id' => $cliente->id,
@@ -791,7 +794,7 @@ class AdminController extends Controller
         $fechaCarbon = Carbon::parse($hoy);
         $aplicaEnvioGratis = EnvioGratisFecha::tieneEnvioGratisParaFecha($fechaCarbon);
 
-        if ($aplicaEnvioGratis && $cantidadPlatillos >= 3) {
+        if ($aplicaEnvioGratis && $cantidadPlatillos >= $aplicaEnvioGratis->cantidad_minima) {
             $costo_envio = 0;
         } else {
             if ($distancia_km <= 0.7) {
@@ -1092,55 +1095,55 @@ class AdminController extends Controller
         return view('admin.pedidos', compact('pedidos', 'pedidoSeleccionado', 'estados', 'tab'));
     }
 
-  public function pedidosStatusViewCocina(Request $request)
-{
-    $tab = $request->query('tab', 'hoy');
-    $timezone = 'America/Tegucigalpa';
-    $today = now()->setTimezone($timezone)->format('Y-m-d');
+    public function pedidosStatusViewCocina(Request $request)
+    {
+        $tab = $request->query('tab', 'hoy');
+        $timezone = 'America/Tegucigalpa';
+        $today = now()->setTimezone($timezone)->format('Y-m-d');
 
-    $query = Pedido::with(['cliente', 'detalles.platillo'])
-        ->orderBy('fecha_pedido', 'desc');
+        $query = Pedido::with(['cliente', 'detalles.platillo'])
+            ->orderBy('fecha_pedido', 'desc');
 
-    // Filtros por pestaña
-    switch ($tab) {
-        case 'hoy':
-            $query->whereDate('fecha_pedido', $today)
-                  ->where('estado', 'en preparacion');
-            break;
-        case 'futuro':
-            $query->whereDate('fecha_pedido', '>', $today);
-            break;
-        case 'pasado':
-            $query->whereDate('fecha_pedido', '<', $today);
-            break;
+        // Filtros por pestaña
+        switch ($tab) {
+            case 'hoy':
+                $query->whereDate('fecha_pedido', $today)
+                    ->where('estado', 'en preparacion');
+                break;
+            case 'futuro':
+                $query->whereDate('fecha_pedido', '>', $today);
+                break;
+            case 'pasado':
+                $query->whereDate('fecha_pedido', '<', $today);
+                break;
+        }
+
+        // Búsqueda incluyendo notas
+        if ($request->filled('buscar')) {
+            $buscar = $request->buscar;
+            $query->where(function ($q) use ($buscar) {
+                $q->whereHas('cliente', function ($q2) use ($buscar) {
+                    $q2->where('nombre', 'like', '%' . $buscar . '%')
+                        ->orWhere('telefono', 'like', '%' . $buscar . '%');
+                })
+                    ->orWhere('estado', 'like', '%' . $buscar . '%')
+                    ->orWhereDate('fecha_pedido', $buscar)
+                    ->orWhere('total', 'like', '%' . $buscar . '%')
+                    ->orWhere('id', $buscar)
+                    ->orWhere('notas', 'like', '%' . $buscar . '%'); // Nueva búsqueda en notas
+            });
+        }
+
+        $pedidos = $query->paginate(10)->withQueryString();
+
+        $pedidoSeleccionado = $request->has('pedido_id')
+            ? Pedido::with(['cliente', 'detalles.platillo'])->find($request->pedido_id)
+            : null;
+
+        $estados = ['pendiente', 'en preparación', 'despachado', 'entregado', 'cancelado'];
+
+        return view('cocina.pedidos-cocina', compact('pedidos', 'pedidoSeleccionado', 'estados', 'tab'));
     }
-
-    // Búsqueda incluyendo notas
-    if ($request->filled('buscar')) {
-        $buscar = $request->buscar;
-        $query->where(function ($q) use ($buscar) {
-            $q->whereHas('cliente', function ($q2) use ($buscar) {
-                $q2->where('nombre', 'like', '%' . $buscar . '%')
-                   ->orWhere('telefono', 'like', '%' . $buscar . '%');
-            })
-            ->orWhere('estado', 'like', '%' . $buscar . '%')
-            ->orWhereDate('fecha_pedido', $buscar)
-            ->orWhere('total', 'like', '%' . $buscar . '%')
-            ->orWhere('id', $buscar)
-            ->orWhere('notas', 'like', '%' . $buscar . '%'); // Nueva búsqueda en notas
-        });
-    }
-
-    $pedidos = $query->paginate(10)->withQueryString();
-
-    $pedidoSeleccionado = $request->has('pedido_id') 
-        ? Pedido::with(['cliente', 'detalles.platillo'])->find($request->pedido_id)
-        : null;
-
-    $estados = ['pendiente', 'en preparación', 'despachado', 'entregado', 'cancelado'];
-
-    return view('cocina.pedidos-cocina', compact('pedidos', 'pedidoSeleccionado', 'estados', 'tab'));
-}
 
     public function actualizarEstadoCocina(Request $request, $id)
     {
@@ -1302,7 +1305,7 @@ class AdminController extends Controller
 
         Log::info("estado del envio {$aplicaEnvioGratis} y cantidad de platillos pedidos {$cantidadPlatillos}");
 
-        if ($aplicaEnvioGratis && $cantidadPlatillos >= 3) {
+        if ($aplicaEnvioGratis && $cantidadPlatillos >= $aplicaEnvioGratis->cantidad_minima) {
             $costo_envio = 0;
         } else {
             // 2. Si está muy cerca, también es gratis
@@ -1567,7 +1570,7 @@ class AdminController extends Controller
 
         $fechaCarbon = Carbon::parse($fecha);
         $aplicaEnvioGratis = EnvioGratisFecha::tieneEnvioGratisParaFecha($fechaCarbon);
-        if ($aplicaEnvioGratis && $cantidadPlatillos >= 3) {
+        if ($aplicaEnvioGratis && $cantidadPlatillos >= $aplicaEnvioGratis->cantidad_minima) {
             $costo_envio = 0;
         } else {
             // 2. Si está muy cerca, también es gratis

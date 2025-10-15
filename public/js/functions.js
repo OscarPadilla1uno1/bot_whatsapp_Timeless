@@ -27,6 +27,9 @@ function esFechaPasada(fechaSeleccionada) {
 function renderizarSwitchEnvioGratis(fecha) {
     const container = document.getElementById("switch-envio-container");
     const switchInput = document.getElementById("switch-envio-gratis");
+    const inputCantidad = document.getElementById("input-cantidad-minima");
+    const labelCantidad = document.getElementById("label-cantidad-minima");
+    const btnGuardar = document.getElementById("btn-guardar-cantidad-minima");
 
     if (esFechaPasada(fecha)) {
         container.classList.add("hidden");
@@ -34,17 +37,9 @@ function renderizarSwitchEnvioGratis(fecha) {
     }
 
     const url = window.routes.envioGratisPorFecha();
-    if (!url) {
-        console.warn(
-            "No se pudo construir la URL de envío gratis (fecha no seleccionada)"
-        );
-        return;
-    }
+    if (!url) return console.warn("No se pudo construir la URL (fecha no seleccionada)");
 
-    console.log(url);
-    // Consultar al backend
     $.get(url, function (data) {
-        console.log("Ejecutado desde el ur de windows variable con funcion");
         if (!data.existe) {
             container.classList.add("hidden");
             return;
@@ -52,31 +47,38 @@ function renderizarSwitchEnvioGratis(fecha) {
 
         container.classList.remove("hidden");
         switchInput.checked = data.activo;
+        inputCantidad.value = data.cantidad_minima || 3;
+        labelCantidad.textContent = data.cantidad_minima || 3;
 
+        // Evento al cambiar el checkbox
         switchInput.onchange = function () {
-            $.ajax({
-                url: url,
-                method: "PATCH",
-                data: {
-                    activo: this.checked,
-                    _token: document
-                        .querySelector('meta[name="csrf-token"]')
-                        .getAttribute("content"),
-                },
-                success: () => {
-                    console.log(
-                        `Estado de envío gratis para ${fecha} actualizado`
-                    );
-                },
-                error: () => {
-                    console.error(
-                        "No se pudo actualizar el estado de envío gratis"
-                    );
-                },
-            });
+            actualizarEnvioGratis(url, this.checked, inputCantidad.value);
+        };
+
+        // Evento al guardar la cantidad mínima
+        btnGuardar.onclick = function () {
+            actualizarEnvioGratis(url, switchInput.checked, inputCantidad.value);
+            labelCantidad.textContent = inputCantidad.value;
         };
     });
 }
+
+function actualizarEnvioGratis(url, activo, cantidad_minima) {
+    $.ajax({
+        url: url,
+        method: "PATCH",
+        data: {
+            activo: activo,
+            cantidad_minima: cantidad_minima,
+            _token: document
+                .querySelector('meta[name="csrf-token"]')
+                .getAttribute("content"),
+        },
+        success: () => console.log("Configuración de envío gratis actualizada."),
+        error: () => console.error("Error al actualizar el estado de envío gratis."),
+    });
+}
+
 
 function manejarEstadoFormulario(fechaPasada) {
     const formulario = document.getElementById("agregar-platillo-form-menu");

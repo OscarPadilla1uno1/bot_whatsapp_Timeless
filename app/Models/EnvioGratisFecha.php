@@ -12,7 +12,7 @@ class EnvioGratisFecha extends Model
 
     public static function tieneEnvioGratisParaFecha(Carbon $fecha)
     {
-        return self::where('fecha', $fecha->toDateString())->where('activo', true)->exists();
+        return self::where('fecha', $fecha->toDateString())->where('activo', true)->first();
     }
 
     public static function establecerSiNoExiste(Carbon $fecha)
