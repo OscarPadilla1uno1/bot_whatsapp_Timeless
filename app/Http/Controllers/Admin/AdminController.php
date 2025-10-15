@@ -1092,51 +1092,55 @@ class AdminController extends Controller
         return view('admin.pedidos', compact('pedidos', 'pedidoSeleccionado', 'estados', 'tab'));
     }
 
-    public function pedidosStatusViewCocina(Request $request)
-    {
-        $tab = $request->query('tab', 'hoy'); // Por defecto "hoy"
+  public function pedidosStatusViewCocina(Request $request)
+{
+    $tab = $request->query('tab', 'hoy');
+    $timezone = 'America/Tegucigalpa';
+    $today = now()->setTimezone($timezone)->format('Y-m-d');
 
-        $query = Pedido::with('cliente')->orderBy('fecha_pedido', 'desc');
+    $query = Pedido::with(['cliente', 'detalles.platillo'])
+        ->orderBy('fecha_pedido', 'desc');
 
-
-
-        if ($tab === 'hoy') {
-            $query->whereDate('fecha_pedido', now()->setTimezone('America/Tegucigalpa')->format('Y-m-d'))->where('estado', 'en preparacion'); // Solo pedidos en preparación
-        } elseif ($tab === 'futuro') {
-            $query->whereDate('fecha_pedido', '>', now()->setTimezone('America/Tegucigalpa')->format('Y-m-d'));
-        } elseif ($tab === 'pasado') {
-            $query->whereDate('fecha_pedido', '<', now()->setTimezone('America/Tegucigalpa')->format('Y-m-d'));
-        }
-
-
-        if ($request->filled('buscar')) {
-            $buscar = $request->buscar;
-
-            $query->where(function ($q) use ($buscar) {
-                $q->whereHas('cliente', function ($q2) use ($buscar) {
-                    $q2->where('nombre', 'like', '%' . $buscar . '%');
-                })
-                    ->orWhere('estado', 'like', '%' . $buscar . '%')
-                    ->orWhereDate('fecha_pedido', $buscar)
-                    ->orWhere('total', 'like', '%' . $buscar . '%');
-            });
-        }
-
-        $pedidos = $query->paginate(10)->withQueryString(); // Mantener query params en paginación
-
-
-
-        $pedidoSeleccionado = null;
-        if ($request->has('pedido_id')) {
-            $pedidoSeleccionado = Pedido::with(['cliente', 'detalles.platillo'])->find($request->pedido_id);
-        }
-
-        $estados = ['pendiente', 'en preparación', 'despachado', 'entregado', 'cancelado'];
-
-
-        return view('cocina.pedidos-cocina', compact('pedidos', 'pedidoSeleccionado', 'estados', 'tab'));
+    // Filtros por pestaña
+    switch ($tab) {
+        case 'hoy':
+            $query->whereDate('fecha_pedido', $today)
+                  ->where('estado', 'en preparacion');
+            break;
+        case 'futuro':
+            $query->whereDate('fecha_pedido', '>', $today);
+            break;
+        case 'pasado':
+            $query->whereDate('fecha_pedido', '<', $today);
+            break;
     }
 
+    // Búsqueda incluyendo notas
+    if ($request->filled('buscar')) {
+        $buscar = $request->buscar;
+        $query->where(function ($q) use ($buscar) {
+            $q->whereHas('cliente', function ($q2) use ($buscar) {
+                $q2->where('nombre', 'like', '%' . $buscar . '%')
+                   ->orWhere('telefono', 'like', '%' . $buscar . '%');
+            })
+            ->orWhere('estado', 'like', '%' . $buscar . '%')
+            ->orWhereDate('fecha_pedido', $buscar)
+            ->orWhere('total', 'like', '%' . $buscar . '%')
+            ->orWhere('id', $buscar)
+            ->orWhere('notas', 'like', '%' . $buscar . '%'); // Nueva búsqueda en notas
+        });
+    }
+
+    $pedidos = $query->paginate(10)->withQueryString();
+
+    $pedidoSeleccionado = $request->has('pedido_id') 
+        ? Pedido::with(['cliente', 'detalles.platillo'])->find($request->pedido_id)
+        : null;
+
+    $estados = ['pendiente', 'en preparación', 'despachado', 'entregado', 'cancelado'];
+
+    return view('cocina.pedidos-cocina', compact('pedidos', 'pedidoSeleccionado', 'estados', 'tab'));
+}
 
     public function actualizarEstadoCocina(Request $request, $id)
     {
