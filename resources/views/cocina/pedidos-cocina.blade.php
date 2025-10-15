@@ -133,6 +133,15 @@
                         </div>
 
                     
+    {{-- AGREGAR AQUÍ LAS NOTAS --}}
+    @if($pedidoSeleccionado->notas)
+        <div class="sm:col-span-3">
+            <p class="mb-1"><strong>Notas:</strong></p>
+            <div class="bg-yellow-50 border border-yellow-200 rounded p-3">
+                {{ $pedidoSeleccionado->notas }}
+            </div>
+        </div>
+    @endif
 
                         {{-- Detalles del pedido (platillos) --}}
                         @if ($pedidoSeleccionado->detalles->count())
