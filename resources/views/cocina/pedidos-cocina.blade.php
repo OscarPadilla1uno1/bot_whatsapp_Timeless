@@ -64,52 +64,62 @@
                 <h3 class="text-lg font-semibold mb-4">Lista de Pedidos</h3>
 
                 <table class="min-w-full divide-y divide-gray-200" id="tabla-pedidos">
-                    <thead class="bg-gray-100">
-                        <tr>
-                            <th class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                ID</th>
-                            <th class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Cliente</th>
-                            <th class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Estado</th>
-                            <th class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Total</th>
-                            <th class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Fecha</th>
-                            <th class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Acciones</th>
-                        </tr>
-                    </thead>
+                   <thead class="bg-gray-100">
+    <tr>
+        <th class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+        <th class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cliente</th>
+        <th class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
+        {{-- AGREGAR ESTA LÍNEA --}}
+        <th class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
+        <th class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
+        <th class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
+        <th class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+    </tr>
+</thead>
                     <tbody class="bg-white divide-y divide-gray-200">
-                        @forelse ($pedidos as $pedido)
-                            <tr>
-                                <td class="px-2 py-2 whitespace-nowrap text-sm text-gray-900">{{ $pedido->id }}</td>
-                                <td class="px-2 py-2 whitespace-nowrap text-sm text-gray-900 max-w-[10rem] truncate"
-                                    title="{{ $pedido->cliente->nombre }}">
-                                    {{ $pedido->cliente->nombre }}
-                                </td>
-                                <td class="px-2 py-2 whitespace-nowrap text-sm text-gray-900">{{ ucfirst($pedido->estado) }}
-                                </td>
-                                <td class="px-2 py-2 whitespace-nowrap text-sm text-gray-900">
-                                    LPS. {{ number_format($pedido->total, 2) }}
-                                </td>
-                                <td class="px-2 py-2 whitespace-nowrap text-sm text-gray-900">
-                                    {{ \Carbon\Carbon::parse($pedido->fecha_pedido)->format('d/m/Y H:i') }}
-                                </td>
-                                <td class="px-2 py-2 whitespace-nowrap">
-                                    <a href="{{ route('cocina.pedidosCocina', ['tab' => $tab, 'pedido_id' => $pedido->id]) }}"
-                                        class="text-blue-600 hover:text-blue-800 font-semibold text-xs sm:text-sm">
-                                        Ver Detalle
-                                    </a>
-                                </td>
-                            </tr>
-                        @empty
-                            <tr>
-                                <td colspan="6" class="px-4 py-4 text-center text-gray-500">
-                                    No hay pedidos registrados.
-                                </td>
-                            </tr>
-                        @endforelse
+                       @forelse ($pedidos as $pedido)
+    <tr>
+        <td class="px-2 py-2 whitespace-nowrap text-sm text-gray-900">{{ $pedido->id }}</td>
+        <td class="px-2 py-2 whitespace-nowrap text-sm text-gray-900 max-w-[10rem] truncate"
+            title="{{ $pedido->cliente->nombre }}">
+            {{ $pedido->cliente->nombre }}
+        </td>
+        <td class="px-2 py-2 whitespace-nowrap text-sm text-gray-900">{{ ucfirst($pedido->estado) }}</td>
+        
+        {{-- AGREGAR ESTA COLUMNA --}}
+        <td class="px-2 py-2 whitespace-nowrap text-sm">
+            @if($pedido->domicilio == 1)
+                <span class="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs font-medium">
+                    Domicilio
+                </span>
+            @else
+                <span class="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium">
+                    Local
+                </span>
+            @endif
+        </td>
+        
+        <td class="px-2 py-2 whitespace-nowrap text-sm text-gray-900">
+            LPS. {{ number_format($pedido->total, 2) }}
+        </td>
+        <td class="px-2 py-2 whitespace-nowrap text-sm text-gray-900">
+            {{ \Carbon\Carbon::parse($pedido->fecha_pedido)->format('d/m/Y H:i') }}
+        </td>
+        <td class="px-2 py-2 whitespace-nowrap">
+            <a href="{{ route('cocina.pedidosCocina', ['tab' => $tab, 'pedido_id' => $pedido->id]) }}"
+                class="text-blue-600 hover:text-blue-800 font-semibold text-xs sm:text-sm">
+                Ver Detalle
+            </a>
+        </td>
+    </tr>
+@empty
+    {{-- Cambiar colspan de 6 a 7 porque agregamos una columna --}}
+    <tr>
+        <td colspan="7" class="px-4 py-4 text-center text-gray-500">
+            No hay pedidos registrados.
+        </td>
+    </tr>
+@endforelse
                     </tbody>
                 </table>
 
@@ -125,12 +135,20 @@
                 <div class="p-6 text-gray-900">
                     <h3 class="text-lg font-semibold mb-4">Detalle del Pedido #{{ $pedidoSeleccionado->id }}</h3>
 
-                    <div class="mb-4">
-                        <div class="grid grid-cols-1 items-center sm:grid-cols-3 gap-4 mb-4">
-                            <p><strong>Cliente:</strong> {{ $pedidoSeleccionado->cliente->nombre }}</p>
-                            <p><strong>Teléfono:</strong> {{ $pedidoSeleccionado->cliente->telefono }}</p>
-                            <p><strong>Total:</strong> LPS. {{ number_format($pedidoSeleccionado->total, 2) }}</p>
-                        </div>
+                    {{-- AGREGAR TIPO DE ENTREGA --}}
+<div class="grid grid-cols-1 items-center sm:grid-cols-2 gap-4 mb-4">
+    <p><strong>Tipo de entrega:</strong> 
+        @if($pedidoSeleccionado->domicilio == 1)
+            <span class="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-sm font-medium">
+                A Domicilio
+            </span>
+        @else
+            <span class="bg-green-100 text-green-800 px-2 py-1 rounded-full text-sm font-medium">
+                En Local
+            </span>
+        @endif
+    </p>
+</div>
 
                     
     {{-- AGREGAR AQUÍ LAS NOTAS --}}
@@ -204,33 +222,47 @@
 
                     </div>
 
-                    {{-- Formulario para cambiar estado --}}
-                    @if ($tab == 'hoy' && $pedidoSeleccionado->estado !== 'cancelado' && $pedidoSeleccionado->estado !== 'entregado')
-                        {{-- Formulario de actualización de estado + botón cancelar --}}
-              <form method="POST" action="{{ route('cocina.pedidos.actualizarEstado.cocina', $pedidoSeleccionado->id) }}">
-    @csrf
-    <input type="hidden" name="nuevo_estado" value="despachado">
-    
-    <div class="flex flex-wrap items-center gap-4">
-        <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
-            Despachado
-        </button>
-    
+              {{-- Formulario para cambiar estado --}}
+@if ($tab == 'hoy' && $pedidoSeleccionado->estado !== 'cancelado' && $pedidoSeleccionado->estado !== 'entregado')
+    {{-- Mostrar botón diferente según el tipo de entrega --}}
+    @if($pedidoSeleccionado->domicilio == 1)
+        {{-- Pedido a domicilio: Botón "Despachado" --}}
+        <form method="POST" action="{{ route('cocina.pedidos.actualizarEstado.cocina', $pedidoSeleccionado->id) }}">
+            @csrf
+            <input type="hidden" name="nuevo_estado" value="despachado">
+            
+            <div class="flex flex-wrap items-center gap-4">
+                <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+                    Despachado (A Domicilio)
+                </button>
+            </div>
+        </form>
+    @else
+        {{-- Pedido en local: Botón "Entregado" --}}
+        <form method="POST" action="{{ route('cocina.pedidos.actualizarEstado.cocina', $pedidoSeleccionado->id) }}">
+            @csrf
+            <input type="hidden" name="nuevo_estado" value="entregado">
+            
+            <div class="flex flex-wrap items-center gap-4">
+                <button type="submit" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">
+                    Entregado (En Local)
+                </button>
+            </div>
+        </form>
+    @endif
+@else
+    {{-- Modo solo lectura: futuro, pasado o cancelado --}}
+    <div class="mt-4">
+        <p><strong>Estado actual:</strong> {{ ucfirst($pedidoSeleccionado->estado) }}</p>
+        <p><strong>Tipo de entrega:</strong> {{ $pedidoSeleccionado->domicilio == 1 ? 'A Domicilio' : 'En Local' }}</p>
+
+        @if ($pedidoSeleccionado->estado === 'cancelado')
+            <div class="mt-2 text-red-600 font-semibold">
+                Este pedido ha sido cancelado. No se puede editar.
+            </div>
+        @endif
     </div>
-</form>
-                    @else
-                        {{-- Modo solo lectura: futuro, pasado o cancelado --}}
-                        <div class="mt-4">
-                            <p><strong>Estado actual:</strong> {{ ucfirst($pedidoSeleccionado->estado) }}</p>
-
-                            @if ($pedidoSeleccionado->estado === 'cancelado')
-                                <div class="mt-2 text-red-600 font-semibold">
-                                    Este pedido ha sido cancelado. No se puede editar.
-                                </div>
-                            @endif
-                        </div>
-                    @endif
-
+@endif
 
 
                 </div>
