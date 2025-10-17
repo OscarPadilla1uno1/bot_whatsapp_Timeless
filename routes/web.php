@@ -132,9 +132,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/admin/drivers/with-availability', [AdminController::class, 'getDriversWithAvailability']);
 
     // routes/api.php o routes/web.php
-Route::post('/api/entregas/actualizar-estado', [EntregaController::class, 'actualizarEstado']);
-// O la ruta alternativa
-Route::post('/update-delivery-status', [EntregaController::class, 'updateDeliveryStatus'])->name('delivery.update');
+    Route::post('/api/entregas/actualizar-estado', [EntregaController::class, 'actualizarEstado']);
+    // O la ruta alternativa
+    Route::post('/update-delivery-status', [EntregaController::class, 'updateDeliveryStatus'])->name('delivery.update');
 });
 
 Route::get('/pago/exito', function (Request $request) {
@@ -213,10 +213,19 @@ Route::get('/pago/exito', function (Request $request) {
             $pago->estado_pago = 'fallido';
             $pago->save();
 
+
+
             if (!$pago->notificado) {
                 $cliente = $pago->pedido ? $pago->pedido->cliente : null;
                 $telefono = $cliente ? $cliente->telefono : null;
                 $nombre = $cliente ? $cliente->nombre : 'Usuario';
+
+                $pedido = $pago->pedido;
+                if ($pedido) {
+                    $adminController = new AdminController();
+                    $result = $adminController->cancelarPedidoBot($pedido->id);
+                    Log::info("Resultado cancelación automática: " . $result->getContent());
+                }
 
                 if ($telefono) {
                     $mensaje = "Hola {$nombre}, hemos recibido la actualización de tu pago con referencia {$pago->referencia_transaccion}. Estado: {$pago->estado_pago}.";
@@ -370,7 +379,7 @@ Route::post('/admin/reiniciar-distribucion', [VroomController::class, 'reiniciar
 
 Route::get('/bot/qr', function () {
     $qrPath = '/var/www/base-js-wppconnect-mysqlCHATBOTV2/bot.qr.png';
-    
+
     if (file_exists($qrPath)) {
         return response()->file($qrPath, [
             'Content-Type' => 'image/png',
@@ -379,7 +388,7 @@ Route::get('/bot/qr', function () {
             'Expires' => '0'
         ]);
     }
-    
+
     // Si no existe el QR, devolver una imagen placeholder o error
     abort(404, 'QR no disponible');
 })->name('bot.qr');

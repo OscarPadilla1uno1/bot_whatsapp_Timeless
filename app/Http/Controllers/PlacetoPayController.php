@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Http\Request;
 use Dnetix\Redirection\PlacetoPay;
 use Exception;
+//use App\Http\Controllers\Admin\AdminController;
 
 class PlacetoPayController extends Controller
 {
@@ -362,6 +363,7 @@ class PlacetoPayController extends Controller
                 $pedido->save();
             } elseif ($notification->isRejected() || $estado === 'FAILED') {
                 $pago->estado_pago = 'fallido';
+                //AdminController::class::cancelarPedidoBot($pedido->id);
             } else {
                 $pago->estado_pago = 'pendiente';
             }
