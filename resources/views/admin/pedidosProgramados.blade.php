@@ -80,8 +80,18 @@
                         <option value="efectivo">Efectivo</option>
                         <option value="tarjeta">Tarjeta</option>
                         <option value="transferencia">Transferencia</option>
-                        <!-- Agrega más si tienes otros en el ENUM -->
                     </select>
+                </div>
+
+                <div class="mt-4 flex items-center space-x-2">
+                    <input type="checkbox" id="domicilio" class="h-4 w-4 text-blue-600 border-gray-300 rounded">
+                    <label for="domicilio" class="text-sm text-gray-700">¿Entrega a domicilio?</label>
+                </div>
+
+                <div class="mt-4">
+                    <label class="block font-medium text-sm text-gray-700">Notas / Observaciones</label>
+                    <textarea id="notas" rows="3" class="mt-1 block w-full border-gray-300 rounded shadow-sm"
+                        placeholder="Ej. Sin cebolla, entregar a las 2pm..."></textarea>
                 </div>
 
                 {{-- Campos se llenan dinámicamente según el menú del día --}}
@@ -204,7 +214,7 @@
             document.getElementById("form-programar-pedido").addEventListener("submit", async function (e) {
                 e.preventDefault();
 
-                console.log("llegamos al submit"); // Verificar que se llega al submit
+                //console.log("llegamos al submit"); // Verificar que se llega al submit
 
                 const fecha = document.getElementById("fecha-menu-programar").value;
                 const nombre = document.getElementById("nombre").value;
@@ -213,6 +223,8 @@
                 const longitud = parseFloat(document.getElementById("longitud").value);
                 const mapaUrl = document.getElementById("google-maps-link").value;
                 const metodo_pago = document.getElementById("metodo_pago")?.value;
+                const domicilio = document.getElementById("domicilio").checked;
+                const notas = document.getElementById("notas").value.trim() || null;
 
                 const platillos = [];
 
@@ -299,6 +311,8 @@
                     longitud,
                     platillos,
                     metodo_pago,
+                    domicilio,
+                    notas,
                 };
                 console.log(payload)
 
@@ -335,7 +349,7 @@
                         document.getElementById("form-platillos-programar").innerHTML =
                             '<p class="text-gray-500">Seleccione una fecha para ver las opciones.</p>';
                         document.getElementById("coordenadas-info").textContent = "";
-                        
+
                         cargarPedidosPorFecha(fecha); // Reusar función si ya existe
                     } else {
                         Swal.fire({

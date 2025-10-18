@@ -540,6 +540,7 @@ class AdminController extends Controller
 
 
         $hoy = now()->setTimezone('America/Tegucigalpa')->format('Y-m-d H:i:s'); // Ajusta tu zona horaria
+        $hoyDATE = now()->setTimezone('America/Tegucigalpa')->format('Y-m-d'); // Ajusta tu zona horaria
 
         Log::info("Fecha generada: " . $hoy);
         $subtotal = 0.00;
@@ -620,7 +621,7 @@ class AdminController extends Controller
         }
 
         try {
-            $result = DB::transaction(function () use ($notas, $domicilio, $nombre, $telefono, $latitud, $longitud, $platillos, $costo_envio, $hoy, &$subtotal, $metodo_pago) {
+            $result = DB::transaction(function () use ($hoyDATE, $notas, $domicilio, $nombre, $telefono, $latitud, $longitud, $platillos, $costo_envio, $hoy, &$subtotal, $metodo_pago) {
                 // Verificar si el cliente ya existe o crearlo
                 $cliente = Cliente::firstOrCreate(
                     ['telefono' => $telefono],
@@ -652,7 +653,7 @@ class AdminController extends Controller
                     $cantidad = $item['cantidad'];
 
                     // Verificar existencia en menú diario y disponibilidad
-                    $menuItem = MenuDiario::where('fecha', $hoy)
+                    $menuItem = MenuDiario::where('fecha', $hoyDATE)
                         ->where('platillo_id', $platilloId)
                         ->first();
 
@@ -1095,55 +1096,55 @@ class AdminController extends Controller
         return view('admin.pedidos', compact('pedidos', 'pedidoSeleccionado', 'estados', 'tab'));
     }
 
-public function pedidosStatusViewCocina(Request $request)
-{
-    $tab = $request->query('tab', 'hoy');
-    $timezone = 'America/Tegucigalpa';
-    $today = now()->setTimezone($timezone)->format('Y-m-d');
+    public function pedidosStatusViewCocina(Request $request)
+    {
+        $tab = $request->query('tab', 'hoy');
+        $timezone = 'America/Tegucigalpa';
+        $today = now()->setTimezone($timezone)->format('Y-m-d');
 
-    $query = Pedido::with(['cliente', 'detalles.platillo'])
-        ->orderBy('fecha_pedido', 'desc');
+        $query = Pedido::with(['cliente', 'detalles.platillo'])
+            ->orderBy('fecha_pedido', 'desc');
 
-    // Filtros por pestaña
-    switch ($tab) {
-        case 'hoy':
-            $query->whereDate('fecha_pedido', $today)
-                ->where('estado', 'en preparacion');
-            break;
-        case 'futuro':
-            $query->whereDate('fecha_pedido', '>', $today);
-            break;
-        case 'pasado':
-            $query->whereDate('fecha_pedido', '<', $today);
-            break;
+        // Filtros por pestaña
+        switch ($tab) {
+            case 'hoy':
+                $query->whereDate('fecha_pedido', $today)
+                    ->where('estado', 'en preparacion');
+                break;
+            case 'futuro':
+                $query->whereDate('fecha_pedido', '>', $today);
+                break;
+            case 'pasado':
+                $query->whereDate('fecha_pedido', '<', $today);
+                break;
+        }
+
+        // Búsqueda incluyendo notas
+        if ($request->filled('buscar')) {
+            $buscar = $request->buscar;
+            $query->where(function ($q) use ($buscar) {
+                $q->whereHas('cliente', function ($q2) use ($buscar) {
+                    $q2->where('nombre', 'like', '%' . $buscar . '%')
+                        ->orWhere('telefono', 'like', '%' . $buscar . '%');
+                })
+                    ->orWhere('estado', 'like', '%' . $buscar . '%')
+                    ->orWhereDate('fecha_pedido', $buscar)
+                    ->orWhere('total', 'like', '%' . $buscar . '%')
+                    ->orWhere('id', $buscar)
+                    ->orWhere('notas', 'like', '%' . $buscar . '%'); // Nueva búsqueda en notas
+            });
+        }
+
+        $pedidos = $query->paginate(10)->withQueryString();
+
+        $pedidoSeleccionado = $request->has('pedido_id')
+            ? Pedido::with(['cliente', 'detalles.platillo'])->find($request->pedido_id)
+            : null;
+
+        $estados = ['pendiente', 'en preparación', 'despachado', 'entregado', 'cancelado'];
+
+        return view('cocina.pedidos-cocina', compact('pedidos', 'pedidoSeleccionado', 'estados', 'tab'));
     }
-
-    // Búsqueda incluyendo notas
-    if ($request->filled('buscar')) {
-        $buscar = $request->buscar;
-        $query->where(function ($q) use ($buscar) {
-            $q->whereHas('cliente', function ($q2) use ($buscar) {
-                $q2->where('nombre', 'like', '%' . $buscar . '%')
-                    ->orWhere('telefono', 'like', '%' . $buscar . '%');
-            })
-                ->orWhere('estado', 'like', '%' . $buscar . '%')
-                ->orWhereDate('fecha_pedido', $buscar)
-                ->orWhere('total', 'like', '%' . $buscar . '%')
-                ->orWhere('id', $buscar)
-                ->orWhere('notas', 'like', '%' . $buscar . '%'); // Nueva búsqueda en notas
-        });
-    }
-
-    $pedidos = $query->paginate(10)->withQueryString();
-
-    $pedidoSeleccionado = $request->has('pedido_id')
-        ? Pedido::with(['cliente', 'detalles.platillo'])->find($request->pedido_id)
-        : null;
-
-    $estados = ['pendiente', 'en preparación', 'despachado', 'entregado', 'cancelado'];
-
-    return view('cocina.pedidos-cocina', compact('pedidos', 'pedidoSeleccionado', 'estados', 'tab'));
-}
 
     public function actualizarEstadoCocina(Request $request, $id)
     {
@@ -1228,7 +1229,9 @@ public function pedidosStatusViewCocina(Request $request)
             'platillos' => 'required|array|min:1',
             'platillos.*.id' => 'required|integer|exists:platillos,id',
             'platillos.*.cantidad' => 'required|integer|min:1',
-            'metodo_pago' => 'required|in:efectivo,tarjeta,transferencia',
+            'metodo_pago' => 'required|string|in:tarjeta,efectivo,transferencia',
+            'domicilio' => 'required|boolean',
+            'notas' => 'nullable|string',
         ]);
 
         $fecha = $request->input('fecha');
@@ -1249,18 +1252,20 @@ public function pedidosStatusViewCocina(Request $request)
         $nombre = $request->input('nombre');
         $telefono = $request->input('telefono');
         $pago = $request->input('metodo_pago');
+        $domicilio = $request->boolean('domicilio');
+        $notas = $request->input('notas', null);
 
         $subtotal = 0.00;
 
         $distancia_km = 0;
         $tiempo_min = 0;
 
-        $request = new Request([
+        $request2 = new Request([
             'target_lat' => (float) $latitud,
             'target_lng' => (float) $longitud
         ]);
 
-        $response = app(VroomController::class)->calculateDistanceFromVehicle($request);
+        $response = app(VroomController::class)->calculateDistanceFromVehicle($request2);
         $datosDistancia = $response->getData(true);
 
 
@@ -1300,45 +1305,56 @@ public function pedidosStatusViewCocina(Request $request)
         }
 
         $fechaCarbon = Carbon::parse($fecha);
+        $fechaCompleta = $fechaCarbon->format('Y-m-d H:i:s');
         $aplicaEnvioGratis = EnvioGratisFecha::tieneEnvioGratisParaFecha($fechaCarbon);
 
 
         Log::info("estado del envio {$aplicaEnvioGratis} y cantidad de platillos pedidos {$cantidadPlatillos}");
-
-        if ($aplicaEnvioGratis && $cantidadPlatillos >= $aplicaEnvioGratis->cantidad_minima) {
+        if (!$domicilio) {
             $costo_envio = 0;
         } else {
-            // 2. Si está muy cerca, también es gratis
-            if ($distancia_km <= 0.7) {
+            if ($aplicaEnvioGratis && $cantidadPlatillos >= $aplicaEnvioGratis->cantidad_minima) {
                 $costo_envio = 0;
-            }
-            // 3. Rangos definidos
-            elseif ($distancia_km > 0.7 && $distancia_km <= 6.0) {
-                $costo_envio = 40;
-            } elseif ($distancia_km > 6.0 && $distancia_km <= 6.75) {
-                $costo_envio = 50;
-            } elseif ($distancia_km > 6.75 && $distancia_km <= 9.0) {
-                $costo_envio = 70;
-            } else { // mayor a 9.0
-                $costo_envio = 80;
+            } else {
+                // 2. Si está muy cerca, también es gratis
+                if ($distancia_km <= 0.7) {
+                    $costo_envio = 0;
+                }
+                // 3. Rangos definidos
+                elseif ($distancia_km > 0.7 && $distancia_km <= 6.0) {
+                    $costo_envio = 40;
+                } elseif ($distancia_km > 6.0 && $distancia_km <= 6.75) {
+                    $costo_envio = 50;
+                } elseif ($distancia_km > 6.75 && $distancia_km <= 9.0) {
+                    $costo_envio = 70;
+                } else { // mayor a 9.0
+                    $costo_envio = 80;
+                }
             }
         }
 
 
 
         try {
-            $result = DB::transaction(function () use ($nombre, $telefono, $latitud, $longitud, $platillos, $fecha, $costo_envio, $pago, &$subtotal) {
+            $result = DB::transaction(function () use ($fechaCompleta, $notas, $domicilio, $nombre, $telefono, $latitud, $longitud, $platillos, $fecha, $costo_envio, $pago, &$subtotal) {
                 $cliente = Cliente::firstOrCreate(
                     ['telefono' => $telefono],
                     ['nombre' => $nombre]
                 );
 
+                $estadoPedido = in_array($pago, ['efectivo', 'transferencia'])
+                    ? 'en preparación'
+                    : 'pendiente';
+
                 $pedido = Pedido::create([
                     'cliente_id' => $cliente->id,
                     'latitud' => $latitud,
                     'longitud' => $longitud,
-                    'fecha_pedido' => $fecha . ' 12:00:00',
-                    'total' => 0.00
+                    'domicilio' => $domicilio,
+                    'fecha_pedido' => $fechaCompleta,
+                    'total' => 0.00,
+                    'estado' => $estadoPedido,
+                    'notas' => $notas,
                 ]);
 
                 foreach ($platillos as $item) {
@@ -1375,11 +1391,38 @@ public function pedidosStatusViewCocina(Request $request)
                 $pedido->total = $subtotal + $costo_envio;
                 $pedido->save();
 
-                Pago::create([
-                    'pedido_id' => $pedido->id,
-                    'metodo_pago' => $pago,
-                    'estado' => 'pendiente', // o el estado que corresponda por defecto
-                ]);
+                if ($pago === 'tarjeta') {
+                    $pago2 = new Pago([
+                        'pedido_id' => $pedido->id,
+                        'metodo_pago' => 'tarjeta',
+                        'estado_pago' => 'pendiente',
+                        'fecha_pago' => null,
+                        'referencia_transaccion' => null,
+                        'request_id' => null,
+                        'process_url' => null,
+                        'metodo_interno' => null,
+                        'canal' => 'Aplicativo',
+                        'observaciones' => 'Pago con tarjeta pendiente de confirmación'
+                    ]);
+                } else {
+                    // 💵 Pago en efectivo → confirmado automáticamente
+                    $pago2 = new Pago([
+                        'pedido_id' => $pedido->id,
+                        'metodo_pago' => $pago,
+                        'estado_pago' => 'confirmado',
+                        'fecha_pago' => now()->setTimezone('America/Tegucigalpa'),
+                        'referencia_transaccion' => null,
+                        'request_id' => null,
+                        'process_url' => null,
+                        'metodo_interno' => null,
+                        'canal' => 'Aplicativo',
+                        'observaciones' => $pago === 'efectivo'
+                            ? 'Pago confirmado en efectivo'
+                            : 'Pago confirmado por transferencia'
+                    ]);
+                }
+
+                $pago2->save();
 
 
                 return [
