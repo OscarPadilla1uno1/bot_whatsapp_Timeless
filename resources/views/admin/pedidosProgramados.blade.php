@@ -148,6 +148,21 @@
                             disabled>
                     </div>
 
+                    <!-- Campo DOMICILIO -->
+                    <div class="mb-4 flex items-center space-x-2">
+                        <input type="checkbox" id="domicilio-edit" name="domicilio"
+                            class="h-4 w-4 text-blue-600 border-gray-300 rounded">
+                        <label for="domicilio-edit" class="text-sm text-gray-700">¿Entrega a domicilio?</label>
+                    </div>
+
+                    <!-- Campo NOTAS -->
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700">Notas / Observaciones</label>
+                        <textarea id="notas-edit" name="notas" rows="3"
+                            class="mt-1 block w-full border-gray-300 rounded shadow-sm"
+                            placeholder="Ej. sin cebolla, entregar antes de las 2 pm..."></textarea>
+                    </div>
+
                     <!-- Aquí se inyecta método de pago y platillos -->
                 </div>
 

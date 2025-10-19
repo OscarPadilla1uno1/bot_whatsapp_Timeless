@@ -37,7 +37,10 @@ function renderizarSwitchEnvioGratis(fecha) {
     }
 
     const url = window.routes.envioGratisPorFecha();
-    if (!url) return console.warn("No se pudo construir la URL (fecha no seleccionada)");
+    if (!url)
+        return console.warn(
+            "No se pudo construir la URL (fecha no seleccionada)"
+        );
 
     $.get(url, function (data) {
         if (!data.existe) {
@@ -57,7 +60,11 @@ function renderizarSwitchEnvioGratis(fecha) {
 
         // Evento al guardar la cantidad mínima
         btnGuardar.onclick = function () {
-            actualizarEnvioGratis(url, switchInput.checked, inputCantidad.value);
+            actualizarEnvioGratis(
+                url,
+                switchInput.checked,
+                inputCantidad.value
+            );
             labelCantidad.textContent = inputCantidad.value;
         };
     });
@@ -74,11 +81,12 @@ function actualizarEnvioGratis(url, activo, cantidad_minima) {
                 .querySelector('meta[name="csrf-token"]')
                 .getAttribute("content"),
         },
-        success: () => console.log("Configuración de envío gratis actualizada."),
-        error: () => console.error("Error al actualizar el estado de envío gratis."),
+        success: () =>
+            console.log("Configuración de envío gratis actualizada."),
+        error: () =>
+            console.error("Error al actualizar el estado de envío gratis."),
     });
 }
-
 
 function manejarEstadoFormulario(fechaPasada) {
     const formulario = document.getElementById("agregar-platillo-form-menu");
@@ -441,8 +449,6 @@ function eliminarPlatillo(id) {
         }
     });
 }
-
-
 
 // Función para mostrar la imagen en un modal
 function showImage(imagePath) {
@@ -921,6 +927,10 @@ function abrirModalEditarPedido(pedidoId) {
                 "ubicacion-text-edit"
             ).value = `${data.latitud}, ${data.longitud}`;
 
+            document.getElementById("domicilio-edit").checked =
+                !!data.domicilio;
+            document.getElementById("notas-edit").value = data.notas || "";
+
             // Contenedor donde se inyectarán los campos dinámicos
             const contenedor = document.getElementById(
                 "campos-form-pedido-editar"
@@ -1028,7 +1038,7 @@ function abrirModalEditarPedido(pedidoId) {
             const fechaInput = document.createElement("input");
             fechaInput.type = "hidden";
             fechaInput.className = "fecha-menu-editar";
-            fechaInput.value = data.fecha || "";
+            fechaInput.value = data.fecha_pedido || "";
             contenedor.appendChild(fechaInput);
         })
         .catch((error) => {
@@ -1050,6 +1060,8 @@ async function actualizarPedidoProgramado(form) {
     const mapaUrl = document.getElementById("google-maps-link-edit").value;
     const metodo_pago = document.getElementById("editar-metodo-pago").value;
     const pedido_id = form.querySelector(".pedido_id")?.value;
+    const domicilio = document.getElementById("domicilio-edit").checked;
+    const notas = document.getElementById("notas-edit").value.trim() || null;
 
     //console.log("pedido_id:", pedido_id);
     //console.log(telefono, nombre, latitud, longitud, mapaUrl, metodo_pago);
@@ -1148,6 +1160,8 @@ async function actualizarPedidoProgramado(form) {
         longitud,
         metodo_pago,
         platillos,
+        domicilio,
+        notas,
     };
 
     console.log("Payload:", payload);
@@ -1211,10 +1225,7 @@ function eliminarPedido(id) {
         cancelButtonColor: "#3085d6",
     }).then((result) => {
         if (result.isConfirmed) {
-            urlBorrar = window.routes.borrarPedido.replace(
-                "__ID__",
-                id
-            );
+            urlBorrar = window.routes.borrarPedido.replace("__ID__", id);
 
             fetch(urlBorrar, {
                 method: "DELETE",

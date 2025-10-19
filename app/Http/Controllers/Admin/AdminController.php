@@ -1491,6 +1491,8 @@ class AdminController extends Controller
             }),
             'metodo_pago' => optional($pedido->pago)->metodo_pago,
             'menu_dia' => $menu,
+            'domicilio' => (bool) $pedido->domicilio,
+            'notas' => $pedido->notas,
         ]);
     }
 
@@ -1535,6 +1537,8 @@ class AdminController extends Controller
             'platillos.*.cantidad' => 'required|integer|min:0',
             'platillos.*.precio' => 'required|numeric|min:0',
             'metodo_pago' => 'required|in:efectivo,tarjeta,transferencia',
+            'domicilio' => 'required|boolean',
+            'notas' => 'nullable|string',
         ]);
 
 
@@ -1548,7 +1552,10 @@ class AdminController extends Controller
         $pedido = Pedido::with(['detalles', 'pago'])->findOrFail($id);
         $fecha = Carbon::parse($pedido->fecha_pedido)->format('Y-m-d'); // ✅ convierte string a Carbon
 
+        $metodo_pago = $request->metodo_pago;
 
+        $domicilio = $request->boolean('domicilio');
+        $notas = $request->notas;
         // Extraer coordenadas del mapa
         if (!preg_match('/@([-0-9.]+),([-0-9.]+),/', $request->mapa_url, $matches)) {
             return response()->json(['success' => false, 'mensaje' => 'No se pudo extraer latitud/longitud.'], 400);
@@ -1613,28 +1620,37 @@ class AdminController extends Controller
 
         $fechaCarbon = Carbon::parse($fecha);
         $aplicaEnvioGratis = EnvioGratisFecha::tieneEnvioGratisParaFecha($fechaCarbon);
-        if ($aplicaEnvioGratis && $cantidadPlatillos >= $aplicaEnvioGratis->cantidad_minima) {
+        
+        //Log::info("Estado del envío gratis: {$aplicaEnvioGratis->cantidad_minima}");
+        //Log::info("Existe realmente la variable aplicaEnvioGratis? " . ($aplicaEnvioGratis ? 'Sí' : 'No'));
+        //Log::info("estado del envio {$aplicaEnvioGratis} y cantidad de platillos pedidos {$cantidadPlatillos}");
+
+        if (!$domicilio) {
             $costo_envio = 0;
         } else {
-            // 2. Si está muy cerca, también es gratis
-            if ($distancia_km <= 0.7) {
+            if ($aplicaEnvioGratis && $cantidadPlatillos >= $aplicaEnvioGratis->cantidad_minima) {
                 $costo_envio = 0;
-            }
-            // 3. Rangos definidos
-            elseif ($distancia_km > 0.7 && $distancia_km <= 6.0) {
-                $costo_envio = 40;
-            } elseif ($distancia_km > 6.0 && $distancia_km <= 6.75) {
-                $costo_envio = 50;
-            } elseif ($distancia_km > 6.75 && $distancia_km <= 9.0) {
-                $costo_envio = 70;
-            } else { // mayor a 9.0
-                $costo_envio = 80;
+            } else {
+                // 2. Si está muy cerca, también es gratis
+                if ($distancia_km <= 0.7) {
+                    $costo_envio = 0;
+                }
+                // 3. Rangos definidos
+                elseif ($distancia_km > 0.7 && $distancia_km <= 6.0) {
+                    $costo_envio = 40;
+                } elseif ($distancia_km > 6.0 && $distancia_km <= 6.75) {
+                    $costo_envio = 50;
+                } elseif ($distancia_km > 6.75 && $distancia_km <= 9.0) {
+                    $costo_envio = 70;
+                } else { // mayor a 9.0
+                    $costo_envio = 80;
+                }
             }
         }
 
 
         try {
-            DB::transaction(function () use ($pedido, $platillosInput, $platillosActuales, $costo_envio, $fecha, $latitud, $longitud, $cliente, $request, &$subtotal) {
+            DB::transaction(function () use ($metodo_pago, $notas, $domicilio, $pedido, $platillosInput, $platillosActuales, $costo_envio, $fecha, $latitud, $longitud, $cliente, $request, &$subtotal) {
 
                 // 1. Revertir stock de platillos eliminados o disminuidos
                 foreach ($platillosActuales as $platilloId => $detalle) {
@@ -1706,22 +1722,44 @@ class AdminController extends Controller
                     $subtotal += $cantidad * $precio;
                 }
 
+                $estadoPedido = in_array($metodo_pago, ['efectivo', 'transferencia'])
+                    ? 'en preparación'
+                    : 'pendiente';
+
                 // 3. Actualizar coordenadas y total
-                $pedido->latitud = $latitud;
-                $pedido->longitud = $longitud;
-                $pedido->total = $subtotal + $costo_envio;
-                $pedido->cliente_id = $cliente->id;
-                $pedido->save();
+                $pedido->update([
+                    'cliente_id' => $cliente->id,
+                    'latitud' => $latitud,
+                    'longitud' => $longitud,
+                    'total' => $subtotal + $costo_envio,
+                    'domicilio' => $request->boolean('domicilio'),
+                    'notas' => $request->input('notas', null),
+                    'estado' => $estadoPedido,
+                ]);
 
                 // 4. Actualizar método de pago
+                $metodo = strtolower($request->metodo_pago);
+
                 if ($pedido->pago) {
-                    $pedido->pago->metodo_pago = $request->metodo_pago;
-                    $pedido->pago->save();
+                    $pedido->pago->update([
+                        'metodo_pago' => $metodo,
+                        'estado_pago' => $metodo === 'tarjeta' ? 'pendiente' : 'confirmado',
+                        'fecha_pago' => $metodo === 'tarjeta' ? null : now()->setTimezone('America/Tegucigalpa'),
+                        'canal' => 'panel',
+                        'observaciones' => $metodo === 'tarjeta'
+                            ? 'Pago pendiente de confirmación (actualización)'
+                            : ($metodo === 'efectivo'
+                                ? 'Pago confirmado en efectivo (actualización)'
+                                : 'Pago confirmado por transferencia (actualización)')
+                    ]);
                 } else {
                     Pago::create([
                         'pedido_id' => $pedido->id,
-                        'metodo_pago' => $request->metodo_pago,
-                        'estado' => 'pendiente',
+                        'metodo_pago' => $metodo,
+                        'estado_pago' => $metodo === 'tarjeta' ? 'pendiente' : 'confirmado',
+                        'fecha_pago' => $metodo === 'tarjeta' ? null : now()->setTimezone('America/Tegucigalpa'),
+                        'canal' => 'panel',
+                        'observaciones' => 'Pago agregado manualmente en actualización'
                     ]);
                 }
             });

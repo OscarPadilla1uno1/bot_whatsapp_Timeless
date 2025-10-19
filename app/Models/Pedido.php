@@ -27,4 +27,16 @@ class Pedido extends Model
     {
         return $this->hasOne(Pago::class);
     }
+
+    public function pagosConsolidados()
+{
+    return $this->belongsToMany(
+        PagoConsolidado::class,
+        'pago_consolidado_pedidos',
+        'pedido_id',
+        'pago_consolidado_id'
+    )->withPivot('pagado')
+     ->withTimestamps();
+}
+
 }
