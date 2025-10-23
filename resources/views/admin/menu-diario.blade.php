@@ -151,7 +151,7 @@
             const today = obtenerFechaHoyTegucigalpa();
 
             manejarEstadoFormulario(esFechaPasada(today));
-            renderizarSwitchEnvioGratis(today);
+            
 
 
             console.log('Fecha de hoy:', today);
@@ -165,6 +165,8 @@
                 document.querySelectorAll('.cantidad-input').forEach(input => {
                     input.dataset.fecha = today;
                 });
+
+                renderizarSwitchEnvioGratis(today);
 
                 fechaInput.addEventListener('change', function () {
                     const esPasada = esFechaPasada(this.value);

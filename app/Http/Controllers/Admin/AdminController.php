@@ -23,6 +23,9 @@ use thiagoalessio\TesseractOCR\TesseractOCR;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\Http;
 use App\Http\Controllers\VroomController;
+use App\Models\PagoConsolidado;
+use App\Models\PagoConsolidadoPedido;
+use App\Http\Controllers\PlacetoPayController;
 
 
 
@@ -1620,7 +1623,7 @@ class AdminController extends Controller
 
         $fechaCarbon = Carbon::parse($fecha);
         $aplicaEnvioGratis = EnvioGratisFecha::tieneEnvioGratisParaFecha($fechaCarbon);
-        
+
         //Log::info("Estado del envío gratis: {$aplicaEnvioGratis->cantidad_minima}");
         //Log::info("Existe realmente la variable aplicaEnvioGratis? " . ($aplicaEnvioGratis ? 'Sí' : 'No'));
         //Log::info("estado del envio {$aplicaEnvioGratis} y cantidad de platillos pedidos {$cantidadPlatillos}");
@@ -1796,6 +1799,11 @@ class AdminController extends Controller
                 // Marcar el pedido como cancelado
                 $pedido->estado = 'cancelado';
                 $pedido->save();
+                $pago = $pedido->pago;
+                if ($pago) {
+                    $pago->estado_pago = 'cancelado';
+                    $pago->save();
+                }
             });
 
             return response()->json(['success' => true, 'mensaje' => 'Pedido cancelado y stock restaurado.']);
@@ -1902,6 +1910,172 @@ class AdminController extends Controller
             'cliente' => $cliente->nombre,
         ]);
     }
+
+    public function listarClientes()
+    {
+        $clientes = Cliente::select('id', 'nombre', 'telefono')
+            ->orderBy('nombre')
+            ->get();
+
+        return response()->json($clientes);
+    }
+
+    public function listarPedidosTarjeta()
+    {
+        $hoy = Carbon::now('America/Tegucigalpa')->toDateString();
+
+        $pedidos = Pedido::with(['cliente', 'pago'])
+            ->whereHas('pago', function ($q) {
+                $q->where('metodo_pago', 'tarjeta')
+                    ->where('estado_pago', 'pendiente');
+            })
+            ->whereDate('fecha_pedido', '>=', Carbon::tomorrow('America/Tegucigalpa'))
+            ->where('estado', '=', 'pendiente')
+            ->orderBy('fecha_pedido', 'asc')
+            ->get()
+            ->groupBy(fn($p) => Carbon::parse($p->fecha_pedido)->toDateString());
+
+        $eventos = [];
+
+        foreach ($pedidos as $fecha => $listaPedidos) {
+            $primer = $listaPedidos->first();
+
+            $eventos[] = [
+                'fecha' => $fecha,
+                'cliente_id' => $primer->cliente->id ?? null,
+                'cliente' => $primer->cliente->nombre ?? 'Sin nombre',
+                'total' => $listaPedidos->sum('total'),
+                'pedidos' => $listaPedidos->map(function ($p) {
+                    return [
+                        'id' => $p->id,
+                        'estado' => $p->estado,
+                        'total' => $p->total,
+                    ];
+                })->values(),
+            ];
+        }
+
+        return response()->json($eventos);
+    }
+
+
+    public function crearPagoConsolidado(Request $request)
+    {
+        $validated = $request->validate([
+            'cliente' => 'required|string',      // nombre visible (opcional)
+            'cliente_id' => 'required|exists:clientes,id', // 🔑 usamos el ID del cliente como clave única
+            'pedido_ids' => 'required|array|min:1',
+            'total' => 'required|numeric|min:1',
+            'fecha' => 'required|date',
+        ]);
+
+        DB::beginTransaction();
+
+        try {
+            // Buscar el cliente por ID
+            $cliente = Cliente::find($validated['cliente_id']);
+
+            if (!$cliente) {
+                throw new \Exception("Cliente con ID {$validated['cliente_id']} no encontrado.");
+            }
+
+            // Crear registro de pago consolidado
+            $pagoConsolidado = PagoConsolidado::create([
+                'cliente_id' => $cliente->id,
+                'monto_total' => $validated['total'],
+                'metodo_pago' => 'tarjeta',
+                'estado_pago' => 'pendiente',
+                'referencia_transaccion' => null,
+                'request_id' => null,
+                'process_url' => null,
+                'fecha_pago' => null,
+                'canal' => 'Aplicativo',
+                'observaciones' => 'Pago consolidado generado desde panel admin',
+                'notificado' => false,
+            ]);
+
+            // Asociar los pedidos seleccionados
+            foreach ($validated['pedido_ids'] as $pedidoId) {
+                $pedido = Pedido::find($pedidoId);
+                if ($pedido) {
+                    PagoConsolidadoPedido::create([
+                        'pago_consolidado_id' => $pagoConsolidado->id,
+                        'pedido_id' => $pedido->id,
+                        'pagado' => false,
+                    ]);
+                }
+            }
+
+            // Generar sesión de pago en PlacetoPay
+            $placetoPayController = new PlacetoPayController();
+            $fakeRequest = new Request([
+                'name' => $cliente->nombre,
+                'mobile' => $cliente->telefono,
+                'description' => 'Pago consolidado de pedidos programados',
+                'total' => $validated['total'],
+            ]);
+
+            $placetoResponse = $placetoPayController->createSession($fakeRequest);
+
+            Log::info('Respuesta de PlacetoPay para pago consolidado: ' . $placetoResponse->getContent());
+
+            if ($placetoResponse->getStatusCode() !== 200) {
+                throw new \Exception('Error al generar enlace de pago en PlacetoPay.');
+            }
+
+            $data = $placetoResponse->getData(true);
+
+            // Guardar los datos devueltos por PlacetoPay
+            $pagoConsolidado->update([
+                'referencia_transaccion' => $data['reference'],
+                'request_id' => $data['requestId'],
+                'process_url' => $data['processUrl'],
+            ]);
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'processUrl' => $data['processUrl'],
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Log::error('Error al crear pago consolidado: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 400);
+        }
+
+    }
+
+    public function listarPagosConsolidadosCliente($id)
+    {
+        $pagos = PagoConsolidado::with(['pedidos:id,estado,total,fecha_pedido'])
+            ->where('cliente_id', $id)
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(function ($pago) {
+                return [
+                    'id' => $pago->id,
+                    'monto_total' => $pago->monto_total,
+                    'estado_pago' => $pago->estado_pago,
+                    'fecha_pago' => $pago->fecha_pago ? $pago->fecha_pago->format('Y-m-d H:i') : 'N/A',
+                    'referencia_transaccion' => $pago->referencia_transaccion,
+                    'pedidos' => $pago->pedidos->map(fn($p) => [
+                        'id' => $p->id,
+                        'estado' => $p->estado,
+                        'total' => $p->total,
+                        'fecha_pedido' => $p->fecha_pedido,
+                    ]),
+                ];
+            });
+
+        return response()->json($pagos);
+    }
+
+
 
 }
 

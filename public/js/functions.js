@@ -468,7 +468,7 @@ function closeImageModal() {
 }
 
 function updateButtonText() {
-    const inputFile = document.getElementById("imagen");
+    const inputFile = document.getElementById("imagen-input");
     const labelText = document.getElementById("imagen-text");
 
     if (inputFile.files.length > 0) {
@@ -813,7 +813,7 @@ function cargarPedidosPorFecha(fecha) {
                 data.pedidos && data.pedidos.length > 0
                     ? data.pedidos.map((pedido, index) => {
                           return [
-                              index + 1,
+                            pedido.id,
                               pedido.cliente.nombre,
                               pedido.estado,
                               `LPS. ${parseFloat(pedido.total).toFixed(2)}`,
@@ -859,7 +859,7 @@ function cargarPedidosPorFecha(fecha) {
             <table class="min-w-full divide-y divide-gray-200">
                 <thead class="bg-gray-100">
                     <tr>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">#</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nombre</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Precio</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cantidad Disponible

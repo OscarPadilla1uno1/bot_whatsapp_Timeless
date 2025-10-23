@@ -8,6 +8,10 @@ class PagoConsolidado extends Model
 {
     protected $table = 'pagos_consolidados';
 
+    protected $casts = [
+        'fecha_pago' => 'datetime',
+    ];
+
     protected $fillable = [
         'cliente_id',
         'monto_total',
@@ -43,7 +47,7 @@ class PagoConsolidado extends Model
             'pago_consolidado_id',        // FK en pivote hacia este modelo
             'pedido_id'                   // FK en pivote hacia pedidos
         )->withPivot('pagado')            // campo adicional en la pivote
-         ->withTimestamps();
+            ->withTimestamps();
     }
 
     /* =============================
