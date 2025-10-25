@@ -9,10 +9,44 @@
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
             <!-- Card de bienvenida -->
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
-                <div class="p-6 text-gray-900">
-                    {{ __('Bienvenido de vuelta') }}, {{ Auth::user()->name }}
+                <div class="p-6 text-gray-900 space-y-3">
+                    <p>{{ __('Bienvenido de vuelta') }}, {{ Auth::user()->name }}</p>
+
+                    <h3 class="text-lg font-semibold mt-4">📦 Exportar Datos del Restaurante</h3>
+
+                    <div class="flex flex-wrap gap-3 mt-2">
+                        <a href="{{ route('export.todo') }}"
+                            class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg shadow">
+                            🗃 Exportar Todo (ZIP)
+                        </a>
+                        <a href="{{ route('export.clientes') }}"
+                            class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg shadow">
+                            👥 Clientes
+                        </a>
+                        <a href="{{ route('export.pedidos') }}"
+                            class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg shadow">
+                            🧾 Pedidos
+                        </a>
+                        <a href="{{ route('export.pagos') }}"
+                            class="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg shadow">
+                            💳 Pagos
+                        </a>
+                        <a href="{{ route('export.pagos.consolidados') }}"
+                            class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg shadow">
+                            🧮 Pagos Consolidados
+                        </a>
+                        <a href="{{ route('export.pago.consolidado.pedidos') }}"
+                            class="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg shadow">
+                            🔗 Pagos ↔ Pedidos Consolidados
+                        </a>
+                        <a href="{{ route('export.platillos') }}"
+                            class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg shadow">
+                            🍽 Platillos
+                        </a>
+                    </div>
                 </div>
             </div>
+
 
             <!-- Card del menú del día -->
             <div class="mt-6 bg-white shadow-sm sm:rounded-lg mb-6">

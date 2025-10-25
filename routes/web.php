@@ -503,6 +503,21 @@ Route::get('/admin/clientes/{id}/pagos-consolidados', [AdminController::class, '
     ->name('admin.cliente.pagos.consolidados')
     ->can('Administrador');
 
+use App\Http\Controllers\ExportController;
+
+Route::prefix('export')->group(function () {
+    Route::get('/clientes', [ExportController::class, 'exportClientes'])->name('export.clientes')->can('Administrador');
+    Route::get('/pedidos', [ExportController::class, 'exportPedidos'])->name('export.pedidos')->can('Administrador');
+    Route::get('/pagos', [ExportController::class, 'exportPagos'])->name('export.pagos')->can('Administrador');
+    Route::get('/pagos-consolidados', [ExportController::class, 'exportPagosConsolidados'])->name('export.pagos.consolidados')->can('Administrador');
+    Route::get('/platillos', [ExportController::class, 'exportPlatillos'])->name('export.platillos')->can('Administrador');
+    Route::get('/todo', [ExportController::class, 'exportTodo'])->name('export.todo')->can('Administrador');
+    Route::get('/export/pago-consolidado-pedidos', [ExportController::class, 'exportPagoConsolidadoPedidos'])
+    ->name('export.pago.consolidado.pedidos')->can('Administrador');
+
+});
+
+
 
 Route::get('/bot/qr', function () {
     $qrPath = '/var/www/base-js-wppconnect-mysqlCHATBOTV2/bot.qr.png';

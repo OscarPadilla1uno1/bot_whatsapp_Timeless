@@ -19,6 +19,7 @@
         "laravel/sanctum": "^4.0",
         "laravel/tinker": "^2.10.1",
         "livewire/livewire": "^3.6",
+        "rap2hpoutre/fast-excel": "^5.6",
         "spatie/laravel-permission": "^6.16",
         "thiagoalessio/tesseract_ocr": "^2.13"
     },

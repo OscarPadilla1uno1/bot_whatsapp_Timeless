@@ -597,13 +597,13 @@ class AdminController extends Controller
             if ($aplicaEnvioGratis && $cantidadPlatillos >= $aplicaEnvioGratis->cantidad_minima) {
                 $costo_envio = 0;
             } else {
-                if ($distancia_km <= 0.7) {
+                if ($distancia_km <= 0.5) {
                     $costo_envio = 0;
-                } elseif ($distancia_km > 0.7 && $distancia_km <= 6.0) {
+                } elseif ($distancia_km > 0.5 && $distancia_km <= 1.5) {
                     $costo_envio = 40;
-                } elseif ($distancia_km > 6.0 && $distancia_km <= 6.75) {
+                } elseif ($distancia_km > 1.5 && $distancia_km <= 3.5) {
                     $costo_envio = 50;
-                } elseif ($distancia_km > 6.75 && $distancia_km <= 9.0) {
+                } elseif ($distancia_km > 3.5 && $distancia_km <= 4.0) {
                     $costo_envio = 70;
                 } else {
                     $costo_envio = 80;
@@ -801,13 +801,13 @@ class AdminController extends Controller
         if ($aplicaEnvioGratis && $cantidadPlatillos >= $aplicaEnvioGratis->cantidad_minima) {
             $costo_envio = 0;
         } else {
-            if ($distancia_km <= 0.7) {
+            if ($distancia_km <= 0.5) {
                 $costo_envio = 0;
-            } elseif ($distancia_km <= 6.0) {
+            } elseif ($distancia_km <= 1.5) {
                 $costo_envio = 40;
-            } elseif ($distancia_km <= 6.75) {
+            } elseif ($distancia_km <= 3.5) {
                 $costo_envio = 50;
-            } elseif ($distancia_km <= 9.0) {
+            } elseif ($distancia_km <= 4.0) {
                 $costo_envio = 70;
             } else {
                 $costo_envio = 80;
@@ -1320,17 +1320,17 @@ class AdminController extends Controller
                 $costo_envio = 0;
             } else {
                 // 2. Si está muy cerca, también es gratis
-                if ($distancia_km <= 0.7) {
+                if ($distancia_km <= 0.5) {
                     $costo_envio = 0;
                 }
                 // 3. Rangos definidos
-                elseif ($distancia_km > 0.7 && $distancia_km <= 6.0) {
+                elseif ($distancia_km > 0.5 && $distancia_km <= 1.5) {
                     $costo_envio = 40;
-                } elseif ($distancia_km > 6.0 && $distancia_km <= 6.75) {
+                } elseif ($distancia_km > 1.5 && $distancia_km <= 3.5) {
                     $costo_envio = 50;
-                } elseif ($distancia_km > 6.75 && $distancia_km <= 9.0) {
+                } elseif ($distancia_km > 3.5 && $distancia_km <= 4.0) {
                     $costo_envio = 70;
-                } else { // mayor a 9.0
+                } else { // mayor a 4.0
                     $costo_envio = 80;
                 }
             }
@@ -1635,17 +1635,17 @@ class AdminController extends Controller
                 $costo_envio = 0;
             } else {
                 // 2. Si está muy cerca, también es gratis
-                if ($distancia_km <= 0.7) {
+                if ($distancia_km <= 0.5) {
                     $costo_envio = 0;
                 }
                 // 3. Rangos definidos
-                elseif ($distancia_km > 0.7 && $distancia_km <= 6.0) {
+                elseif ($distancia_km > 0.5 && $distancia_km <= 1.5) {
                     $costo_envio = 40;
-                } elseif ($distancia_km > 6.0 && $distancia_km <= 6.75) {
+                } elseif ($distancia_km > 1.5 && $distancia_km <= 3.5) {
                     $costo_envio = 50;
-                } elseif ($distancia_km > 6.75 && $distancia_km <= 9.0) {
+                } elseif ($distancia_km > 3.5 && $distancia_km <= 4.0) {
                     $costo_envio = 70;
-                } else { // mayor a 9.0
+                } else { // mayor a 6.75
                     $costo_envio = 80;
                 }
             }

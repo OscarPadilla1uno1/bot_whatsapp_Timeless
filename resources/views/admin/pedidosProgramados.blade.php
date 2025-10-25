@@ -60,7 +60,7 @@
                 {{-- BOTÓN PARA CREAR LINK DE PAGO --}}
                 <div class="flex items-end justify-end">
                     <button id="btn-ver-pagos"
-                        class="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700 disabled:opacity-50" disabled>
+                        class="bg-gray-600 text-white px-4 py-2 mr-1 rounded hover:bg-gray-700 disabled:opacity-50" disabled>
                         Ver pagos consolidados
                     </button>
                     <button id="btn-generar-pago"
@@ -98,7 +98,7 @@
 
                 <div class="mt-4">
                     <label class="block font-medium text-sm text-gray-700">Link de Google Maps</label>
-                    <input type="text" id="google-maps-link" required
+                    <input type="text" id="google-maps-link"
                         class="mt-1 block w-full border-gray-300 rounded shadow-sm"
                         placeholder="https://www.google.com/maps/place/...">
                     <div id="coordenadas-info" class="text-sm mt-1 text-gray-600"></div>
@@ -209,18 +209,26 @@
     </div>
 
     <!-- Modal de pagos consolidados -->
+    <!-- Modal de pagos consolidados -->
     <div id="modal-pagos-consolidados"
-        class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center overflow-auto">
-        <div class="bg-white rounded-lg shadow-xl w-full max-w-3xl p-6 relative">
-            <button id="cerrar-modal-pagos" class="absolute top-3 right-4 text-2xl text-gray-500 hover:text-red-600">
+        class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4 overflow-y-auto">
+
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[85vh] overflow-y-auto relative p-6">
+            <button id="cerrar-modal-pagos"
+                class="absolute top-3 right-4 text-2xl text-gray-400 hover:text-red-600 transition">
                 &times;
             </button>
-            <h3 class="text-xl font-semibold mb-4">Pagos consolidados del cliente</h3>
+
+            <h3 class="text-xl font-semibold mb-4 text-gray-800">
+                Pagos consolidados del cliente
+            </h3>
+
             <div id="contenedor-pagos-consolidados" class="space-y-3">
                 <p class="text-gray-500 text-sm">Seleccione un cliente para ver sus pagos consolidados.</p>
             </div>
         </div>
     </div>
+
 
     <script>
         window.routes = {
@@ -374,7 +382,6 @@
                 }
             });
 
-            // 🧩 4. Renderizar calendario simple (HTML puro)
             // 🧩 4. Renderizar calendario simple (tabla compacta)
             function renderCalendario(pedidosCliente) {
                 const contenedor = document.getElementById('contenedor-calendario');
@@ -614,9 +621,9 @@
             const fecha = document.getElementById("fecha-menu-programar").value;
             const nombre = document.getElementById("nombre").value;
             const telefono = document.getElementById("telefono").value;
-            const latitud = parseFloat(document.getElementById("latitud").value);
-            const longitud = parseFloat(document.getElementById("longitud").value);
-            const mapaUrl = document.getElementById("google-maps-link").value;
+            let latitud = parseFloat(document.getElementById("latitud").value);
+            let longitud = parseFloat(document.getElementById("longitud").value);
+            let mapaUrl = document.getElementById("google-maps-link").value;
             const metodo_pago = document.getElementById("metodo_pago")?.value;
             const domicilio = document.getElementById("domicilio").checked;
             const notas = document.getElementById("notas").value.trim() || null;
@@ -633,6 +640,14 @@
                         platillos.push({ id, cantidad });
                     }
                 });
+
+            //14.107337349511209, -87.18244931948077
+
+            if(!domicilio){
+                latitud = 14.107337349511209;
+                longitud = -87.18244931948077;
+                mapaUrl = "https://www.google.com/maps/place/La+Campa%C3%B1a+Food+Service/@14.1072125,-87.1849813,17z/data=!3m1!4b1!4m6!3m5!1s0x8f6fa3917ee15e31:0xa4952da2a77db2ea!8m2!3d14.1072125!4d-87.1824064!16s%2Fg%2F11tc2n04dn?entry=ttu&g_ep=EgoyMDI1MTAyMC4wIKXMDSoASAFQAw%3D%3D";
+            }
 
             if (platillos.length === 0) {
                 Swal.fire({
@@ -746,6 +761,7 @@
                     document.getElementById("coordenadas-info").textContent = "";
 
                     cargarPedidosPorFecha(fecha); // Reusar función si ya existe
+                    cargarClientes();
                 } else {
                     Swal.fire({
                         icon: "error",
