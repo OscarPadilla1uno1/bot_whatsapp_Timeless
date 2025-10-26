@@ -215,6 +215,16 @@ Route::get('/pago/exito', function (Request $request) {
                     $telefono = $cliente->telefono ?? null;
                     $nombre = $cliente->nombre ?? 'Cliente';
 
+                    if ($telefono) {
+                            // Elimina espacios, guiones o símbolos
+                            $telefono = preg_replace('/\D/', '', $telefono);
+
+                            // Si no comienza con 504, se lo agregamos
+                            if (!str_starts_with($telefono, '504')) {
+                                $telefono = '504' . $telefono;
+                            }
+                        }
+
                     $mensaje = "✅ Hola {$nombre}, tu pago consolidado por L. {$pagoConsolidado->monto_total} ha sido confirmado. Tus pedidos pasarán a preparación.";
 
                     try {
@@ -246,6 +256,16 @@ Route::get('/pago/exito', function (Request $request) {
                         $cliente = $pagoConsolidado->cliente;
                         $telefono = $cliente->telefono ?? null;
                         $nombre = $cliente->nombre ?? 'Cliente';
+
+                        if ($telefono) {
+                            // Elimina espacios, guiones o símbolos
+                            $telefono = preg_replace('/\D/', '', $telefono);
+
+                            // Si no comienza con 504, se lo agregamos
+                            if (!str_starts_with($telefono, '504')) {
+                                $telefono = '504' . $telefono;
+                            }
+                        }
 
                         $mensaje = "⚠️ Hola {$nombre}, tu pago consolidado por L. {$pagoConsolidado->monto_total} fue rechazado. Intenta nuevamente.";
 
