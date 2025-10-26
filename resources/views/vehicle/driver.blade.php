@@ -1112,6 +1112,10 @@
                 <span class="payment-badge efectivo" title="Pago en efectivo">
                     - EFECTIVO <strong>L.{{ $step['job_details']['total'] ?? 0,2 }}</strong>
                 </span>
+                @if(($step['job_details']['metodo_pago'] ?? null) === 'transferencia')   
+                <span class="payment-badge transferencia" title="Pago en transferencia">
+                    - transferencia <strong>L.{{ $step['job_details']['total'] ?? 0,2 }}</strong>
+                </span>
                 @elseif(($step['job_details']['metodo_pago'] ?? null) === 'en_linea')
                 <span class="payment-badge en-linea" title="Pago en línea">
                     - EN LÍNEA
