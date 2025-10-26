@@ -60,8 +60,14 @@
                 {{-- BOTÓN PARA CREAR LINK DE PAGO --}}
                 <div class="flex items-end justify-end">
                     <button id="btn-ver-pagos"
-                        class="bg-gray-600 text-white px-4 py-2 mr-1 rounded hover:bg-gray-700 disabled:opacity-50" disabled>
+                        class="bg-gray-600 text-white px-4 py-2 mr-1 rounded hover:bg-gray-700 disabled:opacity-50"
+                        disabled>
                         Ver pagos consolidados
+                    </button>
+                    <button id="btn-ver-efectivo-transferencia"
+                        class="bg-purple-600 text-white px-4 py-2 mr-1 rounded hover:bg-purple-700 disabled:opacity-50"
+                        disabled>
+                        Confirmar pagos de efectivo o transferencia
                     </button>
                     <button id="btn-generar-pago"
                         class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50" disabled>
@@ -98,8 +104,7 @@
 
                 <div class="mt-4">
                     <label class="block font-medium text-sm text-gray-700">Link de Google Maps</label>
-                    <input type="text" id="google-maps-link"
-                        class="mt-1 block w-full border-gray-300 rounded shadow-sm"
+                    <input type="text" id="google-maps-link" class="mt-1 block w-full border-gray-300 rounded shadow-sm"
                         placeholder="https://www.google.com/maps/place/...">
                     <div id="coordenadas-info" class="text-sm mt-1 text-gray-600"></div>
                     <input type="hidden" name="latitud" id="latitud">
@@ -229,6 +234,38 @@
         </div>
     </div>
 
+    <!-- Modal de pagos en efectivo o transferencia -->
+    <div id="modal-pagos-efectivo-transferencia"
+        class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4 overflow-y-auto">
+
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[85vh] overflow-y-auto relative p-6">
+            <button id="cerrar-modal-pagos-efectivo-transferencia"
+                class="absolute top-3 right-4 text-2xl text-gray-400 hover:text-red-600 transition">
+                &times;
+            </button>
+
+            <h3 class="text-xl font-semibold mb-4 text-gray-800">
+                Pedidos pendientes (Efectivo / Transferencia)
+            </h3>
+
+            <div id="contenedor-pagos-efectivo-transferencia" class="space-y-3">
+                <p class="text-gray-500 text-sm">Seleccione un cliente para ver sus pedidos programados.</p>
+            </div>
+
+            <div class="mt-4 flex justify-between items-center border-t pt-3">
+                <p id="total-seleccionado" class="text-lg font-semibold text-gray-800">Total seleccionado: L. 0.00</p>
+                <button id="btn-confirmar-pagos" disabled
+                    class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50 transition">
+                    Confirmar pagos seleccionados
+                </button>
+            </div>
+        </div>
+    </div>
+
+
+
+
+
 
     <script>
         window.routes = {
@@ -238,6 +275,119 @@
             editarPedido: "{{ route('admin.pedidos.programado.edit', ['pedido' => '__ID__']) }}",
             borrarPedido: "{{ route('admin.borrar.programado', ['id' => '__ID__']) }}"
         };
+    </script>
+
+    
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const btnVerPagosPendientes = document.getElementById("btn-ver-efectivo-transferencia");
+            const modal = document.getElementById("modal-pagos-efectivo-transferencia");
+            const contenedor = document.getElementById("contenedor-pagos-efectivo-transferencia");
+            const cerrarModal = document.getElementById("cerrar-modal-pagos-efectivo-transferencia");
+            const btnConfirmar = document.getElementById("btn-confirmar-pagos");
+            const totalSeleccionadoEl = document.getElementById("total-seleccionado");
+
+            // Habilitar botón cuando se seleccione cliente
+            $('#select-cliente').on('change', function () {
+                btnVerPagosPendientes.disabled = !$(this).val();
+            });
+
+            // Abrir modal
+            btnVerPagosPendientes.addEventListener("click", async () => {
+                const clienteId = $('#select-cliente').val();
+                if (!clienteId) return;
+
+                contenedor.innerHTML = '<p class="text-gray-500 text-sm">Cargando pedidos...</p>';
+                modal.classList.remove("hidden");
+
+                try {
+                    const res = await fetch(`/admin/pedidos/efectivo-transferencia`);
+                    const pedidos = await res.json();
+
+                    console.log(pedidos);
+
+                    const pedidosCliente = pedidos.filter(p => p.cliente_id == clienteId);
+                    if (!pedidosCliente.length) {
+                        contenedor.innerHTML = '<p class="text-gray-500 text-sm">Este cliente no tiene pedidos pendientes.</p>';
+                        return;
+                    }
+
+                    contenedor.innerHTML = pedidosCliente.map(grupo => `
+                <div class="border rounded-lg p-3 hover:bg-gray-50">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <p class="font-semibold text-gray-700">${grupo.fecha}</p>
+                            <p class="text-sm text-gray-500">${grupo.pedidos.length} pedidos</p>
+                        </div>
+                        <p class="font-bold text-blue-600">L. ${Number(grupo.total).toFixed(2)}</p>
+                    </div>
+                    <ul class="mt-2 text-sm text-gray-600 list-disc ml-6">
+                        ${grupo.pedidos.map(p => `
+                            <li>
+                                <label class="flex items-center space-x-2">
+                                    <input type="checkbox" class="chk-pedido" data-id="${p.id}" data-total="${p.total}">
+                                    <span>#${p.id} - ${p.metodo_pago} - L. ${Number(p.total).toFixed(2)}</span>
+                                </label>
+                            </li>
+                        `).join('')}
+                    </ul>
+                </div>
+            `).join('');
+                } catch (error) {
+                    console.error("Error cargando pedidos:", error);
+                    contenedor.innerHTML = '<p class="text-red-500 text-sm">Error al cargar los pedidos.</p>';
+                }
+            });
+
+            // Cerrar modal
+            cerrarModal.addEventListener("click", () => modal.classList.add("hidden"));
+            modal.addEventListener("click", (e) => {
+                if (e.target === modal) modal.classList.add("hidden");
+            });
+
+            // Escuchar selección de pedidos para actualizar total
+            document.addEventListener("change", (e) => {
+                if (e.target.classList.contains("chk-pedido")) {
+                    const checkboxes = document.querySelectorAll(".chk-pedido:checked");
+                    const total = Array.from(checkboxes).reduce((acc, chk) => acc + parseFloat(chk.dataset.total), 0);
+                    totalSeleccionadoEl.textContent = `Total seleccionado: L. ${total.toFixed(2)}`;
+                    btnConfirmar.disabled = checkboxes.length === 0;
+                }
+            });
+
+            // Confirmar pagos seleccionados
+            btnConfirmar.addEventListener("click", async () => {
+                const seleccionadas = Array.from(document.querySelectorAll(".chk-pedido:checked"));
+                const pedidoIds = seleccionadas.map(chk => parseInt(chk.dataset.id));
+                if (!pedidoIds.length) return;
+
+                const token = document.querySelector('meta[name="csrf-token"]').content;
+
+                try {
+                    const res = await fetch("{{ route('admin.pagos.efectivo_transferencia.confirmar') }}", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "X-CSRF-TOKEN": token
+                        },
+                        body: JSON.stringify({ pedido_ids: pedidoIds })
+                    });
+
+                    const data = await res.json();
+                    if (data.success) {
+                        Swal.fire('Éxito', 'Pagos confirmados y pedidos en preparación.', 'success');
+                        modal.classList.add("hidden");
+                        const fecha = document.getElementById("fecha-menu-programar").value;
+                        cargarPedidosPorFecha(fecha); // Recargar lista de pedidos programados
+                    } else {
+                        Swal.fire('Error', data.message || 'No se pudo confirmar los pagos.', 'error');
+                    }
+                } catch (error) {
+                    console.error(error);
+                    Swal.fire('Error', 'No se pudo conectar con el servidor.', 'error');
+                }
+            });
+        });
     </script>
 
     <script>document.addEventListener("DOMContentLoaded", () => {
@@ -515,68 +665,6 @@
             });
 
 
-            // ================================================
-            // FUNCIÓN AUXILIAR PARA GENERAR LINK DE PAGO
-            // ================================================
-
-            /*async function generarLinkConsolidado(pedidos, cliente, fecha) {
-                const pedidoIds = pedidos.map(p => p.id);
-                const total = pedidos.reduce((sum, p) => sum + parseFloat(p.total), 0);
-
-                const payload = {
-                    cliente: cliente,
-                    pedido_ids: pedidoIds,
-                    total: total,
-                    fecha: fecha
-                };
-
-                Swal.fire({
-                    title: "Generando link...",
-                    text: "Por favor espere un momento",
-                    allowOutsideClick: false,
-                    didOpen: () => Swal.showLoading(),
-                });
-
-                try {
-                    const res = await fetch("{{ route('admin.pagos.consolidado.create') }}", {
-            method: "POST",
-                headers: {
-                "Content-Type": "application/json",
-                    "X-CSRF-TOKEN": document
-                        .querySelector('meta[name="csrf-token"]')
-                        .getAttribute("content"),
-                        },
-            body: JSON.stringify(payload),
-                    });
-
-        const data = await res.json();
-
-        Swal.close();
-
-        if (res.ok && data.success) {
-            Swal.fire({
-                icon: "success",
-                title: "Link de pago creado",
-                html: `<p>Link generado:</p><a href="${data.processUrl}" target="_blank" class="text-blue-600 underline">${data.processUrl}</a>`,
-            });
-        } else {
-            Swal.fire({
-                icon: "error",
-                title: "Error",
-                text: data.message || "No se pudo generar el link de pago.",
-            });
-        }
-                } catch (error) {
-            Swal.fire({
-                icon: "error",
-                title: "Error de red",
-                text: "No se pudo conectar con el servidor.",
-            });
-        }
-            }*/
-
-        ////
-
 
         // Inicializar DataTable vacía al principio
         $('#tabla-pedidos').DataTable({
@@ -643,7 +731,7 @@
 
             //14.107337349511209, -87.18244931948077
 
-            if(!domicilio){
+            if (!domicilio) {
                 latitud = 14.107337349511209;
                 longitud = -87.18244931948077;
                 mapaUrl = "https://www.google.com/maps/place/La+Campa%C3%B1a+Food+Service/@14.1072125,-87.1849813,17z/data=!3m1!4b1!4m6!3m5!1s0x8f6fa3917ee15e31:0xa4952da2a77db2ea!8m2!3d14.1072125!4d-87.1824064!16s%2Fg%2F11tc2n04dn?entry=ttu&g_ep=EgoyMDI1MTAyMC4wIKXMDSoASAFQAw%3D%3D";
@@ -862,6 +950,7 @@
         });
         });
     </script>
+
 
 
 

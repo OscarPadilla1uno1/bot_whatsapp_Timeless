@@ -517,6 +517,14 @@ Route::prefix('export')->group(function () {
 
 });
 
+Route::get('/admin/pedidos/efectivo-transferencia', [AdminController::class, 'listarPedidosEfectivoyTransferencia'])
+    ->name('admin.pagos.efectivo_transferencia')
+    ->can('Administrador');
+
+Route::post('/admin/pagos/efectivo-transferencia/confirmar', [AdminController::class, 'confirmarPagosEfectivoTransferencia'])
+    ->name('admin.pagos.efectivo_transferencia.confirmar')
+    ->can('Administrador');
+
 
 
 Route::get('/bot/qr', function () {

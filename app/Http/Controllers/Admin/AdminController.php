@@ -1345,9 +1345,7 @@ class AdminController extends Controller
                     ['nombre' => $nombre]
                 );
 
-                $estadoPedido = in_array($pago, ['efectivo', 'transferencia'])
-                    ? 'en preparación'
-                    : 'pendiente';
+                $estadoPedido = 'pendiente';
 
                 $pedido = Pedido::create([
                     'cliente_id' => $cliente->id,
@@ -1412,7 +1410,7 @@ class AdminController extends Controller
                     $pago2 = new Pago([
                         'pedido_id' => $pedido->id,
                         'metodo_pago' => $pago,
-                        'estado_pago' => 'confirmado',
+                        'estado_pago' => 'pendiente',
                         'fecha_pago' => now()->setTimezone('America/Tegucigalpa'),
                         'referencia_transaccion' => null,
                         'request_id' => null,
@@ -1420,8 +1418,8 @@ class AdminController extends Controller
                         'metodo_interno' => null,
                         'canal' => 'Aplicativo',
                         'observaciones' => $pago === 'efectivo'
-                            ? 'Pago confirmado en efectivo'
-                            : 'Pago confirmado por transferencia'
+                            ? 'Pago adelantado en efectivo'
+                            : 'Pago adelantado por transferencia'
                     ]);
                 }
 
@@ -1725,9 +1723,6 @@ class AdminController extends Controller
                     $subtotal += $cantidad * $precio;
                 }
 
-                $estadoPedido = in_array($metodo_pago, ['efectivo', 'transferencia'])
-                    ? 'en preparación'
-                    : 'pendiente';
 
                 // 3. Actualizar coordenadas y total
                 $pedido->update([
@@ -1737,7 +1732,6 @@ class AdminController extends Controller
                     'total' => $subtotal + $costo_envio,
                     'domicilio' => $request->boolean('domicilio'),
                     'notas' => $request->input('notas', null),
-                    'estado' => $estadoPedido,
                 ]);
 
                 // 4. Actualizar método de pago
@@ -1746,7 +1740,6 @@ class AdminController extends Controller
                 if ($pedido->pago) {
                     $pedido->pago->update([
                         'metodo_pago' => $metodo,
-                        'estado_pago' => $metodo === 'tarjeta' ? 'pendiente' : 'confirmado',
                         'fecha_pago' => $metodo === 'tarjeta' ? null : now()->setTimezone('America/Tegucigalpa'),
                         'canal' => 'panel',
                         'observaciones' => $metodo === 'tarjeta'
@@ -1957,6 +1950,74 @@ class AdminController extends Controller
 
         return response()->json($eventos);
     }
+
+    public function listarPedidosEfectivoyTransferencia()
+    {
+        $pedidos = Pedido::with(['cliente', 'pago'])
+            ->whereHas('pago', function ($q) {
+                $q->where(function ($query) {
+                    $query->where('metodo_pago', 'efectivo')
+                        ->orWhere('metodo_pago', 'transferencia');
+                })
+                    ->where('estado_pago', 'pendiente');
+            })
+            ->whereDate('fecha_pedido', '>=', Carbon::tomorrow('America/Tegucigalpa'))
+            ->where('estado', 'pendiente')
+            ->orderBy('fecha_pedido', 'asc')
+            ->get()
+            ->groupBy(fn($p) => Carbon::parse($p->fecha_pedido)->toDateString());
+
+        $eventos = [];
+
+        foreach ($pedidos as $fecha => $listaPedidos) {
+            $primer = $listaPedidos->first();
+
+            $eventos[] = [
+                'fecha' => $fecha,
+                'cliente_id' => $primer->cliente->id ?? null,
+                'cliente' => $primer->cliente->nombre ?? 'Sin nombre',
+                'total' => $listaPedidos->sum('total'),
+                'pedidos' => $listaPedidos->map(function ($p) {
+                    return [
+                        'id' => $p->id,
+                        'estado' => $p->estado,
+                        'total' => $p->total,
+                        'metodo_pago' => $p->pago->metodo_pago ?? 'N/A',
+                    ];
+                })->values(),
+            ];
+        }
+
+        return response()->json($eventos);
+    }
+
+    public function confirmarPagosEfectivoTransferencia(Request $request)
+    {
+        $validated = $request->validate([
+            'pedido_ids' => 'required|array|min:1',
+        ]);
+
+        $pedidoIds = $validated['pedido_ids'];
+
+        DB::transaction(function () use ($pedidoIds) {
+            $pedidos = Pedido::whereIn('id', $pedidoIds)->with('pago')->get();
+
+            foreach ($pedidos as $pedido) {
+                $pedido->update(['estado' => 'en preparación']);
+
+                if ($pedido->pago) {
+                    $pedido->pago->update([
+                        'estado_pago' => 'confirmado',
+                        'fecha_pago' => now(),
+                        'observaciones' => 'Pago confirmado manualmente por el administrador.',
+                    ]);
+                }
+            }
+        });
+
+        return response()->json(['success' => true, 'message' => 'Pagos confirmados correctamente.']);
+    }
+
 
 
     public function crearPagoConsolidado(Request $request)
