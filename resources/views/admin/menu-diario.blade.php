@@ -68,11 +68,23 @@
                         </tbody>
                     </table>
                 </div>
-                <div id="switch-envio-container" class="mb-4 hidden">
+                <div id="switch-envio-container" class="mb-4 hidden space-y-2">
                     <label class="flex items-center space-x-3">
                         <input type="checkbox" id="switch-envio-gratis" class="form-checkbox h-5 w-5 text-green-600">
-                        <span class="text-sm">Envío gratis si se piden 3 o más platillos</span>
+                        <span class="text-sm">Envío gratis si se piden <span id="label-cantidad-minima">3</span> o más
+                            platillos</span>
                     </label>
+
+                    <div>
+                        <label for="input-cantidad-minima" class="text-sm text-gray-600">Cantidad mínima
+                            requerida:</label>
+                        <input type="number" id="input-cantidad-minima" min="1" max="20"
+                            class="w-24 border rounded px-2 py-1 text-sm ml-2" value="3">
+                        <button id="btn-guardar-cantidad-minima"
+                            class="ml-2 text-blue-600 font-semibold text-sm hover:text-blue-800">
+                            Guardar cambios
+                        </button>
+                    </div>
                 </div>
 
             </div>
@@ -124,13 +136,13 @@
             eliminar: "{{ route('admin.menu.eliminar') }}",
             actualizarCantidad: "{{ route('admin.menu.actualizarCantidad') }}",
             envioGratisPorFecha() {
-            const fecha = document.getElementById('fecha')?.value;
-            if (!fecha) return null;
+                const fecha = document.getElementById('fecha')?.value;
+                if (!fecha) return null;
 
-            // Laravel nos da la ruta con un marcador para reemplazar
-            const base = "{{ route('admin.envios-gratis', ['fecha' => '__FECHA__']) }}";
-            return base.replace('__FECHA__', encodeURIComponent(fecha));
-        }
+                // Laravel nos da la ruta con un marcador para reemplazar
+                const base = "{{ route('admin.envios-gratis', ['fecha' => '__FECHA__']) }}";
+                return base.replace('__FECHA__', encodeURIComponent(fecha));
+            }
         };
     </script>
     <script>
@@ -139,7 +151,7 @@
             const today = obtenerFechaHoyTegucigalpa();
 
             manejarEstadoFormulario(esFechaPasada(today));
-            renderizarSwitchEnvioGratis(today);
+            
 
 
             console.log('Fecha de hoy:', today);
@@ -153,6 +165,8 @@
                 document.querySelectorAll('.cantidad-input').forEach(input => {
                     input.dataset.fecha = today;
                 });
+
+                renderizarSwitchEnvioGratis(today);
 
                 fechaInput.addEventListener('change', function () {
                     const esPasada = esFechaPasada(this.value);

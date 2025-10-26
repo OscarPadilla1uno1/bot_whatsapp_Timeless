@@ -27,6 +27,9 @@ function esFechaPasada(fechaSeleccionada) {
 function renderizarSwitchEnvioGratis(fecha) {
     const container = document.getElementById("switch-envio-container");
     const switchInput = document.getElementById("switch-envio-gratis");
+    const inputCantidad = document.getElementById("input-cantidad-minima");
+    const labelCantidad = document.getElementById("label-cantidad-minima");
+    const btnGuardar = document.getElementById("btn-guardar-cantidad-minima");
 
     if (esFechaPasada(fecha)) {
         container.classList.add("hidden");
@@ -34,17 +37,12 @@ function renderizarSwitchEnvioGratis(fecha) {
     }
 
     const url = window.routes.envioGratisPorFecha();
-    if (!url) {
-        console.warn(
-            "No se pudo construir la URL de envío gratis (fecha no seleccionada)"
+    if (!url)
+        return console.warn(
+            "No se pudo construir la URL (fecha no seleccionada)"
         );
-        return;
-    }
 
-    console.log(url);
-    // Consultar al backend
     $.get(url, function (data) {
-        console.log("Ejecutado desde el ur de windows variable con funcion");
         if (!data.existe) {
             container.classList.add("hidden");
             return;
@@ -52,29 +50,41 @@ function renderizarSwitchEnvioGratis(fecha) {
 
         container.classList.remove("hidden");
         switchInput.checked = data.activo;
+        inputCantidad.value = data.cantidad_minima || 3;
+        labelCantidad.textContent = data.cantidad_minima || 3;
 
+        // Evento al cambiar el checkbox
         switchInput.onchange = function () {
-            $.ajax({
-                url: url,
-                method: "PATCH",
-                data: {
-                    activo: this.checked,
-                    _token: document
-                        .querySelector('meta[name="csrf-token"]')
-                        .getAttribute("content"),
-                },
-                success: () => {
-                    console.log(
-                        `Estado de envío gratis para ${fecha} actualizado`
-                    );
-                },
-                error: () => {
-                    console.error(
-                        "No se pudo actualizar el estado de envío gratis"
-                    );
-                },
-            });
+            actualizarEnvioGratis(url, this.checked, inputCantidad.value);
         };
+
+        // Evento al guardar la cantidad mínima
+        btnGuardar.onclick = function () {
+            actualizarEnvioGratis(
+                url,
+                switchInput.checked,
+                inputCantidad.value
+            );
+            labelCantidad.textContent = inputCantidad.value;
+        };
+    });
+}
+
+function actualizarEnvioGratis(url, activo, cantidad_minima) {
+    $.ajax({
+        url: url,
+        method: "PATCH",
+        data: {
+            activo: activo,
+            cantidad_minima: cantidad_minima,
+            _token: document
+                .querySelector('meta[name="csrf-token"]')
+                .getAttribute("content"),
+        },
+        success: () =>
+            console.log("Configuración de envío gratis actualizada."),
+        error: () =>
+            console.error("Error al actualizar el estado de envío gratis."),
     });
 }
 
@@ -440,8 +450,6 @@ function eliminarPlatillo(id) {
     });
 }
 
-
-
 // Función para mostrar la imagen en un modal
 function showImage(imagePath) {
     const imageModal = document.getElementById("imageModal");
@@ -460,7 +468,7 @@ function closeImageModal() {
 }
 
 function updateButtonText() {
-    const inputFile = document.getElementById("imagen");
+    const inputFile = document.getElementById("imagen-input");
     const labelText = document.getElementById("imagen-text");
 
     if (inputFile.files.length > 0) {
@@ -805,7 +813,7 @@ function cargarPedidosPorFecha(fecha) {
                 data.pedidos && data.pedidos.length > 0
                     ? data.pedidos.map((pedido, index) => {
                           return [
-                              index + 1,
+                            pedido.id,
                               pedido.cliente.nombre,
                               pedido.estado,
                               `LPS. ${parseFloat(pedido.total).toFixed(2)}`,
@@ -851,7 +859,7 @@ function cargarPedidosPorFecha(fecha) {
             <table class="min-w-full divide-y divide-gray-200">
                 <thead class="bg-gray-100">
                     <tr>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">#</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nombre</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Precio</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cantidad Disponible
@@ -918,6 +926,10 @@ function abrirModalEditarPedido(pedidoId) {
             document.getElementById(
                 "ubicacion-text-edit"
             ).value = `${data.latitud}, ${data.longitud}`;
+
+            document.getElementById("domicilio-edit").checked =
+                !!data.domicilio;
+            document.getElementById("notas-edit").value = data.notas || "";
 
             // Contenedor donde se inyectarán los campos dinámicos
             const contenedor = document.getElementById(
@@ -1026,7 +1038,7 @@ function abrirModalEditarPedido(pedidoId) {
             const fechaInput = document.createElement("input");
             fechaInput.type = "hidden";
             fechaInput.className = "fecha-menu-editar";
-            fechaInput.value = data.fecha || "";
+            fechaInput.value = data.fecha_pedido || "";
             contenedor.appendChild(fechaInput);
         })
         .catch((error) => {
@@ -1048,6 +1060,8 @@ async function actualizarPedidoProgramado(form) {
     const mapaUrl = document.getElementById("google-maps-link-edit").value;
     const metodo_pago = document.getElementById("editar-metodo-pago").value;
     const pedido_id = form.querySelector(".pedido_id")?.value;
+    const domicilio = document.getElementById("domicilio-edit").checked;
+    const notas = document.getElementById("notas-edit").value.trim() || null;
 
     //console.log("pedido_id:", pedido_id);
     //console.log(telefono, nombre, latitud, longitud, mapaUrl, metodo_pago);
@@ -1146,6 +1160,8 @@ async function actualizarPedidoProgramado(form) {
         longitud,
         metodo_pago,
         platillos,
+        domicilio,
+        notas,
     };
 
     console.log("Payload:", payload);
@@ -1209,10 +1225,7 @@ function eliminarPedido(id) {
         cancelButtonColor: "#3085d6",
     }).then((result) => {
         if (result.isConfirmed) {
-            urlBorrar = window.routes.borrarPedido.replace(
-                "__ID__",
-                id
-            );
+            urlBorrar = window.routes.borrarPedido.replace("__ID__", id);
 
             fetch(urlBorrar, {
                 method: "DELETE",

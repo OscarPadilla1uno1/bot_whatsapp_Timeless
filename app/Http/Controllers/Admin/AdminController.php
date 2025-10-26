@@ -23,6 +23,9 @@ use thiagoalessio\TesseractOCR\TesseractOCR;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\Http;
 use App\Http\Controllers\VroomController;
+use App\Models\PagoConsolidado;
+use App\Models\PagoConsolidadoPedido;
+use App\Http\Controllers\PlacetoPayController;
 
 
 
@@ -59,14 +62,17 @@ class AdminController extends Controller
 
         return response()->json([
             'existe' => true,
-            'activo' => $registro->activo
+            'activo' => $registro->activo,
+            'cantidad_minima' => $registro->cantidad_minima,
         ]);
     }
 
     public function actualizarEnvioGratis(Request $request, $fecha)
     {
         $registro = EnvioGratisFecha::where('fecha', $fecha)->firstOrFail();
+
         $registro->activo = $request->boolean('activo');
+        $registro->cantidad_minima = $request->input('cantidad_minima', 3);
         $registro->save();
 
         return response()->json(['success' => true]);
@@ -514,7 +520,9 @@ class AdminController extends Controller
             'platillos' => 'required|array',
             'platillos.*.id' => 'required|integer',
             'platillos.*.cantidad' => 'required|integer',
-            'metodo_pago' => 'required|string|in:tarjeta,efectivo',
+            'metodo_pago' => 'required|string|in:tarjeta,efectivo,transferencia',
+            'domicilio' => 'required|boolean',
+            'notas' => 'nullable|string',
         ]);
 
         $nombre = $request->nombre;
@@ -524,6 +532,8 @@ class AdminController extends Controller
         $platillos = $request->platillos;
         $cantidadPlatillos = 0;
         $metodo_pago = strtolower($request->metodo_pago);
+        $domicilio = $request->boolean('domicilio');
+        $notas = $request->input('notas', null);
 
         foreach ($platillos as $i) {
 
@@ -532,7 +542,8 @@ class AdminController extends Controller
         }
 
 
-        $hoy = now()->setTimezone('America/Tegucigalpa')->format('Y-m-d'); // Ajusta tu zona horaria
+        $hoy = now()->setTimezone('America/Tegucigalpa')->format('Y-m-d H:i:s'); // Ajusta tu zona horaria
+        $hoyDATE = now()->setTimezone('America/Tegucigalpa')->format('Y-m-d'); // Ajusta tu zona horaria
 
         Log::info("Fecha generada: " . $hoy);
         $subtotal = 0.00;
@@ -580,22 +591,23 @@ class AdminController extends Controller
         $fechaCarbon = Carbon::parse($hoy);
         $aplicaEnvioGratis = EnvioGratisFecha::tieneEnvioGratisParaFecha($fechaCarbon);
 
-        if ($aplicaEnvioGratis && $cantidadPlatillos >= 3) {
+        if (!$domicilio) {
             $costo_envio = 0;
         } else {
-            // 2. Si está muy cerca, también es gratis
-            if ($distancia_km <= 0.7) {
+            if ($aplicaEnvioGratis && $cantidadPlatillos >= $aplicaEnvioGratis->cantidad_minima) {
                 $costo_envio = 0;
-            }
-            // 3. Rangos definidos
-            elseif ($distancia_km > 0.7 && $distancia_km <= 6.0) {
-                $costo_envio = 40;
-            } elseif ($distancia_km > 6.0 && $distancia_km <= 6.75) {
-                $costo_envio = 50;
-            } elseif ($distancia_km > 6.75 && $distancia_km <= 9.0) {
-                $costo_envio = 70;
-            } else { // mayor a 9.0
-                $costo_envio = 80;
+            } else {
+                if ($distancia_km <= 0.5) {
+                    $costo_envio = 0;
+                } elseif ($distancia_km > 0.5 && $distancia_km <= 1.5) {
+                    $costo_envio = 40;
+                } elseif ($distancia_km > 1.5 && $distancia_km <= 3.5) {
+                    $costo_envio = 50;
+                } elseif ($distancia_km > 3.5 && $distancia_km <= 4.0) {
+                    $costo_envio = 70;
+                } else {
+                    $costo_envio = 80;
+                }
             }
         }
 
@@ -612,23 +624,28 @@ class AdminController extends Controller
         }
 
         try {
-            $result = DB::transaction(function () use ($nombre, $telefono, $latitud, $longitud, $platillos, $costo_envio, $hoy, &$subtotal, $metodo_pago) {
+            $result = DB::transaction(function () use ($hoyDATE, $notas, $domicilio, $nombre, $telefono, $latitud, $longitud, $platillos, $costo_envio, $hoy, &$subtotal, $metodo_pago) {
                 // Verificar si el cliente ya existe o crearlo
                 $cliente = Cliente::firstOrCreate(
                     ['telefono' => $telefono],
                     ['nombre' => $nombre]
                 );
 
-                $estadoPedido = $metodo_pago === 'efectivo' ? 'en preparación' : 'pendiente';
+                $estadoPedido = in_array($metodo_pago, ['efectivo', 'transferencia'])
+                    ? 'en preparación'
+                    : 'pendiente';
+
 
                 // Crear el pedido
                 $pedido = new Pedido([
                     'cliente_id' => $cliente->id,
                     'latitud' => $latitud,
                     'longitud' => $longitud,
+                    'domicilio' => $domicilio,
                     'fecha_pedido' => $hoy,
                     'total' => 0.00, // Se actualizará al final
-                    'estado' => $estadoPedido
+                    'estado' => $estadoPedido,
+                    'notas' => $notas,
                 ]);
 
                 $pedido->save();
@@ -639,7 +656,7 @@ class AdminController extends Controller
                     $cantidad = $item['cantidad'];
 
                     // Verificar existencia en menú diario y disponibilidad
-                    $menuItem = MenuDiario::where('fecha', $hoy)
+                    $menuItem = MenuDiario::where('fecha', $hoyDATE)
                         ->where('platillo_id', $platilloId)
                         ->first();
 
@@ -696,7 +713,7 @@ class AdminController extends Controller
                     // 💵 Pago en efectivo → confirmado automáticamente
                     $pago = new Pago([
                         'pedido_id' => $pedido->id,
-                        'metodo_pago' => 'efectivo',
+                        'metodo_pago' => $metodo_pago,
                         'estado_pago' => 'confirmado',
                         'fecha_pago' => now()->setTimezone('America/Tegucigalpa'),
                         'referencia_transaccion' => null,
@@ -704,7 +721,9 @@ class AdminController extends Controller
                         'process_url' => null,
                         'metodo_interno' => null,
                         'canal' => 'whatsapp',
-                        'observaciones' => 'Pago confirmado en efectivo'
+                        'observaciones' => $metodo_pago === 'efectivo'
+                            ? 'Pago confirmado en efectivo'
+                            : 'Pago confirmado por transferencia'
                     ]);
                 }
 
@@ -779,16 +798,16 @@ class AdminController extends Controller
         $fechaCarbon = Carbon::parse($hoy);
         $aplicaEnvioGratis = EnvioGratisFecha::tieneEnvioGratisParaFecha($fechaCarbon);
 
-        if ($aplicaEnvioGratis && $cantidadPlatillos >= 3) {
+        if ($aplicaEnvioGratis && $cantidadPlatillos >= $aplicaEnvioGratis->cantidad_minima) {
             $costo_envio = 0;
         } else {
-            if ($distancia_km <= 0.7) {
+            if ($distancia_km <= 0.5) {
                 $costo_envio = 0;
-            } elseif ($distancia_km <= 6.0) {
+            } elseif ($distancia_km <= 1.5) {
                 $costo_envio = 40;
-            } elseif ($distancia_km <= 6.75) {
+            } elseif ($distancia_km <= 3.5) {
                 $costo_envio = 50;
-            } elseif ($distancia_km <= 9.0) {
+            } elseif ($distancia_km <= 4.0) {
                 $costo_envio = 70;
             } else {
                 $costo_envio = 80;
@@ -1082,49 +1101,53 @@ class AdminController extends Controller
 
     public function pedidosStatusViewCocina(Request $request)
     {
-        $tab = $request->query('tab', 'hoy'); // Por defecto "hoy"
+        $tab = $request->query('tab', 'hoy');
+        $timezone = 'America/Tegucigalpa';
+        $today = now()->setTimezone($timezone)->format('Y-m-d');
 
-        $query = Pedido::with('cliente')->orderBy('fecha_pedido', 'desc');
+        $query = Pedido::with(['cliente', 'detalles.platillo'])
+            ->orderBy('fecha_pedido', 'desc');
 
-
-
-        if ($tab === 'hoy') {
-            $query->whereDate('fecha_pedido', now()->setTimezone('America/Tegucigalpa')->format('Y-m-d'))->where('estado', 'en preparacion'); // Solo pedidos en preparación
-        } elseif ($tab === 'futuro') {
-            $query->whereDate('fecha_pedido', '>', now()->setTimezone('America/Tegucigalpa')->format('Y-m-d'));
-        } elseif ($tab === 'pasado') {
-            $query->whereDate('fecha_pedido', '<', now()->setTimezone('America/Tegucigalpa')->format('Y-m-d'));
+        // Filtros por pestaña
+        switch ($tab) {
+            case 'hoy':
+                $query->whereDate('fecha_pedido', $today)
+                    ->where('estado', 'en preparacion');
+                break;
+            case 'futuro':
+                $query->whereDate('fecha_pedido', '>', $today);
+                break;
+            case 'pasado':
+                $query->whereDate('fecha_pedido', '<', $today);
+                break;
         }
 
-
+        // Búsqueda incluyendo notas
         if ($request->filled('buscar')) {
             $buscar = $request->buscar;
-
             $query->where(function ($q) use ($buscar) {
                 $q->whereHas('cliente', function ($q2) use ($buscar) {
-                    $q2->where('nombre', 'like', '%' . $buscar . '%');
+                    $q2->where('nombre', 'like', '%' . $buscar . '%')
+                        ->orWhere('telefono', 'like', '%' . $buscar . '%');
                 })
                     ->orWhere('estado', 'like', '%' . $buscar . '%')
                     ->orWhereDate('fecha_pedido', $buscar)
-                    ->orWhere('total', 'like', '%' . $buscar . '%');
+                    ->orWhere('total', 'like', '%' . $buscar . '%')
+                    ->orWhere('id', $buscar)
+                    ->orWhere('notas', 'like', '%' . $buscar . '%'); // Nueva búsqueda en notas
             });
         }
 
-        $pedidos = $query->paginate(10)->withQueryString(); // Mantener query params en paginación
+        $pedidos = $query->paginate(10)->withQueryString();
 
-
-
-        $pedidoSeleccionado = null;
-        if ($request->has('pedido_id')) {
-            $pedidoSeleccionado = Pedido::with(['cliente', 'detalles.platillo'])->find($request->pedido_id);
-        }
+        $pedidoSeleccionado = $request->has('pedido_id')
+            ? Pedido::with(['cliente', 'detalles.platillo'])->find($request->pedido_id)
+            : null;
 
         $estados = ['pendiente', 'en preparación', 'despachado', 'entregado', 'cancelado'];
 
-
         return view('cocina.pedidos-cocina', compact('pedidos', 'pedidoSeleccionado', 'estados', 'tab'));
     }
-
 
     public function actualizarEstadoCocina(Request $request, $id)
     {
@@ -1209,7 +1232,9 @@ class AdminController extends Controller
             'platillos' => 'required|array|min:1',
             'platillos.*.id' => 'required|integer|exists:platillos,id',
             'platillos.*.cantidad' => 'required|integer|min:1',
-            'metodo_pago' => 'required|in:efectivo,tarjeta,transferencia',
+            'metodo_pago' => 'required|string|in:tarjeta,efectivo,transferencia',
+            'domicilio' => 'required|boolean',
+            'notas' => 'nullable|string',
         ]);
 
         $fecha = $request->input('fecha');
@@ -1230,18 +1255,20 @@ class AdminController extends Controller
         $nombre = $request->input('nombre');
         $telefono = $request->input('telefono');
         $pago = $request->input('metodo_pago');
+        $domicilio = $request->boolean('domicilio');
+        $notas = $request->input('notas', null);
 
         $subtotal = 0.00;
 
         $distancia_km = 0;
         $tiempo_min = 0;
 
-        $request = new Request([
+        $request2 = new Request([
             'target_lat' => (float) $latitud,
             'target_lng' => (float) $longitud
         ]);
 
-        $response = app(VroomController::class)->calculateDistanceFromVehicle($request);
+        $response = app(VroomController::class)->calculateDistanceFromVehicle($request2);
         $datosDistancia = $response->getData(true);
 
 
@@ -1281,45 +1308,56 @@ class AdminController extends Controller
         }
 
         $fechaCarbon = Carbon::parse($fecha);
+        $fechaCompleta = $fechaCarbon->format('Y-m-d H:i:s');
         $aplicaEnvioGratis = EnvioGratisFecha::tieneEnvioGratisParaFecha($fechaCarbon);
 
 
         Log::info("estado del envio {$aplicaEnvioGratis} y cantidad de platillos pedidos {$cantidadPlatillos}");
-
-        if ($aplicaEnvioGratis && $cantidadPlatillos >= 3) {
+        if (!$domicilio) {
             $costo_envio = 0;
         } else {
-            // 2. Si está muy cerca, también es gratis
-            if ($distancia_km <= 0.7) {
+            if ($aplicaEnvioGratis && $cantidadPlatillos >= $aplicaEnvioGratis->cantidad_minima) {
                 $costo_envio = 0;
-            }
-            // 3. Rangos definidos
-            elseif ($distancia_km > 0.7 && $distancia_km <= 6.0) {
-                $costo_envio = 40;
-            } elseif ($distancia_km > 6.0 && $distancia_km <= 6.75) {
-                $costo_envio = 50;
-            } elseif ($distancia_km > 6.75 && $distancia_km <= 9.0) {
-                $costo_envio = 70;
-            } else { // mayor a 9.0
-                $costo_envio = 80;
+            } else {
+                // 2. Si está muy cerca, también es gratis
+                if ($distancia_km <= 0.5) {
+                    $costo_envio = 0;
+                }
+                // 3. Rangos definidos
+                elseif ($distancia_km > 0.5 && $distancia_km <= 1.5) {
+                    $costo_envio = 40;
+                } elseif ($distancia_km > 1.5 && $distancia_km <= 3.5) {
+                    $costo_envio = 50;
+                } elseif ($distancia_km > 3.5 && $distancia_km <= 4.0) {
+                    $costo_envio = 70;
+                } else { // mayor a 4.0
+                    $costo_envio = 80;
+                }
             }
         }
 
 
 
         try {
-            $result = DB::transaction(function () use ($nombre, $telefono, $latitud, $longitud, $platillos, $fecha, $costo_envio, $pago, &$subtotal) {
+            $result = DB::transaction(function () use ($fechaCompleta, $notas, $domicilio, $nombre, $telefono, $latitud, $longitud, $platillos, $fecha, $costo_envio, $pago, &$subtotal) {
                 $cliente = Cliente::firstOrCreate(
                     ['telefono' => $telefono],
                     ['nombre' => $nombre]
                 );
 
+                $estadoPedido = in_array($pago, ['efectivo', 'transferencia'])
+                    ? 'en preparación'
+                    : 'pendiente';
+
                 $pedido = Pedido::create([
                     'cliente_id' => $cliente->id,
                     'latitud' => $latitud,
                     'longitud' => $longitud,
-                    'fecha_pedido' => $fecha . ' 12:00:00',
-                    'total' => 0.00
+                    'domicilio' => $domicilio,
+                    'fecha_pedido' => $fechaCompleta,
+                    'total' => 0.00,
+                    'estado' => $estadoPedido,
+                    'notas' => $notas,
                 ]);
 
                 foreach ($platillos as $item) {
@@ -1356,11 +1394,38 @@ class AdminController extends Controller
                 $pedido->total = $subtotal + $costo_envio;
                 $pedido->save();
 
-                Pago::create([
-                    'pedido_id' => $pedido->id,
-                    'metodo_pago' => $pago,
-                    'estado' => 'pendiente', // o el estado que corresponda por defecto
-                ]);
+                if ($pago === 'tarjeta') {
+                    $pago2 = new Pago([
+                        'pedido_id' => $pedido->id,
+                        'metodo_pago' => 'tarjeta',
+                        'estado_pago' => 'pendiente',
+                        'fecha_pago' => null,
+                        'referencia_transaccion' => null,
+                        'request_id' => null,
+                        'process_url' => null,
+                        'metodo_interno' => null,
+                        'canal' => 'Aplicativo',
+                        'observaciones' => 'Pago con tarjeta pendiente de confirmación'
+                    ]);
+                } else {
+                    // 💵 Pago en efectivo → confirmado automáticamente
+                    $pago2 = new Pago([
+                        'pedido_id' => $pedido->id,
+                        'metodo_pago' => $pago,
+                        'estado_pago' => 'confirmado',
+                        'fecha_pago' => now()->setTimezone('America/Tegucigalpa'),
+                        'referencia_transaccion' => null,
+                        'request_id' => null,
+                        'process_url' => null,
+                        'metodo_interno' => null,
+                        'canal' => 'Aplicativo',
+                        'observaciones' => $pago === 'efectivo'
+                            ? 'Pago confirmado en efectivo'
+                            : 'Pago confirmado por transferencia'
+                    ]);
+                }
+
+                $pago2->save();
 
 
                 return [
@@ -1429,6 +1494,8 @@ class AdminController extends Controller
             }),
             'metodo_pago' => optional($pedido->pago)->metodo_pago,
             'menu_dia' => $menu,
+            'domicilio' => (bool) $pedido->domicilio,
+            'notas' => $pedido->notas,
         ]);
     }
 
@@ -1473,6 +1540,8 @@ class AdminController extends Controller
             'platillos.*.cantidad' => 'required|integer|min:0',
             'platillos.*.precio' => 'required|numeric|min:0',
             'metodo_pago' => 'required|in:efectivo,tarjeta,transferencia',
+            'domicilio' => 'required|boolean',
+            'notas' => 'nullable|string',
         ]);
 
 
@@ -1486,7 +1555,10 @@ class AdminController extends Controller
         $pedido = Pedido::with(['detalles', 'pago'])->findOrFail($id);
         $fecha = Carbon::parse($pedido->fecha_pedido)->format('Y-m-d'); // ✅ convierte string a Carbon
 
+        $metodo_pago = $request->metodo_pago;
 
+        $domicilio = $request->boolean('domicilio');
+        $notas = $request->notas;
         // Extraer coordenadas del mapa
         if (!preg_match('/@([-0-9.]+),([-0-9.]+),/', $request->mapa_url, $matches)) {
             return response()->json(['success' => false, 'mensaje' => 'No se pudo extraer latitud/longitud.'], 400);
@@ -1551,28 +1623,37 @@ class AdminController extends Controller
 
         $fechaCarbon = Carbon::parse($fecha);
         $aplicaEnvioGratis = EnvioGratisFecha::tieneEnvioGratisParaFecha($fechaCarbon);
-        if ($aplicaEnvioGratis && $cantidadPlatillos >= 3) {
+
+        //Log::info("Estado del envío gratis: {$aplicaEnvioGratis->cantidad_minima}");
+        //Log::info("Existe realmente la variable aplicaEnvioGratis? " . ($aplicaEnvioGratis ? 'Sí' : 'No'));
+        //Log::info("estado del envio {$aplicaEnvioGratis} y cantidad de platillos pedidos {$cantidadPlatillos}");
+
+        if (!$domicilio) {
             $costo_envio = 0;
         } else {
-            // 2. Si está muy cerca, también es gratis
-            if ($distancia_km <= 0.7) {
+            if ($aplicaEnvioGratis && $cantidadPlatillos >= $aplicaEnvioGratis->cantidad_minima) {
                 $costo_envio = 0;
-            }
-            // 3. Rangos definidos
-            elseif ($distancia_km > 0.7 && $distancia_km <= 6.0) {
-                $costo_envio = 40;
-            } elseif ($distancia_km > 6.0 && $distancia_km <= 6.75) {
-                $costo_envio = 50;
-            } elseif ($distancia_km > 6.75 && $distancia_km <= 9.0) {
-                $costo_envio = 70;
-            } else { // mayor a 9.0
-                $costo_envio = 80;
+            } else {
+                // 2. Si está muy cerca, también es gratis
+                if ($distancia_km <= 0.5) {
+                    $costo_envio = 0;
+                }
+                // 3. Rangos definidos
+                elseif ($distancia_km > 0.5 && $distancia_km <= 1.5) {
+                    $costo_envio = 40;
+                } elseif ($distancia_km > 1.5 && $distancia_km <= 3.5) {
+                    $costo_envio = 50;
+                } elseif ($distancia_km > 3.5 && $distancia_km <= 4.0) {
+                    $costo_envio = 70;
+                } else { // mayor a 6.75
+                    $costo_envio = 80;
+                }
             }
         }
 
 
         try {
-            DB::transaction(function () use ($pedido, $platillosInput, $platillosActuales, $costo_envio, $fecha, $latitud, $longitud, $cliente, $request, &$subtotal) {
+            DB::transaction(function () use ($metodo_pago, $notas, $domicilio, $pedido, $platillosInput, $platillosActuales, $costo_envio, $fecha, $latitud, $longitud, $cliente, $request, &$subtotal) {
 
                 // 1. Revertir stock de platillos eliminados o disminuidos
                 foreach ($platillosActuales as $platilloId => $detalle) {
@@ -1644,22 +1725,44 @@ class AdminController extends Controller
                     $subtotal += $cantidad * $precio;
                 }
 
+                $estadoPedido = in_array($metodo_pago, ['efectivo', 'transferencia'])
+                    ? 'en preparación'
+                    : 'pendiente';
+
                 // 3. Actualizar coordenadas y total
-                $pedido->latitud = $latitud;
-                $pedido->longitud = $longitud;
-                $pedido->total = $subtotal + $costo_envio;
-                $pedido->cliente_id = $cliente->id;
-                $pedido->save();
+                $pedido->update([
+                    'cliente_id' => $cliente->id,
+                    'latitud' => $latitud,
+                    'longitud' => $longitud,
+                    'total' => $subtotal + $costo_envio,
+                    'domicilio' => $request->boolean('domicilio'),
+                    'notas' => $request->input('notas', null),
+                    'estado' => $estadoPedido,
+                ]);
 
                 // 4. Actualizar método de pago
+                $metodo = strtolower($request->metodo_pago);
+
                 if ($pedido->pago) {
-                    $pedido->pago->metodo_pago = $request->metodo_pago;
-                    $pedido->pago->save();
+                    $pedido->pago->update([
+                        'metodo_pago' => $metodo,
+                        'estado_pago' => $metodo === 'tarjeta' ? 'pendiente' : 'confirmado',
+                        'fecha_pago' => $metodo === 'tarjeta' ? null : now()->setTimezone('America/Tegucigalpa'),
+                        'canal' => 'panel',
+                        'observaciones' => $metodo === 'tarjeta'
+                            ? 'Pago pendiente de confirmación (actualización)'
+                            : ($metodo === 'efectivo'
+                                ? 'Pago confirmado en efectivo (actualización)'
+                                : 'Pago confirmado por transferencia (actualización)')
+                    ]);
                 } else {
                     Pago::create([
                         'pedido_id' => $pedido->id,
-                        'metodo_pago' => $request->metodo_pago,
-                        'estado' => 'pendiente',
+                        'metodo_pago' => $metodo,
+                        'estado_pago' => $metodo === 'tarjeta' ? 'pendiente' : 'confirmado',
+                        'fecha_pago' => $metodo === 'tarjeta' ? null : now()->setTimezone('America/Tegucigalpa'),
+                        'canal' => 'panel',
+                        'observaciones' => 'Pago agregado manualmente en actualización'
                     ]);
                 }
             });
@@ -1696,6 +1799,11 @@ class AdminController extends Controller
                 // Marcar el pedido como cancelado
                 $pedido->estado = 'cancelado';
                 $pedido->save();
+                $pago = $pedido->pago;
+                if ($pago) {
+                    $pago->estado_pago = 'cancelado';
+                    $pago->save();
+                }
             });
 
             return response()->json(['success' => true, 'mensaje' => 'Pedido cancelado y stock restaurado.']);
@@ -1802,6 +1910,172 @@ class AdminController extends Controller
             'cliente' => $cliente->nombre,
         ]);
     }
+
+    public function listarClientes()
+    {
+        $clientes = Cliente::select('id', 'nombre', 'telefono')
+            ->orderBy('nombre')
+            ->get();
+
+        return response()->json($clientes);
+    }
+
+    public function listarPedidosTarjeta()
+    {
+        $hoy = Carbon::now('America/Tegucigalpa')->toDateString();
+
+        $pedidos = Pedido::with(['cliente', 'pago'])
+            ->whereHas('pago', function ($q) {
+                $q->where('metodo_pago', 'tarjeta')
+                    ->where('estado_pago', 'pendiente');
+            })
+            ->whereDate('fecha_pedido', '>=', Carbon::tomorrow('America/Tegucigalpa'))
+            ->where('estado', '=', 'pendiente')
+            ->orderBy('fecha_pedido', 'asc')
+            ->get()
+            ->groupBy(fn($p) => Carbon::parse($p->fecha_pedido)->toDateString());
+
+        $eventos = [];
+
+        foreach ($pedidos as $fecha => $listaPedidos) {
+            $primer = $listaPedidos->first();
+
+            $eventos[] = [
+                'fecha' => $fecha,
+                'cliente_id' => $primer->cliente->id ?? null,
+                'cliente' => $primer->cliente->nombre ?? 'Sin nombre',
+                'total' => $listaPedidos->sum('total'),
+                'pedidos' => $listaPedidos->map(function ($p) {
+                    return [
+                        'id' => $p->id,
+                        'estado' => $p->estado,
+                        'total' => $p->total,
+                    ];
+                })->values(),
+            ];
+        }
+
+        return response()->json($eventos);
+    }
+
+
+    public function crearPagoConsolidado(Request $request)
+    {
+        $validated = $request->validate([
+            'cliente' => 'required|string',      // nombre visible (opcional)
+            'cliente_id' => 'required|exists:clientes,id', // 🔑 usamos el ID del cliente como clave única
+            'pedido_ids' => 'required|array|min:1',
+            'total' => 'required|numeric|min:1',
+            'fecha' => 'required|date',
+        ]);
+
+        DB::beginTransaction();
+
+        try {
+            // Buscar el cliente por ID
+            $cliente = Cliente::find($validated['cliente_id']);
+
+            if (!$cliente) {
+                throw new \Exception("Cliente con ID {$validated['cliente_id']} no encontrado.");
+            }
+
+            // Crear registro de pago consolidado
+            $pagoConsolidado = PagoConsolidado::create([
+                'cliente_id' => $cliente->id,
+                'monto_total' => $validated['total'],
+                'metodo_pago' => 'tarjeta',
+                'estado_pago' => 'pendiente',
+                'referencia_transaccion' => null,
+                'request_id' => null,
+                'process_url' => null,
+                'fecha_pago' => null,
+                'canal' => 'Aplicativo',
+                'observaciones' => 'Pago consolidado generado desde panel admin',
+                'notificado' => false,
+            ]);
+
+            // Asociar los pedidos seleccionados
+            foreach ($validated['pedido_ids'] as $pedidoId) {
+                $pedido = Pedido::find($pedidoId);
+                if ($pedido) {
+                    PagoConsolidadoPedido::create([
+                        'pago_consolidado_id' => $pagoConsolidado->id,
+                        'pedido_id' => $pedido->id,
+                        'pagado' => false,
+                    ]);
+                }
+            }
+
+            // Generar sesión de pago en PlacetoPay
+            $placetoPayController = new PlacetoPayController();
+            $fakeRequest = new Request([
+                'name' => $cliente->nombre,
+                'mobile' => $cliente->telefono,
+                'description' => 'Pago consolidado de pedidos programados',
+                'total' => $validated['total'],
+            ]);
+
+            $placetoResponse = $placetoPayController->createSession($fakeRequest);
+
+            Log::info('Respuesta de PlacetoPay para pago consolidado: ' . $placetoResponse->getContent());
+
+            if ($placetoResponse->getStatusCode() !== 200) {
+                throw new \Exception('Error al generar enlace de pago en PlacetoPay.');
+            }
+
+            $data = $placetoResponse->getData(true);
+
+            // Guardar los datos devueltos por PlacetoPay
+            $pagoConsolidado->update([
+                'referencia_transaccion' => $data['reference'],
+                'request_id' => $data['requestId'],
+                'process_url' => $data['processUrl'],
+            ]);
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'processUrl' => $data['processUrl'],
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Log::error('Error al crear pago consolidado: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 400);
+        }
+
+    }
+
+    public function listarPagosConsolidadosCliente($id)
+    {
+        $pagos = PagoConsolidado::with(['pedidos:id,estado,total,fecha_pedido'])
+            ->where('cliente_id', $id)
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(function ($pago) {
+                return [
+                    'id' => $pago->id,
+                    'monto_total' => $pago->monto_total,
+                    'estado_pago' => $pago->estado_pago,
+                    'fecha_pago' => $pago->fecha_pago ? $pago->fecha_pago->format('Y-m-d H:i') : 'N/A',
+                    'referencia_transaccion' => $pago->referencia_transaccion,
+                    'pedidos' => $pago->pedidos->map(fn($p) => [
+                        'id' => $p->id,
+                        'estado' => $p->estado,
+                        'total' => $p->total,
+                        'fecha_pedido' => $p->fecha_pedido,
+                    ]),
+                ];
+            });
+
+        return response()->json($pagos);
+    }
+
+
 
 }
 

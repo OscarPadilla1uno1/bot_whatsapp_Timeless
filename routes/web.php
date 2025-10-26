@@ -13,6 +13,7 @@ use App\Models\Pago;
 use Dnetix\Redirection\PlacetoPay;
 use App\Models\Pedido;
 use Illuminate\Http\Request;
+use App\Models\PagoConsolidado;
 
 
 Route::get('/routes', [VroomController::class, 'index'])->name('routes');
@@ -132,20 +133,36 @@ Route::middleware('auth')->group(function () {
     Route::get('/admin/drivers/with-availability', [AdminController::class, 'getDriversWithAvailability']);
 
     // routes/api.php o routes/web.php
-Route::post('/api/entregas/actualizar-estado', [EntregaController::class, 'actualizarEstado']);
-// O la ruta alternativa
-Route::post('/update-delivery-status', [EntregaController::class, 'updateDeliveryStatus'])->name('delivery.update');
+    Route::post('/api/entregas/actualizar-estado', [EntregaController::class, 'actualizarEstado']);
+    // O la ruta alternativa
+    Route::post('/update-delivery-status', [EntregaController::class, 'updateDeliveryStatus'])->name('delivery.update');
 });
 
 Route::get('/pago/exito', function (Request $request) {
     $reference = $request->query('reference');
+    Log::info("Iniciando retorno de pago para referencia: {$reference}");
 
     if (!$reference) {
         abort(400, 'Referencia no proporcionada');
     }
 
     // Buscar el pago en base de datos
-    $pago = Pago::where('referencia_transaccion', $reference)->firstOrFail();
+    $pago = Pago::where('referencia_transaccion', $reference)->first();
+    Log::info("Pago encontrado en base de datos: {$pago}");
+
+    $pagoConsolidado = null;
+    $esConsolidado = false;
+
+    if (!$pago) {
+        $pagoConsolidado = PagoConsolidado::where('referencia_transaccion', $reference)->first();
+        Log::info("Buscando pago consolidado para referencia: {$reference}");
+        if ($pagoConsolidado) {
+            $esConsolidado = true;
+            Log::info("Pago consolidado encontrado en base de datos: ID {$pagoConsolidado->id}");
+        } else {
+            abort(404, 'Pago no encontrado.');
+        }
+    }
 
     try {
         // Inicializar SDK PlacetoPay
@@ -154,17 +171,110 @@ Route::get('/pago/exito', function (Request $request) {
             'tranKey' => env('SecretKey'),
             'baseUrl' => env('PLACETOPAY_BASE_URL'),
         ]);
+        Log::info("SDK PlacetoPay inicializado.");
 
         // Usar el request_id asociado al pago para validar con PlacetoPay
-        $response = $placetopay->query($pago->request_id);
+        $requestId = $esConsolidado ? $pagoConsolidado->request_id : $pago->request_id;
+        $response = $placetopay->query($requestId);
+        Log::info("Respuesta de PlacetoPay para {$requestId}: " . $response->status()->message());
 
         if (!$response->isSuccessful()) {
-            Log::warning("Error verificando transacción {$pago->request_id}: {$response->status()->message()}");
-            return view('pago.error', ['mensaje' => 'No se pudo validar el estado de su pago']);
+            Log::warning("Error verificando transacción {$requestId}: {$response->status()->message()}");
+            abort('404', 'No se pudo validar el estado de su pago');
         }
+        Log::info("Respuesta exitosa de PlacetoPay para {$requestId}.");
 
         // Obtener estado real de PlacetoPay
         $estadoReal = $response->status()->status();
+
+        if ($esConsolidado && $pagoConsolidado) {
+            if ($response->isApproved()) {
+                $pagoConsolidado->update([
+                    'estado_pago' => 'confirmado',
+                    'fecha_pago' => now(),
+                ]);
+
+                $pagoConsolidado->load(['pedidos.pago']);
+
+                DB::transaction(function () use ($pagoConsolidado) {
+                    foreach ($pagoConsolidado->pedidos as $pedido) {
+                        $pedido->update(['estado' => 'en preparación']);
+                        $pagoConsolidado->pedidos()->updateExistingPivot($pedido->id, ['pagado' => true]);
+                        if ($pedido->pago) {
+                            $pedido->pago->update([
+                                'estado_pago' => 'confirmado',
+                                'fecha_pago' => now(),
+                                'observaciones' => 'Pago consolidado confirmado (retorno)',
+                            ]);
+                        }
+                    }
+                });
+
+                if (!$pagoConsolidado->notificado) {
+                    $cliente = $pagoConsolidado->cliente;
+                    $telefono = $cliente->telefono ?? null;
+                    $nombre = $cliente->nombre ?? 'Cliente';
+
+                    $mensaje = "✅ Hola {$nombre}, tu pago consolidado por L. {$pagoConsolidado->monto_total} ha sido confirmado. Tus pedidos pasarán a preparación.";
+
+                    try {
+                        $botResponse = Http::post("http://xn--lacampaafoodservice-13b.com:3008/v1/send-message", [
+                            'numero' => $telefono,
+                            'mensaje' => $mensaje,
+                        ]);
+
+                        if ($botResponse->successful()) {
+                            $pagoConsolidado->marcarNotificado();
+                            Log::info("Notificación enviada al cliente {$nombre} ({$telefono})");
+                        } else {
+                            Log::warning("Error notificando al bot consolidado: " . $botResponse->body());
+                        }
+                    } catch (\Throwable $ex) {
+                        Log::error("Error notificando bot consolidado: " . $ex->getMessage());
+                    }
+                }
+
+                return view('pago.exito', [
+                    'pago' => $pagoConsolidado,
+                    'tipo' => 'consolidado',
+                ]);
+
+            } elseif ($response->isRejected() || $estadoReal === 'FAILED') {
+                $pagoConsolidado->update(['estado_pago' => 'fallido']);
+
+                if (!$pagoConsolidado->notificado) {
+                        $cliente = $pagoConsolidado->cliente;
+                        $telefono = $cliente->telefono ?? null;
+                        $nombre = $cliente->nombre ?? 'Cliente';
+
+                        $mensaje = "⚠️ Hola {$nombre}, tu pago consolidado por L. {$pagoConsolidado->monto_total} fue rechazado. Intenta nuevamente.";
+
+                        try {
+                            $botRespuesta = Http::post("http://xn--lacampaafoodservice-13b.com:3008/v1/send-message", [
+                                'numero' => $telefono,
+                                'mensaje' => $mensaje,
+                            ]);
+
+                            if ($botRespuesta->successful()) {
+                                $pagoConsolidado->marcarNotificado();
+                                Log::info("Notificación de pago fallido enviada al cliente {$nombre} ({$telefono})");
+                            } else {
+                                Log::warning("Error notificando al bot consolidado: " . $botRespuesta->body());
+                            }
+                        } catch (\Throwable $ex) {
+                            Log::error("Error notificando bot consolidado: " . $ex->getMessage());
+                        }
+                    }
+
+                return view('pago.cancelado', ['mensaje' => 'El pago consolidado fue rechazado.']);
+            } else {
+                return view('pago.exito', [
+                    'pago' => $pagoConsolidado,
+                    'tipo' => 'consolidado',
+                    'mensaje' => 'Tu pago está en estado pendiente de confirmación.',
+                ]);
+            }
+        }
 
         // Actualizar estado en DB según lo que dice PlacetoPay
         if ($response->isApproved()) {
@@ -213,10 +323,19 @@ Route::get('/pago/exito', function (Request $request) {
             $pago->estado_pago = 'fallido';
             $pago->save();
 
+
+
             if (!$pago->notificado) {
                 $cliente = $pago->pedido ? $pago->pedido->cliente : null;
                 $telefono = $cliente ? $cliente->telefono : null;
                 $nombre = $cliente ? $cliente->nombre : 'Usuario';
+
+                $pedido = $pago->pedido;
+                if ($pedido) {
+                    $adminController = new AdminController();
+                    $result = $adminController->cancelarPedidoBot($pedido->id);
+                    Log::info("Resultado cancelación automática: " . $result->getContent());
+                }
 
                 if ($telefono) {
                     $mensaje = "Hola {$nombre}, hemos recibido la actualización de tu pago con referencia {$pago->referencia_transaccion}. Estado: {$pago->estado_pago}.";
@@ -368,9 +487,41 @@ Route::post('/admin/reiniciar-distribucion', [VroomController::class, 'reiniciar
     ->name('admin.reiniciar_distribucion')
     ->can('Administrador');
 
+Route::get('/admin/pedidos/programados/tarjeta', [AdminController::class, 'listarPedidosTarjeta'])
+    ->name('admin.pedidos.programados.tarjeta')
+    ->can('Administrador');
+
+Route::post('/admin/pagos/consolidado/create', [AdminController::class, 'crearPagoConsolidado'])
+    ->name('admin.pagos.consolidado.create');
+//->can('Administrador');
+
+Route::get('/admin/clientes/listar', [AdminController::class, 'listarClientes'])
+    ->name('admin.clientes.listar')
+    ->can('Administrador');
+
+Route::get('/admin/clientes/{id}/pagos-consolidados', [AdminController::class, 'listarPagosConsolidadosCliente'])
+    ->name('admin.cliente.pagos.consolidados')
+    ->can('Administrador');
+
+use App\Http\Controllers\ExportController;
+
+Route::prefix('export')->group(function () {
+    Route::get('/clientes', [ExportController::class, 'exportClientes'])->name('export.clientes')->can('Administrador');
+    Route::get('/pedidos', [ExportController::class, 'exportPedidos'])->name('export.pedidos')->can('Administrador');
+    Route::get('/pagos', [ExportController::class, 'exportPagos'])->name('export.pagos')->can('Administrador');
+    Route::get('/pagos-consolidados', [ExportController::class, 'exportPagosConsolidados'])->name('export.pagos.consolidados')->can('Administrador');
+    Route::get('/platillos', [ExportController::class, 'exportPlatillos'])->name('export.platillos')->can('Administrador');
+    Route::get('/todo', [ExportController::class, 'exportTodo'])->name('export.todo')->can('Administrador');
+    Route::get('/export/pago-consolidado-pedidos', [ExportController::class, 'exportPagoConsolidadoPedidos'])
+    ->name('export.pago.consolidado.pedidos')->can('Administrador');
+
+});
+
+
+
 Route::get('/bot/qr', function () {
     $qrPath = '/var/www/base-js-wppconnect-mysqlCHATBOTV2/bot.qr.png';
-    
+
     if (file_exists($qrPath)) {
         return response()->file($qrPath, [
             'Content-Type' => 'image/png',
@@ -379,7 +530,7 @@ Route::get('/bot/qr', function () {
             'Expires' => '0'
         ]);
     }
-    
+
     // Si no existe el QR, devolver una imagen placeholder o error
     abort(404, 'QR no disponible');
 })->name('bot.qr');

@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 class Pedido extends Model
 {
     protected $table = 'pedidos';
-    protected $fillable = ['cliente_id', 'latitud', 'longitud', 'estado', 'total', 'fecha_pedido'];
+    protected $fillable = ['cliente_id', 'latitud', 'longitud', 'domicilio', 'estado', 'total', 'fecha_pedido', 'notas'];
     
     public $timestamps = false;
 
@@ -27,4 +27,16 @@ class Pedido extends Model
     {
         return $this->hasOne(Pago::class);
     }
+
+    public function pagosConsolidados()
+{
+    return $this->belongsToMany(
+        PagoConsolidado::class,
+        'pago_consolidado_pedidos',
+        'pedido_id',
+        'pago_consolidado_id'
+    )->withPivot('pagado')
+     ->withTimestamps();
+}
+
 }

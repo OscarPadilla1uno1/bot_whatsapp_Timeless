@@ -10,6 +10,10 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Http\Request;
 use Dnetix\Redirection\PlacetoPay;
 use Exception;
+use App\Models\PagoConsolidado;
+use App\Models\PagoConsolidadoPedido;
+use Illuminate\Support\Facades\DB;
+//use App\Http\Controllers\Admin\AdminController;
 
 class PlacetoPayController extends Controller
 {
@@ -337,20 +341,118 @@ class PlacetoPayController extends Controller
             }
 
             $pago = Pago::where('request_id', $requestId)
-                ->where('referencia_transaccion', $reference)
+                ->orWhere('referencia_transaccion', $reference)
                 ->first();
 
+            $esConsolidado = false;
+            $pagoConsolidado = null;
+
             if (!$pago) {
-                return response()->json(['error' => 'Pago no encontrado'], 404);
+                $pagoConsolidado = PagoConsolidado::where('request_id', $requestId)
+                    ->orWhere('referencia_transaccion', $reference)
+                    ->first();
+
+                if ($pagoConsolidado) {
+                    $esConsolidado = true;
+                } else {
+                    return response()->json(['error' => 'Pago no encontrado'], 404);
+                }
             }
 
-            $pedido = $pago->pedido;
+            $pedido = null;
 
-            if (!$pedido) {
-                return response()->json(['error' => 'Pedido no encontrado'], 404);
+            if ($pago) {
+                $pedido = $pago->pedido;
+                if (!$pedido) {
+                    return response()->json(['error' => 'Pedido no encontrado'], 404);
+                }
             }
 
             $estado = $notification->status()->status();
+
+
+            if ($esConsolidado && $pagoConsolidado) {
+                if ($notification->isApproved()) {
+                    $pagoConsolidado->estado_pago = 'confirmado';
+                    $pagoConsolidado->fecha_pago = now();
+                    $pagoConsolidado->save();
+
+                    // Cambiar estado de todos los pedidos a "en preparación"
+                    $pagoConsolidado->load('pedidos');
+
+                    DB::transaction(function () use ($pagoConsolidado) {
+                        foreach ($pagoConsolidado->pedidos as $pedido) {
+                            $pedido->update(['estado' => 'en preparación']);
+                            $pagoConsolidado->pedidos()
+                                ->updateExistingPivot($pedido->id, ['pagado' => true]);
+                            if ($pedido->pago) {
+                                $pedido->pago->update([
+                                    'estado_pago' => 'confirmado',
+                                    'fecha_pago' => now(),
+                                    'observaciones' => 'Pago consolidado confirmado',
+                                ]);
+                            }
+                        }
+                    });
+
+                    // 🟢 Notificar al usuario
+                    if (!$pagoConsolidado->notificado) {
+                        $cliente = $pagoConsolidado->cliente;
+                        $telefono = $cliente->telefono ?? null;
+                        $nombre = $cliente->nombre ?? 'Cliente';
+
+                        $mensaje = "✅ Hola {$nombre}, tu pago consolidado por L. {$pagoConsolidado->monto_total} ha sido confirmado. Tus pedidos pasarán a preparación.";
+
+                        try {
+                            $botResponse = Http::post("http://xn--lacampaafoodservice-13b.com:3008/v1/send-message", [
+                                'numero' => $telefono,
+                                'mensaje' => $mensaje,
+                            ]);
+
+                            if ($botResponse->successful()) {
+                                $pagoConsolidado->marcarNotificado();
+                                Log::info("Notificación enviada al cliente {$nombre} ({$telefono})");
+                            } else {
+                                Log::warning("Error notificando al bot consolidado: " . $botResponse->body());
+                            }
+                        } catch (\Throwable $ex) {
+                            Log::error("Error notificando bot consolidado: " . $ex->getMessage());
+                        }
+                    }
+
+                } elseif ($notification->isRejected() || $estado === 'FAILED') {
+                    $pagoConsolidado->estado_pago = 'fallido';
+                    $pagoConsolidado->save();
+
+                    // ❌ Notificar fallo
+                    if (!$pagoConsolidado->notificado) {
+                        $cliente = $pagoConsolidado->cliente;
+                        $telefono = $cliente->telefono ?? null;
+                        $nombre = $cliente->nombre ?? 'Cliente';
+
+                        $mensaje = "⚠️ Hola {$nombre}, tu pago consolidado por L. {$pagoConsolidado->monto_total} fue rechazado. Intenta nuevamente.";
+
+                        try {
+                            $botRespuesta = Http::post("http://xn--lacampaafoodservice-13b.com:3008/v1/send-message", [
+                                'numero' => $telefono,
+                                'mensaje' => $mensaje,
+                            ]);
+
+                            if ($botRespuesta->successful()) {
+                                $pagoConsolidado->marcarNotificado();
+                                Log::info("Notificación de pago fallido enviada al cliente {$nombre} ({$telefono})");
+                            } else {
+                                Log::warning("Error notificando al bot consolidado: " . $botRespuesta->body());
+                            }
+                        } catch (\Throwable $ex) {
+                            Log::error("Error notificando bot consolidado: " . $ex->getMessage());
+                        }
+                    }
+
+                }
+
+                return response()->json(['success' => true, 'tipo' => 'pago_consolidado']);
+            }
 
             if ($notification->isApproved()) {
                 $pago->estado_pago = 'confirmado';
@@ -362,6 +464,7 @@ class PlacetoPayController extends Controller
                 $pedido->save();
             } elseif ($notification->isRejected() || $estado === 'FAILED') {
                 $pago->estado_pago = 'fallido';
+                //AdminController::class::cancelarPedidoBot($pedido->id);
             } else {
                 $pago->estado_pago = 'pendiente';
             }
@@ -396,7 +499,7 @@ class PlacetoPayController extends Controller
                 Log::info("Pago {$pago->id} ya fue notificado, se omite notificación.");
             }
 
-            return response()->json(['success' => true]);
+            return response()->json(['success' => true, 'tipo' => 'pago_individual']);
         } catch (Exception $e) {
             Log::error('Error en webhook PlacetoPay: ' . $e->getMessage());
             return response()->json(['error' => 'Webhook error'], 500);
