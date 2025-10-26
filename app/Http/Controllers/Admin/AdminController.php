@@ -1745,8 +1745,8 @@ class AdminController extends Controller
                         'observaciones' => $metodo === 'tarjeta'
                             ? 'Pago pendiente de confirmación (actualización)'
                             : ($metodo === 'efectivo'
-                                ? 'Pago confirmado en efectivo (actualización)'
-                                : 'Pago confirmado por transferencia (actualización)')
+                                ? 'Pago en efectivo (actualización)'
+                                : 'Pago por transferencia (actualización)')
                     ]);
                 } else {
                     Pago::create([
